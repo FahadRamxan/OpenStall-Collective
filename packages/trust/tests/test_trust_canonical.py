@@ -59,6 +59,14 @@ def test_whole_number_floats_are_written_as_integers():
     assert canonical_json({"rate": 1.0}) == canonical_json({"rate": 1})
 
 
+def test_whole_floats_become_integers_only_up_to_2_53():
+    # Signed bytes must never change. Above 2**53 a float keeps Python's spelling; such numbers do
+    # not survive a browser round trip (docs/decisions.md).
+    assert canonical_json({"n": 2.0**53}) == b'{"n":9007199254740992}'
+    assert canonical_json({"n": -(2.0**53)}) == b'{"n":-9007199254740992}'
+    assert canonical_json({"n": 2.0**53 + 2}) == b'{"n":9007199254740994.0}'
+
+
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_nan_and_infinity_are_rejected(bad):
     with pytest.raises(ValueError):

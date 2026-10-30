@@ -13,8 +13,9 @@ SIGNATURE_FIELD = "signature"
 # Passports nest a level or two. The limit keeps hostile input to the verify endpoint cheap.
 MAX_DEPTH = 32
 
-# JSON has one number type, and JavaScript writes 1.0 as 1. Whole numbers up to 2**53 are exact
-# in both languages, so whole floats in that range are written as integers.
+# JSON has one number type, and JavaScript writes 1.0 as 1. A browser writes every whole float up
+# to 2**53 as its exact integer, so whole floats in that range are written as integers here too.
+# Bigger whole numbers do not survive a trip through a browser (see docs/decisions.md).
 _EXACT_INTEGERS = 2**53
 
 
@@ -22,8 +23,9 @@ def canonical_json(passport: Mapping[str, Any]) -> bytes:
     """Return the bytes a passport's signature covers.
 
     Keys are sorted at every level, there is no whitespace, text is UTF-8 rather than \\u escapes,
-    and the top-level "signature" field is left out. Whole-number floats are written as integers
-    (1.0 as 1), the way browsers write them, so a passport that went through JavaScript still verifies.
+    and the top-level "signature" field is left out. Whole-number floats up to 2**53 are written as
+    integers (1.0 as 1), the way browsers write them, so a passport that went through JavaScript
+    still verifies.
 
     Raises TypeError for anything that is not plain JSON (non-string keys, sets, bytes, Decimal:
     convert those first) and ValueError for NaN, Infinity, or objects and arrays nested more than
