@@ -15,10 +15,18 @@ dist/
 .ruff_cache/
 .mypy_cache/
 
-# Node / Next.js
+# Node / Next.js (.next-e2e is the UI tests' build)
 node_modules/
 .next/
+.next-e2e/
 out/
+
+# Playwright output (apps/web): reports, traces, review screenshots and the e2e run's throwaway database
+test-results/
+playwright-report/
+blob-report/
+apps/web/e2e/screenshots/
+.e2e-data/
 
 # Seller media and local data (photos, voice notes, receipts)
 media/

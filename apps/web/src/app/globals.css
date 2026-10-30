@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+/* Colour tokens. Components use them through Tailwind (bg-surface, text-muted, border-border...). */
+:root {
+  --background: #faf8f5;
+  --surface: #ffffff;
+  --foreground: #1f1a17;
+  --muted: #5c534c;
+  --border: #e6e0d8;
+  --accent: #0e6e64;
+  --accent-strong: #0b5a52;
+  --accent-soft: #e3f1ee;
+  --accent-foreground: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #14110f;
+    --surface: #1d1916;
+    --foreground: #f3eee8;
+    --muted: #b3a89d;
+    --border: #3a332d;
+    --accent: #5fd3c4;
+    --accent-strong: #8ae2d6;
+    --accent-soft: #123430;
+    --accent-foreground: #06201d;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-foreground: var(--accent-foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

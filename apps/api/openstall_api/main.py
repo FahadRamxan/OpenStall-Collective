@@ -3,7 +3,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from openstall_api import settings
 from openstall_api.storefront import storefront, storefront_http_app
 
 mcp_http = storefront_http_app()
@@ -17,6 +19,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OpenStall Collective API", lifespan=lifespan)
+
+# The web app calls the API from the browser, from another origin. Allow that origin and no other.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.WEB_BASE_URL],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/health")

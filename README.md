@@ -6,7 +6,7 @@ OpenStall Collective lets small sellers who only use WhatsApp sell to AI shoppin
 
 Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox; no real money moves.
 
-> **Status:** early scaffold. The API runs and serves an MCP storefront with one tool, `search_products`, over a seeded demo catalog. Everything else is still to be built.
+> **Status:** early scaffold. The API runs and serves an MCP storefront with one tool, `search_products`, over a seeded demo catalog. The web app has its layout, a home page and placeholder pages. Everything else is still to be built.
 
 ## Run it locally
 
@@ -38,11 +38,37 @@ pytest
 
 **Note for contributors:** this uses the MCP Python SDK 2.x, where `FastMCP` is now `MCPServer` (`from mcp.server import MCPServer`) and clients use `from mcp import Client`. Examples written for SDK 1.x need small changes.
 
+### The web app
+
+You need Node 24.15 or newer (Node 25 is not supported). With the API running, in a second terminal:
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+The site is then at http://localhost:3000. Its tests are `npm test` (components, Vitest) and `npm run e2e` (UI tests with Playwright, which start their own API and web servers). See [apps/web/README.md](apps/web/README.md) for details.
+
+## Before every push
+
+There is no CI to catch a broken push, so run every check on your machine first:
+
+```bash
+python scripts/check_all.py
+```
+
+It runs `pytest`, then, in `apps/web`, `npm run lint`, `npm test`, `npm run build` and `npm run e2e`. It stops at the first failure and ends with a summary of which checks passed, failed or did not run. Push only when it says all checks passed.
+
+- It works from any folder and with any Python 3.11 or newer: pytest and the UI tests' API run on the repo's `.venv` when it exists.
+- It needs the setup above: the Python packages, `npm install` in `apps/web`, and Playwright's browser (`npx playwright install chromium` in `apps/web`, once).
+- The UI tests make their own production build, so a full run takes a few minutes.
+
 ## Repository layout
 
 ```
 apps/api/        FastAPI: webhooks, orders, PayPal, passports, MCP server at /mcp
-apps/web/        Next.js: stall, seller-chat, demo, approve, dashboard (not started)
+apps/web/        Next.js: stall, seller-chat, demo, approve, dashboard
 packages/        agents, allocator, paypal, trust
 scripts/         demo and helper scripts
 docs/            day-one checks and decisions
