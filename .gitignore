@@ -29,3 +29,7 @@ data/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Claude Code local files (agent worktrees, personal settings)
+.claude/worktrees/
+.claude/settings.local.json
