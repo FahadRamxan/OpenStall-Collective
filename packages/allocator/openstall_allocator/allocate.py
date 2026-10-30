@@ -97,7 +97,7 @@ def _seller_cap(fair_share: Amount | None, quantity: int) -> int | None:
     share = _decimal("fair_share", fair_share)
     if not share.is_finite() or not 0 < share <= 1:
         raise ValueError(f"fair_share must be above 0 and at most 1, got {fair_share!r}")
-    # Decimal keeps 0.3 x 40 at exactly 12; in floats it is 12.000000000000002, which rounds up to 13.
+    # Decimal keeps 0.07 x 100 at exactly 7; in floats it is 7.000000000000001, which rounds up to 8.
     return math.ceil(share * quantity)
 
 

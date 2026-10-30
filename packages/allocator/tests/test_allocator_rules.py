@@ -280,10 +280,28 @@ def test_the_system_clock_gives_todays_date_in_utc():
     assert before <= today <= after
 
 
-def test_the_system_clock_can_use_another_time_zone():
-    lahore = timezone(timedelta(hours=5))
-    before = datetime.now(lahore).date()
-    assert before <= SystemClock(lahore).today() <= datetime.now(lahore).date()
+class FrozenDatetime(datetime):
+    """A datetime whose now() is 2026-11-10 22:00 UTC, when it is already November 11 in Lahore."""
+
+    @classmethod
+    def now(cls, tz=None):
+        instant = datetime(2026, 11, 10, 22, 0, tzinfo=timezone.utc)
+        if tz is None:  # local time, as datetime.now() gives it
+            return instant.astimezone().replace(tzinfo=None)
+        return instant.astimezone(tz)
+
+
+def test_the_system_clock_uses_utc_unless_given_another_zone(monkeypatch):
+    monkeypatch.setattr("openstall_allocator.rules.datetime", FrozenDatetime)
+    assert SystemClock().today() == date(2026, 11, 10)
+    assert SystemClock(timezone(timedelta(hours=5))).today() == date(2026, 11, 11)  # Lahore
+
+
+def test_the_system_clock_follows_its_time_zone():
+    # These zones are 26 hours apart, so they are on different dates at every moment.
+    ahead = SystemClock(timezone(timedelta(hours=14))).today()
+    behind = SystemClock(timezone(timedelta(hours=-12))).today()
+    assert 1 <= (ahead - behind).days <= 2
 
 
 def test_a_clock_drives_the_story_dates(seed):

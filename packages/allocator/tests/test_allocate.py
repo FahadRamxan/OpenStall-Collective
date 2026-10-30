@@ -5,7 +5,7 @@ from fractions import Fraction
 from itertools import product
 
 import pytest
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from openstall_allocator import Offer, Plan, allocate, is_valid_offer
@@ -156,13 +156,39 @@ def test_fair_share_spreads_the_order():
 
 
 @pytest.mark.parametrize("share", [0.3, "0.3", Decimal("0.3")])
-def test_fair_share_of_30_percent_is_12_of_40_not_13(share):
-    # In floats, 0.3 * 40 is 12.000000000000002, which would round up to 13.
+def test_fair_share_of_30_percent_caps_each_seller_at_12_of_40(share):
     plan = allocate(three_big_offers(), 40, DEADLINE, fair_share=share)
     assert plan.quantities() == {"s_a": 12, "s_b": 12, "s_c": 12}
     assert not plan.complete
     assert plan.reason == (
         "Only 36 of 40 units can be supplied by 2026-12-10. Fair share caps each seller at 12 units."
+    )
+
+
+@pytest.mark.parametrize(
+    "share, quantity",
+    [(0.07, 100), ("0.07", 100), (Decimal("0.07"), 100), (0.14, 50), (0.28, 25)],
+)
+def test_fair_share_is_exact_where_floats_would_allow_one_more_unit(share, quantity):
+    # The premise: in floats each product is 7.000000000000001, which rounds up to 8.
+    assert math.ceil(float(share) * quantity) == 8
+    plan = allocate(three_big_offers(), quantity, DEADLINE, fair_share=share)
+    assert plan.quantities() == {"s_a": 7, "s_b": 7, "s_c": 7}
+    assert plan.reason == (
+        f"Only 21 of {quantity} units can be supplied by 2026-12-10. Fair share caps each seller at 7 units."
+    )
+
+
+def test_the_reason_mentions_fair_share_only_when_it_held_a_seller_back():
+    # Half of 50 is 25, more than any seller can supply, so the cap changes nothing.
+    plan = allocate(story(), 50, DEADLINE, fair_share=0.5)
+    assert plan == allocate(story(), 50, DEADLINE)
+    assert plan.reason == "Only 44 of 50 units can be supplied by 2026-12-10."
+    # A late offer over the cap is left out anyway, so the cap still held nobody back.
+    late = offer("s_late", "5.00", 40, delivery=DEADLINE + timedelta(days=1))
+    assert allocate([*story(), late], 50, DEADLINE, fair_share=0.5).reason == (
+        "Only 44 of 50 units can be supplied by 2026-12-10. "
+        "1 offer delivers after the deadline and was left out."
     )
 
 
@@ -324,6 +350,7 @@ def test_a_plan_never_exceeds_an_offer_or_the_request_and_is_complete_when_it_ca
 
 @settings(max_examples=500, deadline=None)
 @given(books(), st.integers(1, 100).map(lambda p: Decimal(p).scaleb(-2)))
+@example((three_big_offers(), 100, DEADLINE), Decimal("0.07"))  # a cap of 8 in floats, 7 exactly
 def test_fair_share_never_lets_a_seller_take_more_than_the_cap(book, share):
     offers, quantity, deadline = book
     cap = math.ceil(Fraction(share) * quantity)
