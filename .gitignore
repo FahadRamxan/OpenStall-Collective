@@ -1,0 +1,31 @@
+# Secrets: the repo is public. Only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Seller media and local data (photos, voice notes, receipts)
+media/
+data/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

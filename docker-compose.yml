@@ -1,0 +1,15 @@
+# Local Postgres for development. The API runs outside Docker for now (see README).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: openstall
+      POSTGRES_PASSWORD: openstall
+      POSTGRES_DB: openstall
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
