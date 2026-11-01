@@ -12,4 +12,10 @@ describe("SiteFooter", () => {
 
     expect(screen.getByRole("contentinfo")).toHaveTextContent("Runs in the PayPal sandbox. No real money moves.");
   });
+
+  it("links to the system status page", () => {
+    render(<SiteFooter />);
+
+    expect(screen.getByRole("link", { name: "System status" })).toHaveAttribute("href", "/status");
+  });
 });

@@ -42,7 +42,8 @@ describe("the e2e build", () => {
     );
   });
 
-  it("is not linted", async () => {
+  // Loading Next.js's ESLint config takes about 4 seconds on its own, more while other test files run in parallel.
+  it("is not linted", { timeout: 30_000 }, async () => {
     const eslint = new ESLint({ cwd: __dirname });
 
     expect(await eslint.isPathIgnored(path.join(__dirname, E2E_DIST_DIR, "server", "app", "page.js"))).toBe(true);

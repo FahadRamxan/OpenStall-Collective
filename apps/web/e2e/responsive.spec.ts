@@ -1,10 +1,16 @@
 import path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // Every page must fit a 375px phone without sideways scrolling. Each run also saves full-page
 // screenshots to e2e/screenshots/ (ignored by git) for a quick look at the layout.
-const PAGES = ["/", "/demo", "/seller-chat", "/dashboard", "/stall/does-not-exist"];
+const PAGES = ["/", "/demo", "/seller-chat", "/dashboard", "/status", "/stall/does-not-exist"];
+
+// Pages that load data after the first paint: wait for it, so the checks and the screenshot see the whole page.
+const LOADED: Record<string, (page: Page) => Promise<void>> = {
+  "/status": (page) => expect(page.getByRole("table", { name: "Adapters" })).toBeVisible(),
+};
+
 const VIEWPORTS = [
   { width: 375, height: 812 },
   { width: 1280, height: 720 },
@@ -22,6 +28,7 @@ for (const viewport of VIEWPORTS) {
         await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
         // Let the footer's API check finish, so the screenshot shows its final state.
         await expect(page.getByRole("contentinfo").getByRole("status")).not.toHaveText(/Checking/);
+        await LOADED[pagePath]?.(page);
 
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         expect(overflow, "the page scrolls sideways").toBeLessThanOrEqual(0);

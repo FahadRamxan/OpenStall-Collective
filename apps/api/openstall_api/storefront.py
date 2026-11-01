@@ -12,8 +12,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from starlette.applications import Starlette
 
-from openstall_api import settings
 from openstall_api.catalog import DEMO_PRODUCTS, Product
+from openstall_api.settings import Settings
 
 log = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def search_products(
     return matches
 
 
-def storefront_http_app() -> Starlette:
+def storefront_http_app(settings: Settings) -> Starlette:
     """Streamable HTTP app serving the storefront at /mcp.
 
     Stateless with JSON responses, so any instance of the API can answer any request.

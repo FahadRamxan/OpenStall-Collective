@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
-import { ApiError, apiBaseUrl, apiGet, apiPost, errorMessage } from "@/lib/api";
+import { ApiError, apiBaseUrl, apiGet, apiPost, errorMessage, getStatus, type StatusReport } from "@/lib/api";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" }, ...init });
@@ -122,6 +122,18 @@ describe("apiGet and apiPost", () => {
     fetchMock.mockRejectedValue(aborted);
 
     await expect(apiGet("/health")).rejects.toBe(aborted);
+  });
+});
+
+describe("getStatus", () => {
+  it("reads GET /api/status", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://api.test");
+    const report: StatusReport = { mode: "fake", version: "0.1.0", adapters: [] };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(report));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getStatus()).resolves.toEqual(report);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/status", expect.objectContaining({ method: "GET" }));
   });
 });
 

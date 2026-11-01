@@ -64,6 +64,34 @@ export function getHealth(init: RequestInit = {}): Promise<Health> {
   return apiGet<Health>("/health", init);
 }
 
+/** OPENSTALL_MODE: "fake" uses deterministic stand-ins; "sandbox" the PayPal and Twilio sandboxes and real AI models. */
+export type Mode = "fake" | "sandbox";
+
+/**
+ * Which implementation an adapter uses. "missing key": sandbox mode, but a key it needs is not set.
+ * "not built": sandbox mode with its keys set, but its real adapter does not exist yet.
+ */
+export type AdapterStatus = "fake" | "real" | "missing key" | "not built";
+
+export type AdapterState = {
+  name: string;
+  label: string;
+  purpose: string;
+  /** The real service behind the adapter in sandbox mode. */
+  service: string;
+  status: AdapterStatus;
+  /** Settings the real service needs, by name. The API never sends their values. */
+  keys: string[];
+  /** In sandbox mode, the keys that are not set. */
+  missing_keys: string[];
+};
+
+export type StatusReport = { mode: Mode; version: string; adapters: AdapterState[] };
+
+export function getStatus(init: RequestInit = {}): Promise<StatusReport> {
+  return apiGet<StatusReport>("/api/status", init);
+}
+
 /** A readable message for anything thrown by an API call. */
 export function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;

@@ -6,7 +6,7 @@ OpenStall Collective lets small sellers who only use WhatsApp sell to AI shoppin
 
 Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox; no real money moves.
 
-> **Status:** early scaffold. The API runs and serves an MCP storefront with one tool, `search_products`, over a seeded demo catalog. The web app has its layout, a home page and placeholder pages. Everything else is still to be built.
+> **Status:** early scaffold. The API runs and serves an MCP storefront with one tool, `search_products`, over a seeded demo catalog. It has a fake mode with a stand-in for every outside service, and a status endpoint. The web app has its layout, a home page, a system status page and placeholder pages. Everything else is still to be built.
 
 ## Run it locally
 
@@ -24,13 +24,17 @@ cp .env.example .env
 uvicorn openstall_api.main:app --reload
 ```
 
-Fill in `.env` with the keys you have. The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP). Point any MCP client there, or, with the API running, use the included one in a second terminal:
+The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP).
+
+It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real adapters arrive in later build steps; until one exists, the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.
+
+Point any MCP client at the storefront, or, with the API running, use the included one in a second terminal:
 
 ```bash
 python scripts/try_mcp.py "cushion covers"
 ```
 
-Run the tests (they start their own server, so the API does not need to be running):
+Run the tests (they start their own server, so the API does not need to be running). They always run in fake mode and ignore your `.env`:
 
 ```bash
 pytest

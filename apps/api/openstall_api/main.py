@@ -5,10 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from openstall_api import settings
+from openstall_api import __version__
+from openstall_api.settings import get_settings
+from openstall_api.status import router as status_router
 from openstall_api.storefront import storefront, storefront_http_app
 
-mcp_http = storefront_http_app()
+settings = get_settings()
+mcp_http = storefront_http_app(settings)
 
 
 @asynccontextmanager
@@ -18,7 +21,7 @@ async def lifespan(app: FastAPI):
         yield
 
 
-app = FastAPI(title="OpenStall Collective API", lifespan=lifespan)
+app = FastAPI(title="OpenStall Collective API", version=__version__, lifespan=lifespan)
 
 # The web app calls the API from the browser, from another origin. Allow that origin and no other.
 app.add_middleware(
@@ -33,6 +36,8 @@ app.add_middleware(
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+app.include_router(status_router)
 
 # Add the MCP route itself rather than mounting the app, so the endpoint is exactly /mcp, not /mcp/.
 app.router.routes.extend(mcp_http.routes)
