@@ -15,6 +15,7 @@ dist/
 .hypothesis/
 .ruff_cache/
 .mypy_cache/
+.hypothesis/
 
 # Node / Next.js (.next-e2e is the UI tests' build)
 node_modules/
