@@ -104,3 +104,57 @@ def test_the_web_app_may_read_the_status_from_the_browser():
     response = client.get("/api/status", headers={"Origin": web_app})
 
     assert response.headers["access-control-allow-origin"] == web_app
+
+
+# ---------- the database ----------
+
+TABLES = [
+    "chat_messages",
+    "chat_sessions",
+    "events",
+    "offers",
+    "order_parts",
+    "orders",
+    "passports",
+    "processed_webhooks",
+    "products",
+    "quote_requests",
+    "searches",
+    "sellers",
+]
+
+
+def test_the_database_is_reported_ok_with_rows_per_table(db):
+    from openstall_api.models import Seller
+
+    db.add(Seller(id="s_amina", name="Amina"))
+    db.commit()
+
+    database = get_status()["database"]
+
+    assert database["status"] == "ok"
+    assert sorted(database["tables"]) == TABLES
+    assert database["tables"]["sellers"] == 1
+    assert database["tables"]["orders"] == 0
+    assert database["message"] is None
+
+
+def test_a_database_without_its_tables_is_reported_as_not_migrated():
+    database = get_status()["database"]
+
+    assert database["status"] == "not migrated"
+    assert database["tables"] == {}
+    assert "alembic upgrade head" in database["message"]
+
+
+def test_an_unreachable_database_is_reported_without_its_address_or_password(use_settings):
+    use_settings(DATABASE_URL="postgresql://openstall:db-pw-c41d@db.unreachable.invalid:5432/openstall")
+
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    database = response.json()["database"]
+    assert database["status"] == "error"
+    assert "could not be reached" in database["message"]
+    assert "db-pw-c41d" not in response.text
+    assert "unreachable.invalid" not in response.text

@@ -3,7 +3,14 @@
 import { Fragment, useEffect, useId, useState } from "react";
 
 import { Badge, type BadgeTone } from "@/components/badge";
-import { apiBaseUrl, errorMessage, getStatus, type AdapterState, type StatusReport } from "@/lib/api";
+import {
+  apiBaseUrl,
+  errorMessage,
+  getStatus,
+  type AdapterState,
+  type DatabaseState,
+  type StatusReport,
+} from "@/lib/api";
 
 /** How long to wait for /api/status, so a hung API or a slow cold start cannot leave the page loading. */
 export const STATUS_TIMEOUT_MS = 10_000;
@@ -118,6 +125,8 @@ function Report({ report }: { report: StatusReport }) {
         </dl>
       </section>
 
+      <DatabaseSection database={report.database} />
+
       <section aria-labelledby="adapters-heading" className="mt-10">
         <h2 id="adapters-heading" className="text-xl font-semibold tracking-tight">
           Adapters
@@ -148,6 +157,40 @@ function Report({ report }: { report: StatusReport }) {
         </div>
       </section>
     </>
+  );
+}
+
+const DATABASE: Record<string, Look> = {
+  ok: { label: "OK", tone: "success" },
+  "not migrated": { label: "Not migrated", tone: "warning" },
+  error: { label: "Error", tone: "danger" },
+};
+
+function DatabaseSection({ database }: { database: DatabaseState }) {
+  const look = DATABASE[database.status] ?? { label: database.status, tone: "neutral" };
+  const tables = Object.entries(database.tables);
+  return (
+    <section aria-labelledby="database-heading" className="mt-10 rounded-xl border border-border bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 id="database-heading" className="text-xl font-semibold tracking-tight">
+          Database
+        </h2>
+        <Badge tone={look.tone} size="lg">
+          {look.label}
+        </Badge>
+      </div>
+      {database.message ? <p className="mt-3 leading-7 text-muted">{database.message}</p> : null}
+      {tables.length > 0 ? (
+        <dl aria-label="Rows per table" className="mt-4 grid gap-x-8 text-sm sm:grid-cols-2">
+          {tables.map(([name, rows]) => (
+            <div key={name} className="flex justify-between gap-4 border-b border-border py-1.5">
+              <dt className="font-mono text-muted">{name}</dt>
+              <dd className="font-mono tabular-nums">{rows}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </section>
   );
 }
 

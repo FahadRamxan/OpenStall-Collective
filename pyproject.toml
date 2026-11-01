@@ -13,6 +13,9 @@ dependencies = [
     "pydantic-settings>=2.16,<3",
     # Ed25519 signatures on trust passports (raw key bytes need 40 or later).
     "cryptography>=42",
+    # The database: models and sessions, and migrations.
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
 ]
 
 [project.optional-dependencies]

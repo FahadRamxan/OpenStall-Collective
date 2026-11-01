@@ -22,6 +22,8 @@ cp .env.example .env
 uvicorn openstall_api.main:app --reload
 ```
 
+The API keeps its data in a SQLite file at `data/openstall.db` and brings the tables up to date when it starts. To use Postgres instead, set `DATABASE_URL` (see `.env.example`). After changing the tables in `apps/api/openstall_api/models.py`, make a migration with `alembic revision --autogenerate -m "what changed"`.
+
 The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP).
 
 It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real adapters arrive in later build steps; until one exists, the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.

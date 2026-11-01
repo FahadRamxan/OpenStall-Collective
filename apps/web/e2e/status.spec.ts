@@ -49,6 +49,26 @@ test("shows the API's fake mode, its version and every adapter as fake", async (
   }
 });
 
+test("the API starts on a fresh database, migrates it, and the page shows every table", async ({ page }) => {
+  // playwright.config.ts empties the e2e database before the API starts, so OK here means the start-up migration ran.
+  const [response] = await Promise.all([
+    page.waitForResponse((reply) => new URL(reply.url()).pathname === "/api/status"),
+    page.goto("/status"),
+  ]);
+  const report = (await response.json()) as StatusReport;
+  expect(report.database.status).toBe("ok");
+  expect(Object.keys(report.database.tables)).toEqual(
+    expect.arrayContaining(["sellers", "products", "orders", "order_parts", "events", "processed_webhooks"]),
+  );
+
+  const database = page.getByRole("region", { name: "Database" });
+  await expect(database.getByText("OK", { exact: true })).toBeVisible();
+  const rows = database.getByLabel("Rows per table");
+  for (const table of Object.keys(report.database.tables)) {
+    await expect(rows.getByText(table, { exact: true })).toBeVisible();
+  }
+});
+
 test("in sandbox mode, names the missing keys, and fits a phone screen", async ({ page }) => {
   // The e2e API always runs in fake mode, so this test swaps in a sandbox answer. It keeps the real response's
   // headers, CORS included.

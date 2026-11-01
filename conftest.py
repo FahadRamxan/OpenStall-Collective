@@ -10,12 +10,17 @@ OPENSTALL_LIVE_TESTS=1, and they run in sandbox mode with the developer's .env, 
 """
 
 import os
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
+from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import FakeEmbedder, FakeImageSearch, FakeLLM, FakeSpeechToText
 from openstall_api.adapters import get_registry, reset_app_state
+from openstall_api.db import get_engine, new_session
 from openstall_api.messaging import FakeMessenger
+from openstall_api.models import Base
 from openstall_api.settings import IGNORE_DOTENV, Settings, get_settings
 from openstall_paypal.gateway import FakeGateway
 
@@ -38,20 +43,35 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip)
 
 
-@pytest.fixture(autouse=True)
-def fake_mode(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
-    """Fake mode for every test, with fresh fakes: nothing one test records is seen by the next.
+@pytest.fixture
+def test_database_url(tmp_path: Path) -> str:
+    """A SQLite file of this test's own, so no test touches data/openstall.db or sees another test's rows."""
+    return f"sqlite:///{(tmp_path / 'openstall-test.db').as_posix()}"
 
-    Live tests get sandbox mode and the developer's .env instead.
+
+@pytest.fixture(autouse=True)
+def fake_mode(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, test_database_url: str):
+    """Fake mode for every test, with fresh fakes and its own database: nothing one test does reaches the next.
+
+    Live tests get sandbox mode and the developer's .env instead (but still their own database).
     """
     if request.node.get_closest_marker("live"):
         monkeypatch.setenv("OPENSTALL_MODE", "sandbox")
         monkeypatch.delenv(IGNORE_DOTENV, raising=False)
     else:
         monkeypatch.setenv("OPENSTALL_MODE", "fake")
+    monkeypatch.setenv("DATABASE_URL", test_database_url)
     reset_app_state()
     yield
     reset_app_state()
+
+
+@pytest.fixture
+def db() -> Iterator[Session]:
+    """A session on this test's own database, with every table created."""
+    Base.metadata.create_all(get_engine())
+    with new_session() as session:
+        yield session
 
 
 class Fakes:
@@ -97,13 +117,15 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def use_settings(monkeypatch: pytest.MonkeyPatch):
+def use_settings(monkeypatch: pytest.MonkeyPatch, test_database_url: str):
     """Switch the app to settings from only the given environment variables, for example
-    use_settings(OPENSTALL_MODE="sandbox", ANTHROPIC_API_KEY="made-up"). Anything not given takes its default."""
+    use_settings(OPENSTALL_MODE="sandbox", ANTHROPIC_API_KEY="made-up"). Anything not given takes its default,
+    except DATABASE_URL, which stays on the test's own database unless given."""
 
     def switch(**env: str) -> Settings:
         for name in Settings.model_fields:
             monkeypatch.delenv(name, raising=False)
+        env.setdefault("DATABASE_URL", test_database_url)
         for name, value in env.items():
             monkeypatch.setenv(name, value)
         reset_app_state()

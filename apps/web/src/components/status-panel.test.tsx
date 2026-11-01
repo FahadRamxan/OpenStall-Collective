@@ -18,15 +18,23 @@ function adapter(overrides: Partial<AdapterState> & Pick<AdapterState, "label">)
   };
 }
 
+const DATABASE_OK: StatusReport["database"] = {
+  status: "ok",
+  tables: { orders: 0, sellers: 4 },
+  message: null,
+};
+
 const FAKE_REPORT: StatusReport = {
   mode: "fake",
   version: "0.1.0",
+  database: DATABASE_OK,
   adapters: ADAPTER_LABELS.map((label) => adapter({ label })),
 };
 
 const SANDBOX_REPORT: StatusReport = {
   mode: "sandbox",
   version: "0.2.0",
+  database: DATABASE_OK,
   adapters: [
     adapter({ label: "LLM", status: "not built", keys: ["ANTHROPIC_API_KEY"] }),
     adapter({
@@ -147,6 +155,47 @@ describe("StatusPanel", () => {
     render(<StatusPanel />);
 
     expect(row(await adaptersTable(), "Embedder")).toHaveTextContent("Real service: Embedder service. No key needed.");
+  });
+
+  it("shows the database as OK, with the rows in each table", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(FAKE_REPORT)));
+
+    render(<StatusPanel />);
+
+    const database = await screen.findByRole("region", { name: "Database" });
+    expect(within(database).getByText("OK")).toBeInTheDocument();
+    const rows = within(database).getByLabelText("Rows per table");
+    expect(rows).toHaveTextContent("orders0");
+    expect(rows).toHaveTextContent("sellers4");
+  });
+
+  it("says when the database is not migrated, and how to fix it", async () => {
+    const report: StatusReport = {
+      ...FAKE_REPORT,
+      database: { status: "not migrated", tables: {}, message: "Missing tables: orders. Run alembic upgrade head." },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+
+    render(<StatusPanel />);
+
+    const database = await screen.findByRole("region", { name: "Database" });
+    expect(within(database).getByText("Not migrated")).toBeInTheDocument();
+    expect(database).toHaveTextContent("Run alembic upgrade head.");
+    expect(within(database).queryByLabelText("Rows per table")).not.toBeInTheDocument();
+  });
+
+  it("says when the database cannot be reached", async () => {
+    const report: StatusReport = {
+      ...FAKE_REPORT,
+      database: { status: "error", tables: {}, message: "The database could not be reached (OperationalError)." },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(report)));
+
+    render(<StatusPanel />);
+
+    const database = await screen.findByRole("region", { name: "Database" });
+    expect(within(database).getByText("Error")).toBeInTheDocument();
+    expect(database).toHaveTextContent("could not be reached");
   });
 
   it("shows a status it does not know as the API wrote it", async () => {

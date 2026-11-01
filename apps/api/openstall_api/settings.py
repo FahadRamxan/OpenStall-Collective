@@ -59,6 +59,8 @@ class Settings(BaseSettings):
 
     # Can hold a password (hosted Postgres), so it is never shown, like the keys. Read it with get_secret_value().
     DATABASE_URL: SecretStr = SecretStr("sqlite:///./data/openstall.db")
+    # Apply database migrations when the API starts. On by default for local runs; the host sets it explicitly.
+    AUTO_MIGRATE: bool = True
 
     # Trust passports: Ed25519 private key, base64.
     PASSPORT_SIGNING_KEY: SecretStr | None = None

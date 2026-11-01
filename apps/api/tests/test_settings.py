@@ -30,6 +30,7 @@ ENVIRONMENT = {
     "GOOGLE_VISION_API_KEY": "made-up-vision-key",
     "DATABASE_URL": "postgresql://openstall:made-up-password@db.example:5432/openstall",
     "PASSPORT_SIGNING_KEY": "bWFkZS11cCBzaWduaW5nIGtleQ==",
+    "AUTO_MIGRATE": "false",
 }
 
 SECRETS = (
@@ -46,6 +47,8 @@ HIDDEN = (*SECRETS, "DATABASE_URL")
 
 
 def plain(value: object) -> object:
+    if isinstance(value, bool):
+        return str(value).lower()
     return value.get_secret_value() if isinstance(value, SecretStr) else value
 
 
@@ -57,8 +60,10 @@ def test_settings_load_from_the_environment(use_settings):
     assert {name: plain(getattr(settings, name)) for name in ENVIRONMENT} == ENVIRONMENT
 
 
-def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings):
-    settings = use_settings()
+def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings, monkeypatch):
+    use_settings()
+    monkeypatch.delenv("DATABASE_URL")  # the tests keep their own database; look at the real default
+    settings = Settings(_env_file=None)
 
     assert settings.OPENSTALL_MODE == "fake"
     assert settings.PUBLIC_BASE_URL == "http://localhost:8000"
@@ -67,6 +72,7 @@ def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings):
     assert settings.TWILIO_WHATSAPP_FROM == "whatsapp:+14155238886"
     assert settings.LLM_MODEL == "claude-sonnet-5-5"
     assert settings.DATABASE_URL.get_secret_value() == "sqlite:///./data/openstall.db"
+    assert settings.AUTO_MIGRATE is True
     assert not any(settings.is_set(key) for key in KEYS)
 
 
@@ -140,8 +146,9 @@ def test_get_settings_reads_the_env_file_unless_told_to_ignore_it(use_settings, 
     assert get_settings().LLM_MODEL == "claude-sonnet-5-5"
 
 
-def test_a_fresh_copy_of_env_example_runs_in_fake_mode_with_no_keys(use_settings):
+def test_a_fresh_copy_of_env_example_runs_in_fake_mode_with_no_keys(use_settings, monkeypatch):
     use_settings()
+    monkeypatch.delenv("DATABASE_URL")  # the tests keep their own database; check the file's own default
 
     settings = Settings(_env_file=ENV_EXAMPLE)
 

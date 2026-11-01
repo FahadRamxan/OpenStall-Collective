@@ -20,6 +20,7 @@ from openstall_agents.adapters import (
     ImageSearch,
     SpeechToText,
 )
+from openstall_api.db import reset_engine
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
 from openstall_paypal.gateway import FakeGateway, PaymentGateway
@@ -223,8 +224,10 @@ def get_registry() -> AdapterRegistry:
 
 
 def reset_app_state() -> None:
-    """Forget the settings and the registry, so the next call reads settings again and makes fresh adapters."""
+    """Forget the settings, the registry and the database engine, so the next call reads settings again and makes
+    fresh adapters and a fresh connection pool."""
     global _registry
     with _registry_lock:
         _registry = None
     get_settings.cache_clear()
+    reset_engine()

@@ -86,7 +86,13 @@ export type AdapterState = {
   missing_keys: string[];
 };
 
-export type StatusReport = { mode: Mode; version: string; adapters: AdapterState[] };
+/** "ok" with rows per table; "not migrated" when tables are missing; "error" when the API cannot reach it. */
+export type DatabaseStatus = "ok" | "not migrated" | "error";
+
+/** The database as GET /api/status reports it. The message never holds the database's address or password. */
+export type DatabaseState = { status: DatabaseStatus; tables: Record<string, number>; message: string | null };
+
+export type StatusReport = { mode: Mode; version: string; database: DatabaseState; adapters: AdapterState[] };
 
 export function getStatus(init: RequestInit = {}): Promise<StatusReport> {
   return apiGet<StatusReport>("/api/status", init);

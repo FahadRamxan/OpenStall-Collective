@@ -128,7 +128,12 @@ describe("apiGet and apiPost", () => {
 describe("getStatus", () => {
   it("reads GET /api/status", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://api.test");
-    const report: StatusReport = { mode: "fake", version: "0.1.0", adapters: [] };
+    const report: StatusReport = {
+      mode: "fake",
+      version: "0.1.0",
+      database: { status: "ok", tables: { sellers: 0 }, message: null },
+      adapters: [],
+    };
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(report));
     vi.stubGlobal("fetch", fetchMock);
 
