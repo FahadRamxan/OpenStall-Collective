@@ -1,7 +1,5 @@
 # OpenStall Collective
 
-[![CI](https://github.com/FahadRamxan/OpenStall-Collective/actions/workflows/ci.yml/badge.svg)](https://github.com/FahadRamxan/OpenStall-Collective/actions/workflows/ci.yml)
-
 OpenStall Collective lets small sellers who only use WhatsApp sell to AI shopping agents. A seller sends photos and a voice note, and AI turns them into listings that any agent can read and buy from. Each seller has an agent that negotiates within limits the seller sets. When an order is too big for one seller, the system splits it across several sellers, and one PayPal checkout pays them all.
 
 Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox; no real money moves.

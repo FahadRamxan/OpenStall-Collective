@@ -43,7 +43,7 @@ passports = st.dictionaries(
     max_size=8,
 )
 
-# Signing is fast; the deadline only adds flakiness on a slow CI machine.
+# Signing is fast; the deadline only adds flakiness on a slow machine.
 checks = settings(deadline=None, max_examples=200)
 
 

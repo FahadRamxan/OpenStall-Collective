@@ -32,7 +32,7 @@ class Clock(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class SystemClock:
-    """Today's date in one time zone, UTC by default, so every server and CI agree on it."""
+    """Today's date in one time zone, UTC by default, so every server and machine agree on it."""
 
     tz: tzinfo = timezone.utc
 

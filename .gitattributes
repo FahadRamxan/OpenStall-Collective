@@ -1,4 +1,4 @@
-# Keep LF line endings everywhere, so Windows and Linux (CI) see the same files.
+# Keep LF line endings everywhere, so Windows and Linux machines see the same files.
 * text=auto eol=lf
 *.png binary
 *.jpg binary
