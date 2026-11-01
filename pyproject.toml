@@ -16,6 +16,8 @@ dependencies = [
     # The database: models and sessions, and migrations.
     "sqlalchemy>=2.0,<3",
     "alembic>=1.13,<2",
+    # Server-sent events for the live feed (the MCP SDK already depends on it).
+    "sse-starlette>=3,<4",
 ]
 
 [project.optional-dependencies]

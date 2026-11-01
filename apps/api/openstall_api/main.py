@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from openstall_api import __version__
 from openstall_api.db import migrate
+from openstall_api.events_api import router as events_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
 from openstall_api.storefront import storefront, storefront_http_app
@@ -50,6 +51,7 @@ def health() -> dict[str, str]:
 
 
 app.include_router(status_router)
+app.include_router(events_router)
 
 # Add the MCP route itself rather than mounting the app, so the endpoint is exactly /mcp, not /mcp/.
 app.router.routes.extend(mcp_http.routes)

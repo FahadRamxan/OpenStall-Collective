@@ -4,7 +4,7 @@ OpenStall Collective lets small sellers who only use WhatsApp sell to AI shoppin
 
 Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox; no real money moves.
 
-> **Status:** early scaffold. The API runs and serves an MCP storefront with one tool, `search_products`, over a seeded demo catalog. It has a fake mode with a stand-in for every outside service, and a status endpoint. The web app has its layout, a home page, a system status page and placeholder pages. Everything else is still to be built.
+> **Status:** being built prompt by prompt. Working so far: the MCP storefront with `search_products` over a seeded catalog, settings and fake mode, the database and its migrations, the event log with a live feed on `/demo`, the system status page, and the offer-rules, allocator and trust-passport cores.
 
 ## Run it locally
 

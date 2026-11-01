@@ -19,7 +19,7 @@ test('"See the live demo" goes to /demo', async ({ page }) => {
 
   await expect(page).toHaveURL("/demo");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Live demo");
-  await expect(page.getByText("Coming soon")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live activity" })).toBeVisible();
 });
 
 test("the footer says it runs in the PayPal sandbox", async ({ page }) => {

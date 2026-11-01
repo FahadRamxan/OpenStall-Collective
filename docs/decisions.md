@@ -122,3 +122,16 @@ Code: `apps/api/openstall_api/db.py` (engine, sessions, migrations, the `Money` 
 - **`DATABASE_URL` is a secret setting.** `postgres://` URLs from hosts are rewritten for the psycopg driver, and a relative SQLite path is taken from the repo root. `/api/status` reports the database as ok (with rows per table), "not migrated" (with the missing tables) or "error" (with only the error's type, never the URL).
 - **Migrations run at start-up when `AUTO_MIGRATE` is on** (the default for local runs). The hosted demo will run `alembic upgrade head` in its start command instead (prompt 12). After changing `models.py`, make a migration with `alembic revision --autogenerate -m "..."`; `test_db_migrations.py` fails if a model changes without one.
 - **Each test has its own SQLite file.** The root `conftest.py` points `DATABASE_URL` at a file in the test's temporary folder, and the `db` fixture creates the tables and gives a session. `use_settings()` keeps that database unless a test passes its own `DATABASE_URL`.
+
+## November 1: the event log and the live feed (prompt 05)
+
+Code: `apps/api/openstall_api/events.py` (event types, `record_event`, the stream), `events_api.py` (HTTP), and in the web app `src/hooks/use-event-stream.ts` and `src/components/live-activity.tsx`.
+
+- **Every event carries a one-line summary in plain English,** written by the code that records it (for example "Amina was paid $216.00 on proof"). The feed shows it as is, so the wording lives next to the action and the web app needs no per-type templates. It is stored in the payload under `summary` and returned as its own field.
+- **`record_event` does not commit.** It adds the event to the caller's session, so an action and its event are saved or rolled back together, and the audit log never claims something that did not happen.
+- **Payloads stay exact.** Money becomes a string such as "216.00" (a float would round), dates become ISO strings, and enums their values. Anything else is refused with a clear error.
+- **All event types live in `EventType`.** An unknown type is refused, so a typo cannot create a type the feed has never heard of.
+- **The stream polls the table** every half second instead of listening in-process, so it also sees events written by other server instances or scripts. Each message's id is the event id: a browser that reconnects sends it back as `Last-Event-ID` and misses nothing. A comment ping every 15 seconds keeps proxies from closing a quiet stream.
+- **The page loads past events first, then follows the stream from the last one it has** (`?after_id=`), so nothing falls in the gap between the two. Events are shown newest first and only once, however often they arrive.
+- **Times are UTC.** SQLite drops the time zone, so the API marks event times as UTC before sending them; the page shows them in the viewer's own time zone.
+- **`POST /api/dev/events` exists only in fake mode.** Anywhere else it is a plain 404, so the hosted demo cannot be filled with test events by strangers.

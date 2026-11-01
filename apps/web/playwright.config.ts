@@ -11,6 +11,8 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const apiPort = Number(process.env.E2E_API_PORT || 8100);
 const webPort = Number(process.env.E2E_WEB_PORT || 3100);
 const apiURL = `http://127.0.0.1:${apiPort}`;
+/** The e2e API, for tests that call it directly (for example to record a test event). */
+export const E2E_API_URL = apiURL;
 const webURL = `http://127.0.0.1:${webPort}`;
 
 // A throwaway SQLite database in an ignored folder, emptied each time the e2e API starts.
