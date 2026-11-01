@@ -17,6 +17,8 @@ dependencies = [
 dev = [
     "pytest>=8",
     "httpx>=0.27",
+    # Property tests for the allocator and trust passports.
+    "hypothesis>=6.100,<7",
 ]
 
 [build-system]
