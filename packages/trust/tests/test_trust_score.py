@@ -60,6 +60,8 @@ def test_rounds_once_however_many_places_a_rate_has():
 )
 def test_the_callers_decimal_context_is_not_used(callers_settings):
     with localcontext(**callers_settings) as callers_context:
+        # localcontext copies the thread's sticky flags, which earlier tests may have set; start from none.
+        callers_context.clear_flags()
         assert trust_score(0.95, 0.02, 0.91) == Decimal("0.95")
         assert trust_score(1, 0, 1) == Decimal("1.00")
         assert trust_score(Decimal("0.0124" + "9" * 30), 1, 0) == Decimal("0.00")
