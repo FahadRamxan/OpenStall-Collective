@@ -2,12 +2,23 @@
 they come back, then pay or release each seller's share. Every PayPal call goes through the payment gateway.
 """
 
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session, selectinload
 
 from openstall_api.events import EventType, record_event
-from openstall_api.models import Order, OrderPart, OrderStatus
-from openstall_api.orders import move_order
-from openstall_paypal import Checkout, CheckoutPart, CheckoutRequest, PaymentGateway
+from openstall_api.models import Order, OrderPart, OrderStatus, PartStatus
+from openstall_api.orders import move_order, move_part
+from openstall_paypal import (
+    WAITING_FOR_BUYER,
+    Checkout,
+    CheckoutPart,
+    CheckoutRequest,
+    PaymentGateway,
+    PaymentUnavailable,
+    Reservation,
+    Share,
+)
 
 # Only these orders can be sent to PayPal: a repeated press of Approve finds the order waiting for approval.
 CHECKOUT_FROM = frozenset({OrderStatus.DRAFT, OrderStatus.AWAITING_APPROVAL})
@@ -23,6 +34,11 @@ STATUS_WORDS = {
 }
 
 
+# Orders whose money PayPal already holds, or has paid out: reserving them again changes nothing.
+RESERVED = frozenset({OrderStatus.AUTHORIZED, OrderStatus.PARTLY_SHIPPED, OrderStatus.SHIPPED, OrderStatus.COMPLETED})
+PAID = frozenset({PartStatus.CAPTURED, PartStatus.DELIVERED})
+
+
 class OrderNotFound(LookupError):
     pass
 
@@ -31,8 +47,20 @@ class WrongStatus(ValueError):
     """The order's status does not allow this step, such as sending a reserved order to PayPal again."""
 
 
+class NotApproved(WrongStatus):
+    """The human has not approved the order at PayPal (yet), so there is nothing to reserve."""
+
+
 def load_order(session: Session, order_id: str) -> Order:
-    order = session.get(Order, order_id, options=[selectinload(Order.parts).selectinload(OrderPart.seller)])
+    # Locked on Postgres, so two requests cannot reserve or settle the same order at once, and read again once
+    # locked (populate_existing), so nothing loaded before the lock is trusted.
+    order = session.get(
+        Order,
+        order_id,
+        options=[selectinload(Order.parts).selectinload(OrderPart.seller)],
+        with_for_update=True,
+        populate_existing=True,
+    )
     if order is None:
         raise OrderNotFound(f"There is no order called {order_id!r}.")
     return order
@@ -91,3 +119,149 @@ def start_checkout(session: Session, order_id: str, gateway: PaymentGateway, web
             payload={"paypal_order_id": checkout.paypal_order_id, "total_usd": request.total_usd},
         )
     return checkout
+
+
+def reserve_order(session: Session, order_id: str, gateway: PaymentGateway) -> Order:
+    """Reserve an approved order at PayPal, exactly once. The caller commits.
+
+    PayPal's own state decides: the order is read first and reserved only if it is APPROVED. If PayPal does not
+    answer the reserve call, the order is read again to learn whether it went through; it is never sent twice blindly.
+    """
+    order = load_order(session, order_id)
+    if order.status in RESERVED:
+        return order
+    if order.status != OrderStatus.AWAITING_APPROVAL or not order.paypal_order_id:
+        raise WrongStatus(f"Order {order.id} is {STATUS_WORDS[order.status]}, so there is nothing to reserve.")
+    paypal_order_id = order.paypal_order_id
+    state = gateway.get_order(paypal_order_id)
+    if state.holds:  # reserved before, but our side was not saved
+        reservation = Reservation(paypal_order_id, state.holds)
+    elif state.status in WAITING_FOR_BUYER:
+        raise NotApproved("PayPal does not have your approval for this order yet. Go back to the order and approve it.")
+    elif state.status != "APPROVED":
+        raise NotApproved(
+            f"PayPal says this approval is no longer valid ({state.status.lower()}). Go back to the order and approve "
+            "it again."
+        )
+    else:
+        try:
+            reservation = gateway.reserve(paypal_order_id)
+        except PaymentUnavailable:
+            state = gateway.get_order(paypal_order_id)
+            if not state.holds:
+                raise
+            reservation = Reservation(paypal_order_id, state.holds)
+    for part in order.parts:
+        hold = reservation.hold_for(part.reference_id)
+        if hold is None:
+            raise WrongStatus(f"PayPal sent no authorization for share {part.reference_id} of order {order.id}.")
+        part.authorization_id = hold
+        move_part(part, PartStatus.AUTHORIZED)
+        record_event(
+            session,
+            EventType.PART_RESERVED,
+            f"{part.seller.name}'s share is reserved: ${part.amount_usd:,.2f}, paid when she ships",
+            entity_id=part.id,
+            payload={"order_id": order.id, "seller_id": part.seller_id, "amount_usd": part.amount_usd},
+        )
+    move_order(order, OrderStatus.AUTHORIZED)
+    order.approved_at = datetime.now(UTC)
+    record_event(
+        session,
+        EventType.ORDER_AUTHORIZED,
+        f"PayPal reserved ${order.total_usd:,.2f} for order {order.id}. Nothing is taken until each maker ships",
+        entity_id=order.id,
+        payload={"paypal_order_id": paypal_order_id, "total_usd": order.total_usd},
+    )
+    return order
+
+
+def load_part(session: Session, part_id: str) -> OrderPart:
+    part = session.get(OrderPart, part_id)
+    if part is None:
+        raise OrderNotFound(f"There is no order share called {part_id!r}.")
+    load_order(session, part.order_id)  # lock the order: whether this is its last open share depends on the others
+    return part
+
+
+def share_of(part: OrderPart) -> Share:
+    """A reserved share as the gateway needs it. `last`: no other share of the order is still reserved."""
+    assert part.authorization_id is not None
+    others_open = any(other.status == PartStatus.AUTHORIZED for other in part.order.parts if other.id != part.id)
+    return Share(
+        part_id=part.id,
+        hold_id=part.authorization_id,
+        amount_usd=part.amount_usd,
+        payee_merchant_id=part.seller.paypal_merchant_id,
+        payee_email=part.seller.paypal_email,
+        note=f"Your share of OpenStall order {part.order_id}: {share_description(part)}",
+        last=not others_open,
+    )
+
+
+def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderPart:
+    """Pay one maker her share on proof of shipping: only once her tracking is confirmed, and only once.
+    The caller commits."""
+    part = load_part(session, part_id)
+    name = part.seller.name
+    if part.status in PAID:
+        return part
+    if part.status != PartStatus.AUTHORIZED:
+        raise WrongStatus(f"{name}'s share is {part.status.value}, so it cannot be paid.")
+    if not part.tracking_number:
+        raise WrongStatus(f"{name}'s share is paid when her tracking is confirmed, and there is none yet.")
+    payment = gateway.pay_share(share_of(part))
+    part.capture_id = payment.capture_id
+    move_part(part, PartStatus.CAPTURED)
+    record_event(
+        session,
+        EventType.PART_CAPTURED,
+        f"{name} was paid ${part.amount_usd:,.2f} on proof of shipping",
+        entity_id=part.id,
+        payload={
+            "order_id": part.order_id,
+            "capture_id": payment.capture_id,
+            "payout_batch_id": payment.payout_batch_id,
+            "amount_usd": part.amount_usd,
+        },
+    )
+    settle_order(part.order)
+    return part
+
+
+def release_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderPart:
+    """Give one maker's share back to the buyer when she cannot deliver; never once she is paid. The caller commits."""
+    part = load_part(session, part_id)
+    name = part.seller.name
+    if part.status == PartStatus.RELEASED:
+        return part
+    if part.status in PAID:
+        raise WrongStatus(f"{name}'s share was already paid, so it cannot be released.")
+    if part.status == PartStatus.AUTHORIZED:
+        gateway.release_share(share_of(part))
+    move_part(part, PartStatus.RELEASED)
+    record_event(
+        session,
+        EventType.PART_RELEASED,
+        f"{name}'s share of ${part.amount_usd:,.2f} was released back to the buyer",
+        entity_id=part.id,
+        payload={"order_id": part.order_id, "amount_usd": part.amount_usd},
+    )
+    settle_order(part.order)
+    return part
+
+
+def settle_order(order: Order) -> None:
+    """The order's status from its shares: partly shipped while some are paid and some still wait, shipped once
+    none waits, and cancelled if every share was released."""
+    if order.status not in (OrderStatus.AUTHORIZED, OrderStatus.PARTLY_SHIPPED):
+        return
+    statuses = [part.status for part in order.parts]
+    paid = any(status in PAID for status in statuses)
+    waiting = any(status == PartStatus.AUTHORIZED for status in statuses)
+    if waiting:
+        target = OrderStatus.PARTLY_SHIPPED if paid else order.status
+    else:
+        target = OrderStatus.SHIPPED if paid else OrderStatus.CANCELLED
+    if target != order.status:
+        move_order(order, target)

@@ -35,6 +35,8 @@ const ORDER: Order = {
   total_usd: "392.00",
   units: 23,
   created_at: "2026-11-03T10:00:00Z",
+  approved_at: null,
+  paypal_order_id: null,
   parent_order_id: null,
   request: {
     summary: "40 hand-embroidered cushion covers for corporate gifts",

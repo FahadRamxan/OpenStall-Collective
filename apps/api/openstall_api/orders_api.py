@@ -16,7 +16,7 @@ from openstall_api.catalog import photo_path
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
-from openstall_api.payments import OrderNotFound, WrongStatus, start_checkout
+from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, start_checkout
 from openstall_paypal import PaymentError, PaymentUnavailable
 from openstall_trust import trust_score
 
@@ -64,6 +64,8 @@ class OrderOut(BaseModel):
     total_usd: Decimal
     units: int
     created_at: datetime
+    approved_at: datetime | None
+    paypal_order_id: str | None
     parent_order_id: str | None
     request: RequestOut | None
     parts: list[PartOut]
@@ -105,6 +107,8 @@ def order_out(session: Session, order: Order) -> OrderOut:
         total_usd=server_total(order),
         units=sum(part.quantity for part in order.parts),
         created_at=order.created_at,
+        approved_at=order.approved_at,
+        paypal_order_id=order.paypal_order_id,
         parent_order_id=order.parent_order_id,
         request=(
             RequestOut(
@@ -167,6 +171,15 @@ class CheckoutOut(BaseModel):
     approval_url: str
 
 
+# PayPal refusals the human can do something about, in words they can act on.
+REFUSALS = {
+    "INSTRUMENT_DECLINED": "PayPal declined the way you chose to pay. Nothing was reserved. Approve the order again "
+    "and choose another way to pay.",
+    "ORDER_EXPIRED": "Your approval at PayPal expired before the money was reserved. Approve the order again.",
+    "ORDER_NOT_APPROVED": "PayPal does not have your approval for this order yet. Go back to the order and approve it.",
+}
+
+
 @contextmanager
 def payment_errors() -> Iterator[None]:
     """Payment failures as HTTP errors a person can read. When one is raised, nothing was reserved or paid."""
@@ -183,6 +196,8 @@ def payment_errors() -> Iterator[None]:
             status_code=503, detail="PayPal did not answer, so nothing was reserved or paid. Try again in a moment."
         ) from None
     except PaymentError as error:
+        if error.issue in REFUSALS:
+            raise HTTPException(status_code=409, detail=REFUSALS[error.issue]) from None
         raise HTTPException(
             status_code=502, detail=f"PayPal refused this ({error.issue}), so nothing was reserved or paid."
         ) from None
@@ -195,3 +210,12 @@ def checkout(order_id: str, session: SessionDep, registry: RegistryDep) -> Check
         result = start_checkout(session, order_id, registry.payment_gateway, registry.settings.WEB_BASE_URL)
     session.commit()
     return CheckoutOut(paypal_order_id=result.paypal_order_id, approval_url=result.approval_url)
+
+
+@router.post("/orders/{order_id}/reserve")
+def reserve(order_id: str, session: SessionDep, registry: RegistryDep) -> OrderOut:
+    """The human is back from PayPal: reserve the whole order, once. Safe to call again; it changes nothing then."""
+    with payment_errors():
+        reserve_order(session, order_id, registry.payment_gateway)
+    session.commit()
+    return order_out(session, _load(session, order_id))

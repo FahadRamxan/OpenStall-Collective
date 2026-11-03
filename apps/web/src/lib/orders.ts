@@ -41,6 +41,9 @@ export type Order = {
   total_usd: string;
   units: number;
   created_at: string;
+  /** When PayPal reserved the order: null until then. */
+  approved_at: string | null;
+  paypal_order_id: string | null;
   parent_order_id: string | null;
   request: BuyerRequest | null;
   parts: OrderPart[];
@@ -56,6 +59,11 @@ export type Checkout = { paypal_order_id: string; approval_url: string };
 /** Creates the PayPal order for the whole total. Pressing Approve twice gives back the same PayPal order. */
 export function startCheckout(id: string): Promise<Checkout> {
   return apiPost<Checkout>(`/api/orders/${encodeURIComponent(id)}/checkout`, {});
+}
+
+/** Reserves the approved order at PayPal, once. Calling it again changes nothing and returns the order. */
+export function reserveOrder(id: string, init: RequestInit = {}): Promise<Order> {
+  return apiPost<Order>(`/api/orders/${encodeURIComponent(id)}/reserve`, {}, init);
 }
 
 /** Only a draft, or an order already waiting at PayPal, can be sent to PayPal. */
@@ -79,4 +87,13 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   shipped: "Shipped",
   completed: "Completed",
   cancelled: "Cancelled",
+};
+
+/** Where each maker's share stands in pay-on-proof, in words for the buyer. */
+export const PART_STATUS_LABELS: Record<PartStatus, string> = {
+  pending: "Waiting for your approval",
+  authorized: "Reserved, paid when she ships",
+  captured: "Paid on proof of shipping",
+  delivered: "Delivered",
+  released: "Released back to you",
 };

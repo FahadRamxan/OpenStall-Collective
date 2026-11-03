@@ -40,7 +40,7 @@ async function freshOrder(request: APIRequestContext): Promise<string> {
   return ((await response.json()) as { order_id: string }).order_id;
 }
 
-test("Approve goes to the simulated PayPal page, and approving there comes back to OpenStall", async ({
+test("Approve, then approving at the simulated PayPal page, reserves every maker's share", async ({
   page,
   request,
 }) => {
@@ -59,7 +59,47 @@ test("Approve goes to the simulated PayPal page, and approving there comes back 
   await page.getByRole("button", { name: "Approve", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/approve/${orderId}/return\\?token=FAKE-[0-9A-F]+&PayerID=FAKEBUYER01$`));
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("You approved the order at PayPal");
+  await expect(page.getByRole("heading", { level: 1, name: "PayPal is holding $815.00" })).toBeVisible();
+  const receipt = page.getByRole("list", { name: "Each maker's share" }).getByRole("listitem");
+  await expect(receipt).toHaveCount(4);
+  for (const [index, share] of SHARES.entries()) {
+    await expect(receipt.nth(index)).toContainText(share.name);
+    await expect(receipt.nth(index)).toContainText(share.amount);
+    await expect(receipt.nth(index)).toContainText("Reserved, paid when she ships");
+  }
+  await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-1280.png"), fullPage: true });
+
+  // Reloading the receipt reserves nothing twice, and the order now points to its receipt instead of PayPal.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "PayPal is holding $815.00" })).toBeVisible();
+  await page.goto(`/approve/${orderId}`);
+  await expect(page.getByRole("button", { name: "Approve and pay with PayPal" })).toHaveCount(0);
+  await page.getByRole("link", { name: "See the receipt" }).click();
+  await expect(page).toHaveURL(`/approve/${orderId}/return`);
+});
+
+test("the receipt fits a phone screen", async ({ page, request }) => {
+  const orderId = await freshOrder(request);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/approve/${orderId}`);
+  await page.getByRole("button", { name: "Approve and pay with PayPal" }).click();
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+
+  await expect(page.getByRole("list", { name: "Each maker's share" }).getByRole("listitem")).toHaveCount(4);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-375.png"), fullPage: true });
+});
+
+test("a receipt for an order nobody approved says so and links back", async ({ page, request }) => {
+  const orderId = await freshOrder(request);
+
+  await page.goto(`/approve/${orderId}/return`);
+
+  const alert = page.getByRole("main").getByRole("alert");
+  await expect(alert).toContainText("The money is not reserved yet");
+  await expect(alert).toContainText("nothing to reserve");
+  await alert.getByRole("link", { name: "Back to the order" }).click();
+  await expect(page).toHaveURL(`/approve/${orderId}`);
 });
 
 test("leaving the simulated PayPal page comes back calmly, and Try again returns to it", async ({
