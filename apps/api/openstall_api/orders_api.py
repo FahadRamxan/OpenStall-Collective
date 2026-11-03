@@ -1,5 +1,7 @@
-"""Orders over HTTP, for the approval page: GET /api/orders/{id} and POST /api/orders/{id}/verify-total."""
+"""Orders over HTTP, for the approval page: the order, its total check, and checkout at PayPal."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
@@ -9,15 +11,19 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
 from openstall_allocator import usd
+from openstall_api.adapters import AdapterRegistry, AdapterUnavailable, get_registry
 from openstall_api.catalog import photo_path
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
+from openstall_api.payments import OrderNotFound, WrongStatus, start_checkout
+from openstall_paypal import PaymentError, PaymentUnavailable
 from openstall_trust import trust_score
 
 router = APIRouter(prefix="/api", tags=["orders"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
+RegistryDep = Annotated[AdapterRegistry, Depends(get_registry)]
 
 
 class SellerBrief(BaseModel):
@@ -154,3 +160,38 @@ def verify_total(order_id: str, body: TotalIn, session: SessionDep) -> TotalChec
             detail=f"The total is ${expected:,.2f}, not ${claimed:,.2f}. Totals are worked out on the server.",
         )
     return TotalCheck(total_usd=expected)
+
+
+class CheckoutOut(BaseModel):
+    paypal_order_id: str
+    approval_url: str
+
+
+@contextmanager
+def payment_errors() -> Iterator[None]:
+    """Payment failures as HTTP errors a person can read. When one is raised, nothing was reserved or paid."""
+    try:
+        yield
+    except OrderNotFound as error:
+        raise HTTPException(status_code=404, detail=str(error)) from None
+    except WrongStatus as error:
+        raise HTTPException(status_code=409, detail=str(error)) from None
+    except AdapterUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error)) from None
+    except PaymentUnavailable:
+        raise HTTPException(
+            status_code=503, detail="PayPal did not answer, so nothing was reserved or paid. Try again in a moment."
+        ) from None
+    except PaymentError as error:
+        raise HTTPException(
+            status_code=502, detail=f"PayPal refused this ({error.issue}), so nothing was reserved or paid."
+        ) from None
+
+
+@router.post("/orders/{order_id}/checkout")
+def checkout(order_id: str, session: SessionDep, registry: RegistryDep) -> CheckoutOut:
+    """Spec 3.5: one PayPal order for the whole amount. Approving it at PayPal only reserves the money."""
+    with payment_errors():
+        result = start_checkout(session, order_id, registry.payment_gateway, registry.settings.WEB_BASE_URL)
+    session.commit()
+    return CheckoutOut(paypal_order_id=result.paypal_order_id, approval_url=result.approval_url)

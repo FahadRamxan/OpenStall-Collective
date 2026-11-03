@@ -18,14 +18,17 @@ dependencies = [
     "alembic>=1.13,<2",
     # Server-sent events for the live feed (the MCP SDK already depends on it).
     "sse-starlette>=3,<4",
+    # HTTP for the PayPal client (and later Twilio media downloads).
+    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "httpx>=0.27",
     # Property tests for the allocator and trust passports.
     "hypothesis>=6.100,<7",
+    # Mocks PayPal and other HTTP services in tests, so no test calls a real API.
+    "respx>=0.21,<1",
 ]
 
 [build-system]

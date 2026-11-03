@@ -9,6 +9,7 @@ import {
   getStatus,
   type AdapterState,
   type DatabaseState,
+  type PaymentState,
   type StatusReport,
 } from "@/lib/api";
 
@@ -125,6 +126,8 @@ function Report({ report }: { report: StatusReport }) {
         </dl>
       </section>
 
+      <PaymentSection payment={report.payment} />
+
       <DatabaseSection database={report.database} />
 
       <section aria-labelledby="adapters-heading" className="mt-10">
@@ -157,6 +160,41 @@ function Report({ report }: { report: StatusReport }) {
         </div>
       </section>
     </>
+  );
+}
+
+const PAYMENT: Record<string, Look> = {
+  fake: { label: "Fake", tone: "warning" },
+  "missing key": { label: "Missing key", tone: "danger" },
+  "token ok": { label: "Token OK", tone: "success" },
+  failed: { label: "Failed", tone: "danger" },
+};
+
+const PAYMENT_PATHS: Record<string, string> = {
+  payouts:
+    "Payouts. PayPal holds the buyer's approval for OpenStall, and each maker is paid with PayPal Payouts when she " +
+    "ships.",
+  multiparty: "Multiparty. Each maker is a payee on the PayPal order, and her share is captured when she ships.",
+};
+
+function PaymentSection({ payment }: { payment: PaymentState }) {
+  const look = PAYMENT[payment.status] ?? { label: payment.status, tone: "neutral" };
+  return (
+    <section aria-labelledby="payment-heading" className="mt-10 rounded-xl border border-border bg-surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 id="payment-heading" className="text-xl font-semibold tracking-tight">
+          PayPal
+        </h2>
+        <Badge tone={look.tone} size="lg">
+          {look.label}
+        </Badge>
+      </div>
+      <p className="mt-3 leading-7 text-muted">{payment.message}</p>
+      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt className="text-muted">Payment path</dt>
+        <dd>{PAYMENT_PATHS[payment.path] ?? payment.path}</dd>
+      </dl>
+    </section>
   );
 }
 

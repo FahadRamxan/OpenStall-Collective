@@ -92,7 +92,23 @@ export type DatabaseStatus = "ok" | "not migrated" | "error";
 /** The database as GET /api/status reports it. The message never holds the database's address or password. */
 export type DatabaseState = { status: DatabaseStatus; tables: Record<string, number>; message: string | null };
 
-export type StatusReport = { mode: Mode; version: string; database: DatabaseState; adapters: AdapterState[] };
+/**
+ * The PayPal connection. "token ok": PayPal gave the API a sandbox token. `path` is how makers are paid: by PayPal
+ * Payouts from the platform, or as payees on the PayPal order themselves.
+ */
+export type PaymentState = {
+  status: "fake" | "missing key" | "token ok" | "failed";
+  path: "multiparty" | "payouts";
+  message: string;
+};
+
+export type StatusReport = {
+  mode: Mode;
+  version: string;
+  database: DatabaseState;
+  payment: PaymentState;
+  adapters: AdapterState[];
+};
 
 export function getStatus(init: RequestInit = {}): Promise<StatusReport> {
   return apiGet<StatusReport>("/api/status", init);

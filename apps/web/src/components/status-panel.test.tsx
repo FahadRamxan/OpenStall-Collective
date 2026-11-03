@@ -24,10 +24,17 @@ const DATABASE_OK: StatusReport["database"] = {
   message: null,
 };
 
+const PAYPAL_FAKE: StatusReport["payment"] = {
+  status: "fake",
+  path: "payouts",
+  message: "Checkout runs on the simulated PayPal page. Nothing reaches PayPal.",
+};
+
 const FAKE_REPORT: StatusReport = {
   mode: "fake",
   version: "0.1.0",
   database: DATABASE_OK,
+  payment: PAYPAL_FAKE,
   adapters: ADAPTER_LABELS.map((label) => adapter({ label })),
 };
 
@@ -35,6 +42,11 @@ const SANDBOX_REPORT: StatusReport = {
   mode: "sandbox",
   version: "0.2.0",
   database: DATABASE_OK,
+  payment: {
+    status: "token ok",
+    path: "multiparty",
+    message: "PayPal gave us a token at https://api-m.sandbox.paypal.com.",
+  },
   adapters: [
     adapter({ label: "LLM", status: "not built", keys: ["ANTHROPIC_API_KEY"] }),
     adapter({
@@ -155,6 +167,38 @@ describe("StatusPanel", () => {
     render(<StatusPanel />);
 
     expect(row(await adaptersTable(), "Embedder")).toHaveTextContent("Real service: Embedder service. No key needed.");
+  });
+
+  it("shows PayPal as fake in fake mode, with the payment path", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(FAKE_REPORT)));
+
+    render(<StatusPanel />);
+
+    const paypal = await screen.findByRole("region", { name: "PayPal" });
+    expect(within(paypal).getByText("Fake")).toBeInTheDocument();
+    expect(paypal).toHaveTextContent("Checkout runs on the simulated PayPal page.");
+    expect(paypal).toHaveTextContent("Payouts. PayPal holds the buyer's approval for OpenStall");
+  });
+
+  it("shows when PayPal gave the API a sandbox token, and when it refused", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(SANDBOX_REPORT)));
+    const { unmount } = render(<StatusPanel />);
+
+    const paypal = await screen.findByRole("region", { name: "PayPal" });
+    expect(within(paypal).getByText("Token OK")).toBeInTheDocument();
+    expect(paypal).toHaveTextContent("Multiparty. Each maker is a payee on the PayPal order");
+    unmount();
+
+    const refused: StatusReport = {
+      ...SANDBOX_REPORT,
+      payment: { status: "failed", path: "payouts", message: "PayPal gave no token: Client Authentication failed" },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(refused)));
+    render(<StatusPanel />);
+
+    const failed = await screen.findByRole("region", { name: "PayPal" });
+    expect(within(failed).getByText("Failed")).toBeInTheDocument();
+    expect(failed).toHaveTextContent("Client Authentication failed");
   });
 
   it("shows the database as OK, with the rows in each table", async () => {

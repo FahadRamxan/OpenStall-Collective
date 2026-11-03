@@ -1,21 +1,55 @@
 """PayPal sandbox client: orders, payouts, webhooks and tracking (spec 3.5 and 3.6)."""
 
+from openstall_paypal.client import (
+    PayPalAuthError,
+    PayPalClient,
+    PayPalError,
+    PayPalNotFound,
+    PayPalUnavailable,
+    PayPalValidationError,
+)
 from openstall_paypal.gateway import (
-    Capture,
+    WAITING_FOR_BUYER,
+    WHOLE_ORDER,
     Checkout,
     CheckoutPart,
     CheckoutRequest,
     FakeGateway,
+    FakeOrderView,
+    OrderState,
+    Payment,
     PaymentError,
     PaymentGateway,
+    PaymentUnavailable,
+    PayPalOrderStatus,
+    Reservation,
+    Share,
 )
+from openstall_paypal.sandbox import MultipartyGateway, PayoutsGateway, SandboxGateway
 
 __all__ = [
-    "Capture",
+    "WAITING_FOR_BUYER",
+    "WHOLE_ORDER",
     "Checkout",
     "CheckoutPart",
     "CheckoutRequest",
     "FakeGateway",
+    "FakeOrderView",
+    "MultipartyGateway",
+    "OrderState",
+    "PayPalAuthError",
+    "PayPalClient",
+    "PayPalError",
+    "PayPalNotFound",
+    "PayPalOrderStatus",
+    "PayPalUnavailable",
+    "PayPalValidationError",
+    "Payment",
     "PaymentError",
     "PaymentGateway",
+    "PaymentUnavailable",
+    "PayoutsGateway",
+    "Reservation",
+    "SandboxGateway",
+    "Share",
 ]

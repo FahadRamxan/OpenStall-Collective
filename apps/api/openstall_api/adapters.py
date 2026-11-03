@@ -23,7 +23,7 @@ from openstall_agents.adapters import (
 from openstall_api.db import reset_engine
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
-from openstall_paypal.gateway import FakeGateway, PaymentGateway
+from openstall_paypal import FakeGateway, MultipartyGateway, PaymentGateway, PayoutsGateway, PayPalClient
 
 # fake: a stand-in, in fake mode. real: the real service, in sandbox mode. missing key: sandbox mode, but a key the
 # real service needs is not set. not built: sandbox mode with the keys set, but the real adapter does not exist yet.
@@ -45,6 +45,15 @@ class AdapterSpec:
     keys: tuple[str, ...]  # the settings the real service needs; names only
     make_fake: Callable[[Settings], Any]
     make_real: Callable[[Settings], Any] | None = None  # None until a build step adds the real adapter
+
+
+def make_paypal_gateway(settings: Settings) -> PaymentGateway:
+    """The sandbox gateway for the chosen payment path. The registry checks the keys are set before calling it."""
+    assert settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET
+    client = PayPalClient(
+        settings.PAYPAL_API_BASE, settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET.get_secret_value()
+    )
+    return MultipartyGateway(client) if settings.PAYMENT_PATH == "multiparty" else PayoutsGateway(client)
 
 
 ADAPTERS: tuple[AdapterSpec, ...] = (
@@ -87,6 +96,7 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         service="PayPal sandbox",
         keys=("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"),
         make_fake=lambda settings: FakeGateway(settings.WEB_BASE_URL),
+        make_real=lambda settings: make_paypal_gateway(settings),
     ),
     AdapterSpec(
         name="image_search",

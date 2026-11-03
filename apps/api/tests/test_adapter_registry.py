@@ -16,7 +16,14 @@ from openstall_agents.adapters import (
 )
 from openstall_api.adapters import ADAPTERS, AdapterRegistry, AdapterSpec, AdapterUnavailable, get_registry
 from openstall_api.messaging import FakeMessenger, Messenger
-from openstall_paypal.gateway import CheckoutPart, CheckoutRequest, FakeGateway, PaymentGateway
+from openstall_paypal import (
+    CheckoutPart,
+    CheckoutRequest,
+    FakeGateway,
+    MultipartyGateway,
+    PaymentGateway,
+    PayoutsGateway,
+)
 
 ALL_ADAPTERS = ["llm", "speech_to_text", "embedder", "messenger", "payment_gateway", "image_search"]
 
@@ -111,10 +118,18 @@ def test_sandbox_mode_never_falls_back_to_a_fake(use_settings):
 def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_settings):
     registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY))
 
-    assert statuses(registry) == dict.fromkeys(ALL_ADAPTERS, "not built")
+    assert statuses(registry) == {**dict.fromkeys(ALL_ADAPTERS, "not built"), "payment_gateway": "real"}
     assert all(report.missing_keys == () for report in registry.report())
-    with pytest.raises(AdapterUnavailable, match=r"real Payment gateway adapter \(PayPal sandbox\).*not built yet"):
-        registry.payment_gateway
+    with pytest.raises(AdapterUnavailable, match=r"real LLM adapter \(Claude \(Anthropic\)\).*not built yet"):
+        registry.llm
+
+
+@pytest.mark.parametrize(("path", "gateway"), [("payouts", PayoutsGateway), ("multiparty", MultipartyGateway)])
+def test_sandbox_mode_uses_the_paypal_gateway_for_the_chosen_payment_path(use_settings, path, gateway):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", PAYMENT_PATH=path, **EVERY_KEY))
+
+    assert type(registry.payment_gateway) is gateway
+    assert registry.payment_gateway.client.base_url == "https://api-m.sandbox.paypal.com"
 
 
 def test_sandbox_mode_uses_the_real_adapter_once_it_is_built(use_settings):

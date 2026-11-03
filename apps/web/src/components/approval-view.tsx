@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, mediaUrl, place } from "@/lib/catalog";
-import { ORDER_STATUS_LABELS, formatDay, getOrder, type Order, type OrderPart } from "@/lib/orders";
+import { goTo } from "@/lib/navigation";
+import {
+  ORDER_STATUS_LABELS,
+  canCheckout,
+  formatDay,
+  getOrder,
+  startCheckout,
+  type Order,
+  type OrderPart,
+} from "@/lib/orders";
 
 type Load =
   | { state: "loading" }
@@ -18,6 +27,8 @@ type Load =
 /** The human's approval step: what the agent asked for, who makes it, the total, and one button to PayPal. */
 export function ApprovalView() {
   const { orderId } = useParams<{ orderId: string }>();
+  // PayPal sends the human back here with ?cancelled=1 when they leave without approving.
+  const cancelled = useSearchParams().get("cancelled") === "1";
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [attempt, setAttempt] = useState(0);
 
@@ -65,14 +76,49 @@ export function ApprovalView() {
       </div>
     );
   }
-  return <Approval order={load.order} />;
+  return <Approval order={load.order} cancelled={cancelled} />;
 }
 
-function Approval({ order }: { order: Order }) {
+type CheckoutState = { state: "idle" } | { state: "opening" } | { state: "failed"; message: string };
+
+/** Sends the order to PayPal. The page then leaves for PayPal, so "opening" lasts until it does. */
+function useCheckout(orderId: string) {
+  const [checkout, setCheckout] = useState<CheckoutState>({ state: "idle" });
+  async function approve() {
+    setCheckout({ state: "opening" });
+    try {
+      const { approval_url } = await startCheckout(orderId);
+      goTo(approval_url);
+    } catch (error) {
+      setCheckout({ state: "failed", message: errorMessage(error) });
+    }
+  }
+  return { checkout, approve };
+}
+
+function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
   const makers = order.parts.length;
   const total = formatUsd(order.total_usd);
+  const { checkout, approve } = useCheckout(order.id);
+  const open = canCheckout(order.status);
   return (
     <div className="max-w-3xl">
+      {cancelled && open ? (
+        <div role="status" className="mb-8 rounded-2xl border border-border bg-surface p-5">
+          <h2 className="font-semibold">You left PayPal before approving</h2>
+          <p className="mt-1 leading-7 text-muted">
+            Nothing was reserved and nothing was taken. The makers are still ready whenever you are.
+          </p>
+          <button
+            type="button"
+            onClick={approve}
+            disabled={checkout.state === "opening"}
+            className="mt-4 inline-flex min-h-11 items-center rounded-full border border-border px-5 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
+          >
+            Try again
+          </button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm font-semibold text-accent">
           <span className="tracking-wide uppercase">{order.parent_order_id ? "Top-up order" : "Order"}</span>{" "}
@@ -129,18 +175,40 @@ function Approval({ order }: { order: Order }) {
       </section>
 
       <div className="mt-8">
-        <button
-          type="button"
-          disabled
-          aria-describedby="checkout-note"
-          className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-        >
-          Approve and pay with PayPal
-        </button>
-        <p id="checkout-note" className="mt-3 text-sm text-muted">
-          The PayPal sandbox checkout is switched on in the next build step. Everything here runs in the PayPal
-          sandbox: no real money moves.
-        </p>
+        {open ? (
+          <>
+            <button
+              type="button"
+              onClick={approve}
+              disabled={checkout.state === "opening"}
+              aria-describedby="checkout-note"
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-foreground transition-colors hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-70 sm:w-auto"
+            >
+              {checkout.state === "opening" ? "Opening PayPal…" : "Approve and pay with PayPal"}
+            </button>
+            <p id="checkout-note" className="mt-3 text-sm leading-6 text-muted">
+              PayPal reserves the total now. Each maker is paid when she ships. Everything runs in the PayPal
+              sandbox: no real money moves.
+            </p>
+            {checkout.state === "failed" ? (
+              <p role="alert" className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm">
+                {checkout.message}
+              </p>
+            ) : null}
+          </>
+        ) : order.status === "cancelled" ? (
+          <p className="text-muted">This order was cancelled, so there is nothing to approve.</p>
+        ) : (
+          <p className="text-muted">
+            You approved this order and PayPal holds the money for it.{" "}
+            <Link
+              href={`/approve/${encodeURIComponent(order.id)}/return`}
+              className="font-semibold text-accent underline underline-offset-4"
+            >
+              See the receipt
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

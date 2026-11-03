@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 
 export type OrderStatus =
   | "draft"
@@ -48,6 +48,19 @@ export type Order = {
 
 export function getOrder(id: string, init: RequestInit = {}): Promise<Order> {
   return apiGet<Order>(`/api/orders/${encodeURIComponent(id)}`, init);
+}
+
+/** Where the human approves the order: PayPal, or the simulated PayPal page in fake mode. */
+export type Checkout = { paypal_order_id: string; approval_url: string };
+
+/** Creates the PayPal order for the whole total. Pressing Approve twice gives back the same PayPal order. */
+export function startCheckout(id: string): Promise<Checkout> {
+  return apiPost<Checkout>(`/api/orders/${encodeURIComponent(id)}/checkout`, {});
+}
+
+/** Only a draft, or an order already waiting at PayPal, can be sent to PayPal. */
+export function canCheckout(status: OrderStatus): boolean {
+  return status === "draft" || status === "awaiting_approval";
 }
 
 const DAY = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });

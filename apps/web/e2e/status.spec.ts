@@ -41,6 +41,9 @@ test("shows the API's fake mode, its version and every adapter as fake", async (
 
   await expect(modeBadge(page, "Fake")).toBeVisible();
   await expect(page.getByRole("region", { name: "Mode" }).getByText(report.version, { exact: true })).toBeVisible();
+  const paypal = page.getByRole("region", { name: "PayPal" });
+  await expect(paypal.getByText("Fake", { exact: true })).toBeVisible();
+  await expect(paypal).toContainText("Checkout runs on the simulated PayPal page.");
   const headers = adaptersTable(page).getByRole("rowheader");
   await expect(headers).toHaveCount(ADAPTERS.length);
   for (const [index, label] of ADAPTERS.entries()) {

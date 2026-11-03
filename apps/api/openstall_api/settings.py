@@ -16,6 +16,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # fake: deterministic stand-ins for PayPal, Twilio and the AI models. sandbox: the real sandboxes and models.
 Mode = Literal["fake", "sandbox"]
 
+# How sellers are paid (docs/day-one-checks.md). payouts: the platform holds the buyer's authorization and pays each
+# seller with PayPal Payouts when she ships. multiparty: each seller is a payee on the PayPal order herself.
+PaymentPath = Literal["multiparty", "payouts"]
+
 # The repo root's .env, found from this file, not the working directory, so it loads wherever the API starts.
 ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
@@ -47,6 +51,7 @@ class Settings(BaseSettings):
     PAYPAL_CLIENT_SECRET: SecretStr | None = None
     PAYPAL_API_BASE: str = "https://api-m.sandbox.paypal.com"
     PAYPAL_WEBHOOK_ID: str | None = None
+    PAYMENT_PATH: PaymentPath = "payouts"
 
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: SecretStr | None = None
@@ -65,9 +70,9 @@ class Settings(BaseSettings):
     # Trust passports: Ed25519 private key, base64.
     PASSPORT_SIGNING_KEY: SecretStr | None = None
 
-    @field_validator("OPENSTALL_MODE", mode="before")
+    @field_validator("OPENSTALL_MODE", "PAYMENT_PATH", mode="before")
     @classmethod
-    def _mode_ignores_case(cls, value: object) -> object:
+    def _choice_ignores_case(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("PUBLIC_BASE_URL", "WEB_BASE_URL")

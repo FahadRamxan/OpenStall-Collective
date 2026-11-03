@@ -13,7 +13,17 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from openstall_api.models import Base, DataSource, Order, Passport, Product, ProductStatus, QuoteRequest, Seller
+from openstall_api.models import (
+    Base,
+    DataSource,
+    Order,
+    Passport,
+    Product,
+    ProductStatus,
+    QuoteRequest,
+    Seller,
+    new_id,
+)
 from openstall_api.orders import DraftPart, create_draft_order
 from openstall_api.passports import issue_passport
 
@@ -245,10 +255,17 @@ def seed_demo_order(session: Session, today: date) -> Order:
         if existing is not None:
             session.delete(existing)
     session.flush()
+    return story_order(session, today, order_id=DEMO_ORDER_ID, request_id=DEMO_REQUEST_ID)
+
+
+def story_order(session: Session, today: date, *, order_id: str | None = None, request_id: str | None = None) -> Order:
+    """A draft of the story's order with its own request, due 30 days from `today`. Without ids it gets new ones, so
+    UI tests can each pay for an order of their own."""
+    request_id = request_id or new_id("q")
     deadline = today + timedelta(days=30)
     session.add(
         QuoteRequest(
-            id=DEMO_REQUEST_ID,
+            id=request_id,
             items_json=[{"query": DEMO_REQUEST}],
             quantity=40,
             max_unit_price=Decimal("30.00"),
@@ -258,4 +275,4 @@ def seed_demo_order(session: Session, today: date) -> Order:
     )
     session.flush()
     parts = [DraftPart(maker.id, maker.product_id, quantity, price, deadline) for maker, quantity, price in DEMO_SPLIT]
-    return create_draft_order(session, parts, order_id=DEMO_ORDER_ID, request_id=DEMO_REQUEST_ID)
+    return create_draft_order(session, parts, order_id=order_id, request_id=request_id)

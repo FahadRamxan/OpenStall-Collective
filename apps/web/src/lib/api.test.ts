@@ -132,6 +132,7 @@ describe("getStatus", () => {
       mode: "fake",
       version: "0.1.0",
       database: { status: "ok", tables: { sellers: 0 }, message: null },
+      payment: { status: "fake", path: "payouts", message: "Checkout runs on the simulated PayPal page." },
       adapters: [],
     };
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(report));

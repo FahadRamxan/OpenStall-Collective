@@ -3,6 +3,7 @@
 from importlib.metadata import version
 
 import pytest
+import respx
 from fastapi.testclient import TestClient
 
 from openstall_api import __version__
@@ -28,6 +29,7 @@ MADE_UP_SECRETS = {
     "DATABASE_URL": "postgresql://openstall:made-up-db-password-6d2a@db.example:5432/openstall",
 }
 DATABASE_PASSWORD = "made-up-db-password-6d2a"
+PAYPAL_SANDBOX = "https://api-m.sandbox.paypal.com"
 
 
 def get_status() -> dict:
@@ -85,7 +87,12 @@ def test_sandbox_mode_with_a_key_but_no_real_adapter_says_not_built(use_settings
 def test_status_never_contains_a_secret(use_settings, mode):
     use_settings(OPENSTALL_MODE=mode, **MADE_UP_SECRETS)
 
-    response = client.get("/api/status")
+    # In sandbox mode the status asks PayPal for a token; PayPal refuses the made-up keys, in its own words.
+    with respx.mock(base_url=PAYPAL_SANDBOX, assert_all_called=False) as paypal:
+        paypal.post("/v1/oauth2/token").respond(
+            401, json={"error": "invalid_client", "error_description": "Client Authentication failed"}
+        )
+        response = client.get("/api/status")
 
     assert response.status_code == 200
     everything = response.text + "\n".join(f"{name}: {value}" for name, value in response.headers.items())
@@ -158,3 +165,45 @@ def test_an_unreachable_database_is_reported_without_its_address_or_password(use
     assert "could not be reached" in database["message"]
     assert "db-pw-c41d" not in response.text
     assert "unreachable.invalid" not in response.text
+
+
+def test_paypal_is_the_simulated_page_in_fake_mode():
+    assert get_status()["payment"] == {
+        "status": "fake",
+        "path": "payouts",
+        "message": "Checkout runs on the simulated PayPal page. Nothing reaches PayPal.",
+    }
+
+
+def test_paypal_without_its_keys_names_them(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox", PAYMENT_PATH="multiparty")
+
+    payment = get_status()["payment"]
+
+    assert payment["status"] == "missing key"
+    assert payment["path"] == "multiparty"
+    assert payment["message"] == "Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to reach the PayPal sandbox."
+
+
+def test_paypal_with_its_keys_is_asked_for_a_token_and_the_token_is_kept(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox", PAYPAL_CLIENT_ID="made-up-id", PAYPAL_CLIENT_SECRET="made-up-secret")
+
+    with respx.mock(base_url=PAYPAL_SANDBOX) as paypal:
+        token = paypal.post("/v1/oauth2/token").respond(json={"access_token": "TOKEN", "expires_in": 32400})
+        first, second = get_status()["payment"], get_status()["payment"]
+
+    assert first["status"] == second["status"] == "token ok"
+    assert token.call_count == 1
+
+
+def test_paypal_refusing_the_keys_is_reported_in_its_own_words(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox", PAYPAL_CLIENT_ID="wrong-id", PAYPAL_CLIENT_SECRET="wrong-secret")
+
+    with respx.mock(base_url=PAYPAL_SANDBOX) as paypal:
+        paypal.post("/v1/oauth2/token").respond(
+            401, json={"error": "invalid_client", "error_description": "Client Authentication failed"}
+        )
+        payment = get_status()["payment"]
+
+    assert payment["status"] == "failed"
+    assert payment["message"] == "PayPal gave no token: Client Authentication failed"

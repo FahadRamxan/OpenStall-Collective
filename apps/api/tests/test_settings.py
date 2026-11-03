@@ -21,6 +21,7 @@ ENVIRONMENT = {
     "PAYPAL_CLIENT_SECRET": "made-up-paypal-secret",
     "PAYPAL_API_BASE": "https://api-m.paypal.example",
     "PAYPAL_WEBHOOK_ID": "made-up-webhook-id",
+    "PAYMENT_PATH": "multiparty",
     "TWILIO_ACCOUNT_SID": "ACmadeup0000",
     "TWILIO_AUTH_TOKEN": "made-up-twilio-token",
     "TWILIO_WHATSAPP_FROM": "whatsapp:+15550100000",
@@ -69,6 +70,7 @@ def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings, monkey
     assert settings.PUBLIC_BASE_URL == "http://localhost:8000"
     assert settings.WEB_BASE_URL == "http://localhost:3000"
     assert settings.PAYPAL_API_BASE == "https://api-m.sandbox.paypal.com"
+    assert settings.PAYMENT_PATH == "payouts"
     assert settings.TWILIO_WHATSAPP_FROM == "whatsapp:+14155238886"
     assert settings.LLM_MODEL == "claude-sonnet-5-5"
     assert settings.DATABASE_URL.get_secret_value() == "sqlite:///./data/openstall.db"
