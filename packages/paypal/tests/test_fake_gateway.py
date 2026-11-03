@@ -1,4 +1,8 @@
-"""FakeGateway: PayPal's pay-on-proof flow without the network, the same on every run, with every call recorded."""
+"""FakeGateway: PayPal's pay-on-proof flow without the network, the same on every run, with every call recorded.
+
+The tests of one authorization per share use path="multiparty", the recorded dead end the fake still follows on
+request. The payouts path, the default, is in test_fake_gateway_payouts.py.
+"""
 
 from dataclasses import replace
 from decimal import Decimal
@@ -38,25 +42,25 @@ def share(reservation: Reservation, reference_id: str, part_id: str) -> Share:
     return Share(part_id=part_id, hold_id=reservation.holds[reference_id], amount_usd=Decimal("216.00"))
 
 
-def test_follows_the_payment_gateway_interface():
+def test_follows_the_payment_gateway_interface() -> None:
     assert isinstance(FakeGateway(), PaymentGateway)
 
 
-def test_checkout_sends_the_buyer_to_the_simulated_paypal_page():
+def test_checkout_sends_the_buyer_to_the_simulated_paypal_page() -> None:
     checkout = FakeGateway("https://openstall.example/").create_checkout(ORDER)
 
     assert checkout.paypal_order_id.startswith("FAKE-")
     assert checkout.approval_url == f"https://openstall.example/fake-paypal?token={checkout.paypal_order_id}"
 
 
-def test_paypal_order_ids_are_the_same_on_every_run_and_differ_between_orders():
+def test_paypal_order_ids_are_the_same_on_every_run_and_differ_between_orders() -> None:
     first = FakeGateway().create_checkout(ORDER)
 
     assert FakeGateway().create_checkout(ORDER) == first
     assert FakeGateway().create_checkout(replace(ORDER, order_id="ord_other")).paypal_order_id != first.paypal_order_id
 
 
-def test_a_repeated_checkout_returns_the_same_paypal_order_unchanged():
+def test_a_repeated_checkout_returns_the_same_paypal_order_unchanged() -> None:
     gateway = FakeGateway()
     first = gateway.create_checkout(ORDER)
     gateway.approve(first.paypal_order_id)
@@ -65,7 +69,7 @@ def test_a_repeated_checkout_returns_the_same_paypal_order_unchanged():
     assert gateway.get_order(first.paypal_order_id).status == "APPROVED"
 
 
-def test_the_simulated_page_shows_the_order_as_the_buyer_sees_it():
+def test_the_simulated_page_shows_the_order_as_the_buyer_sees_it() -> None:
     gateway = FakeGateway()
     paypal_order_id = gateway.create_checkout(ORDER).paypal_order_id
 
@@ -77,7 +81,7 @@ def test_the_simulated_page_shows_the_order_as_the_buyer_sees_it():
     assert gateway.approve(paypal_order_id).status == "APPROVED"
 
 
-def test_reserving_needs_the_buyers_approval():
+def test_reserving_needs_the_buyers_approval() -> None:
     gateway = FakeGateway()
     paypal_order_id = gateway.create_checkout(ORDER).paypal_order_id
 
@@ -87,8 +91,8 @@ def test_reserving_needs_the_buyers_approval():
     assert error.value.issue == "ORDER_NOT_APPROVED"
 
 
-def test_reserving_holds_each_share_and_a_repeat_returns_the_same_holds():
-    gateway = FakeGateway()
+def test_reserving_holds_each_share_and_a_repeat_returns_the_same_holds() -> None:
+    gateway = FakeGateway(path="multiparty")
     reservation = reserved(gateway)
     paypal_order_id = reservation.paypal_order_id
 
@@ -97,8 +101,8 @@ def test_reserving_holds_each_share_and_a_repeat_returns_the_same_holds():
     assert gateway.get_order(paypal_order_id) == OrderState("COMPLETED", reservation.holds)
 
 
-def test_a_share_is_paid_once_however_often_it_is_asked():
-    gateway = FakeGateway()
+def test_a_share_is_paid_once_however_often_it_is_asked() -> None:
+    gateway = FakeGateway(path="multiparty")
     amina = share(reserved(gateway), "op_001", "op_amina")
 
     first = gateway.pay_share(amina)
@@ -107,8 +111,8 @@ def test_a_share_is_paid_once_however_often_it_is_asked():
     assert gateway.pay_share(amina) == first
 
 
-def test_a_captured_hold_cannot_be_captured_again_for_another_share_or_released():
-    gateway = FakeGateway()
+def test_a_captured_hold_cannot_be_captured_again_for_another_share_or_released() -> None:
+    gateway = FakeGateway(path="multiparty")
     amina = share(reserved(gateway), "op_001", "op_amina")
     gateway.pay_share(amina)
 
@@ -121,8 +125,8 @@ def test_a_captured_hold_cannot_be_captured_again_for_another_share_or_released(
     assert release.value.issue == "AUTHORIZATION_ALREADY_CAPTURED"
 
 
-def test_a_released_share_is_never_paid():
-    gateway = FakeGateway()
+def test_a_released_share_is_never_paid() -> None:
+    gateway = FakeGateway(path="multiparty")
     lucia = share(reserved(gateway), "op_002", "op_lucia")
     gateway.release_share(lucia)
     gateway.release_share(lucia)  # releasing again changes nothing
@@ -133,8 +137,8 @@ def test_a_released_share_is_never_paid():
     assert error.value.issue == "AUTHORIZATION_VOIDED"
 
 
-def test_releasing_one_share_leaves_the_others_payable():
-    gateway = FakeGateway()
+def test_releasing_one_share_leaves_the_others_payable() -> None:
+    gateway = FakeGateway(path="multiparty")
     reservation = reserved(gateway)
     gateway.release_share(share(reservation, "op_002", "op_priya"))
 
@@ -142,15 +146,15 @@ def test_releasing_one_share_leaves_the_others_payable():
 
 
 @pytest.mark.parametrize("call", ["get_order", "reserve", "view", "approve"])
-def test_an_unknown_order_is_not_found(call):
+def test_an_unknown_order_is_not_found(call: str) -> None:
     with pytest.raises(PaymentError) as error:
         getattr(FakeGateway(), call)("FAKE-NO-SUCH-ORDER")
 
     assert error.value.issue == "RESOURCE_NOT_FOUND"
 
 
-def test_every_gateway_call_is_recorded_in_order_and_the_buyers_clicks_are_not():
-    gateway = FakeGateway()
+def test_every_gateway_call_is_recorded_in_order_and_the_buyers_clicks_are_not() -> None:
+    gateway = FakeGateway(path="multiparty")
     paypal_order_id = gateway.create_checkout(ORDER).paypal_order_id
     gateway.view(paypal_order_id)
     gateway.approve(paypal_order_id)
@@ -167,5 +171,5 @@ def test_every_gateway_call_is_recorded_in_order_and_the_buyers_clicks_are_not()
     ]
 
 
-def test_the_total_is_the_sum_of_the_parts_to_the_cent():
+def test_the_total_is_the_sum_of_the_parts_to_the_cent() -> None:
     assert ORDER.total_usd == Decimal("392.00")

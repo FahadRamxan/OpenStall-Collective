@@ -77,15 +77,15 @@ def gateway_calls(fakes) -> list[str]:
 
 
 def test_a_payment_already_in_progress_elsewhere_is_refused_before_paypal(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]
-    hold_claim(demo_order, f"capture:{amina}")
+    priya = reserved["s_priya"]
+    hold_claim(demo_order, f"capture:{priya}")
 
-    with pytest.raises(ClaimHeld, match="Amina's share is being paid by another request"):
-        pay_share(demo_order, amina, fakes.payment_gateway)
+    with pytest.raises(ClaimHeld, match="Priya's share is being paid by another request"):
+        pay_share(demo_order, priya, fakes.payment_gateway)
 
     assert gateway_calls(fakes) == []
     demo_order.rollback()
-    assert demo_order.get(OrderPart, amina).status == PartStatus.AUTHORIZED
+    assert demo_order.get(OrderPart, priya).status == PartStatus.AUTHORIZED
 
 
 def test_the_api_answers_a_concurrent_duplicate_with_409(demo_order, fakes):
@@ -129,32 +129,32 @@ def test_of_many_requests_racing_for_one_claim_exactly_one_wins(db):
 
 
 def test_a_claim_is_done_with_paypals_id_once_our_rows_are_saved(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
 
-    pay_share(demo_order, amina, fakes.payment_gateway)
-    assert claim_row(f"capture:{amina}").state == ClaimState.PENDING  # PayPal answered; our rows are not saved yet
+    pay_share(demo_order, priya, fakes.payment_gateway)
+    assert claim_row(f"capture:{priya}").state == ClaimState.PENDING  # PayPal answered; our rows are not saved yet
     demo_order.commit()
 
-    row = claim_row(f"capture:{amina}")
+    row = claim_row(f"capture:{priya}")
     assert row.state == ClaimState.DONE
-    assert row.result == demo_order.get(OrderPart, amina).capture_id
-    assert row.request_id == f"openstall-capture-{amina}"
+    assert row.result == demo_order.get(OrderPart, priya).capture_id
+    assert row.request_id == f"openstall-capture-{priya}"
 
 
 def test_a_claim_whose_rows_were_never_saved_is_unknown_and_the_next_try_goes_ahead(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
 
-    pay_share(demo_order, amina, fakes.payment_gateway)
+    pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.rollback()
-    assert claim_row(f"capture:{amina}").state == ClaimState.UNKNOWN
+    assert claim_row(f"capture:{priya}").state == ClaimState.UNKNOWN
 
-    pay_share(demo_order, amina, fakes.payment_gateway)  # the same PayPal-Request-Id: PayPal answers it once
+    pay_share(demo_order, priya, fakes.payment_gateway)  # the same PayPal-Request-Id: PayPal answers it once
     demo_order.commit()
-    assert claim_row(f"capture:{amina}").state == ClaimState.DONE
+    assert claim_row(f"capture:{priya}").state == ClaimState.DONE
 
 
 def test_a_refused_call_releases_its_claim_so_the_next_try_goes_ahead(reserved, demo_order, fakes, monkeypatch):
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
     real_pay_share = fakes.payment_gateway.pay_share
 
     def refused(share):
@@ -162,14 +162,14 @@ def test_a_refused_call_releases_its_claim_so_the_next_try_goes_ahead(reserved, 
 
     monkeypatch.setattr(fakes.payment_gateway, "pay_share", refused)
     with pytest.raises(PaymentError):
-        pay_share(demo_order, amina, fakes.payment_gateway)
+        pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.rollback()
-    assert claim_row(f"capture:{amina}") is None
+    assert claim_row(f"capture:{priya}") is None
 
     monkeypatch.setattr(fakes.payment_gateway, "pay_share", real_pay_share)
-    pay_share(demo_order, amina, fakes.payment_gateway)
+    pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.commit()
-    assert demo_order.get(OrderPart, amina).status == PartStatus.CAPTURED
+    assert demo_order.get(OrderPart, priya).status == PartStatus.CAPTURED
 
 
 def test_a_call_that_never_reached_paypal_releases_its_claim(reserved, demo_order, fakes, monkeypatch):
@@ -189,7 +189,7 @@ def test_after_no_answer_the_next_try_goes_ahead_at_once_with_the_same_request_i
     reserved, demo_order, fakes, monkeypatch
 ):
     """As before claims: PayPal dedupes on PayPal-Request-Id, so the repeat is answered with the first result."""
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
     real_pay_share = fakes.payment_gateway.pay_share
 
     def no_answer(share):
@@ -197,17 +197,17 @@ def test_after_no_answer_the_next_try_goes_ahead_at_once_with_the_same_request_i
 
     monkeypatch.setattr(fakes.payment_gateway, "pay_share", no_answer)
     with pytest.raises(PaymentUnavailable):
-        pay_share(demo_order, amina, fakes.payment_gateway)
+        pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.rollback()
-    row = claim_row(f"capture:{amina}")
-    assert (row.state, row.request_id) == (ClaimState.UNKNOWN, f"openstall-capture-{amina}")
+    row = claim_row(f"capture:{priya}")
+    assert (row.state, row.request_id) == (ClaimState.UNKNOWN, f"openstall-capture-{priya}")
 
     monkeypatch.setattr(fakes.payment_gateway, "pay_share", real_pay_share)
-    pay_share(demo_order, amina, fakes.payment_gateway)
+    pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.commit()
 
-    assert demo_order.get(OrderPart, amina).status == PartStatus.CAPTURED
-    assert claim_row(f"capture:{amina}").state == ClaimState.DONE
+    assert demo_order.get(OrderPart, priya).status == PartStatus.CAPTURED
+    assert claim_row(f"capture:{priya}").state == ClaimState.DONE
 
 
 def test_pressing_approve_again_after_paypal_did_not_answer_is_not_refused(demo_order, fakes, monkeypatch):
@@ -227,11 +227,11 @@ def test_pressing_approve_again_after_paypal_did_not_answer_is_not_refused(demo_
 
 
 def test_an_unknown_claim_for_a_different_request_id_waits_until_it_is_stale(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]
-    hold_claim(demo_order, f"capture:{amina}", state=ClaimState.UNKNOWN, request_id="openstall-capture-older")
+    priya = reserved["s_priya"]
+    hold_claim(demo_order, f"capture:{priya}", state=ClaimState.UNKNOWN, request_id="openstall-capture-older")
 
     with pytest.raises(ClaimHeld, match="PayPal did not answer an earlier attempt at this. Try again after"):
-        pay_share(demo_order, amina, fakes.payment_gateway)
+        pay_share(demo_order, priya, fakes.payment_gateway)
     assert gateway_calls(fakes) == []
 
 
@@ -239,18 +239,18 @@ def test_a_failure_to_mark_a_claim_after_the_commit_is_logged_not_raised(
     reserved, demo_order, fakes, monkeypatch, caplog
 ):
     """Our rows are saved by then: the commit must not turn into an error."""
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
 
     def broken(claims_session, claim, state):
         raise RuntimeError("database is locked")
 
-    pay_share(demo_order, amina, fakes.payment_gateway)
+    pay_share(demo_order, priya, fakes.payment_gateway)
     monkeypatch.setattr(claims, "mark", broken)
     with caplog.at_level(logging.ERROR, logger="openstall_api.claims"):
         demo_order.commit()
 
-    assert demo_order.get(OrderPart, amina).status == PartStatus.CAPTURED
-    assert f"Could not mark PayPal claims capture:{amina}" in caplog.text
+    assert demo_order.get(OrderPart, priya).status == PartStatus.CAPTURED
+    assert f"Could not mark PayPal claims capture:{priya}" in caplog.text
 
 
 def test_on_postgres_the_claim_is_written_in_the_callers_own_transaction():
@@ -263,7 +263,7 @@ def test_a_payment_request_whose_claim_joins_its_transaction_uses_one_connection
     reserved, demo_order, fakes, monkeypatch
 ):
     """The Postgres path: no second pooled connection while the order's row is locked, and done with the commit."""
-    amina = reserved["s_amina"]
+    priya = reserved["s_priya"]
     demo_order.close()  # hand the session's connection back, so the count starts from nothing
     monkeypatch.setattr(claims, "joins_callers_transaction", lambda session: True)
     checkouts: list[object] = []
@@ -274,14 +274,14 @@ def test_a_payment_request_whose_claim_joins_its_transaction_uses_one_connection
     engine = get_engine()
     event.listen(engine, "checkout", count)
     try:
-        pay_share(demo_order, amina, fakes.payment_gateway)
+        pay_share(demo_order, priya, fakes.payment_gateway)
         demo_order.commit()
     finally:
         event.remove(engine, "checkout", count)
 
     assert len(checkouts) == 1
-    row = claim_row(f"capture:{amina}")
-    assert (row.state, row.result) == (ClaimState.DONE, demo_order.get(OrderPart, amina).capture_id)
+    row = claim_row(f"capture:{priya}")
+    assert (row.state, row.result) == (ClaimState.DONE, demo_order.get(OrderPart, priya).capture_id)
 
 
 def test_a_stale_claim_left_by_a_crash_is_taken_over(reserved, demo_order, fakes):
@@ -316,18 +316,18 @@ def test_pressing_approve_again_takes_over_the_finished_checkout_claim(demo_orde
 
 def test_with_writes_pending_on_sqlite_the_claim_is_taken_inside_the_callers_transaction(reserved, demo_order, fakes):
     """SQLite has one writer: a claim on another connection would wait for this transaction, so it joins it."""
-    amina = reserved["s_amina"]
-    demo_order.get(OrderPart, amina).tracking_number = "LP00999999999PK"  # an unsaved change, flushed by the load
+    priya = reserved["s_priya"]
+    demo_order.get(OrderPart, priya).tracking_number = "LP00999999999PK"  # an unsaved change, flushed by the load
 
-    pay_share(demo_order, amina, fakes.payment_gateway)
+    pay_share(demo_order, priya, fakes.payment_gateway)
     demo_order.rollback()
 
-    assert claim_row(f"capture:{amina}") is None  # undone with the caller's transaction
+    assert claim_row(f"capture:{priya}") is None  # undone with the caller's transaction
     assert gateway_calls(fakes) == ["pay_share"]
 
 
 def test_every_claim_is_keyed_by_what_it_is_for(reserved, demo_order, fakes):
-    pay_share(demo_order, reserved["s_amina"], fakes.payment_gateway)
+    pay_share(demo_order, reserved["s_priya"], fakes.payment_gateway)
     release_share(demo_order, reserved["s_lucia"], fakes.payment_gateway)
     demo_order.commit()
 
@@ -336,6 +336,6 @@ def test_every_claim_is_keyed_by_what_it_is_for(reserved, demo_order, fakes):
     assert keys == {
         f"checkout:{DEMO_ORDER_ID}",
         f"reserve:{DEMO_ORDER_ID}",
-        f"capture:{reserved['s_amina']}",
+        f"capture:{reserved['s_priya']}",
         f"release:{reserved['s_lucia']}",
     }

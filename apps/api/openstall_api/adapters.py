@@ -109,7 +109,7 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         purpose="PayPal checkout, and paying each seller.",
         service="PayPal sandbox",
         keys=("PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"),
-        make_fake=lambda settings: FakeGateway(settings.WEB_BASE_URL),
+        make_fake=lambda settings: FakeGateway(settings.WEB_BASE_URL, settings.PAYMENT_PATH),
         make_real=lambda settings: make_paypal_gateway(settings),
     ),
     AdapterSpec(

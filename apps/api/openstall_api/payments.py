@@ -14,8 +14,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from openstall_api.claims import paypal_claim
 from openstall_api.events import EventType, record_event
-from openstall_api.models import Order, OrderPart, OrderStatus, PartStatus
+from openstall_api.models import Order, OrderPart, OrderStatus, PartStatus, Seller
 from openstall_api.orders import move_order, move_part
+from openstall_api.settings import Settings, get_settings
 from openstall_paypal import (
     WAITING_FOR_BUYER,
     Checkout,
@@ -24,8 +25,10 @@ from openstall_paypal import (
     PaymentError,
     PaymentGateway,
     PaymentUnavailable,
+    Rail,
     Reservation,
     Share,
+    rail_for,
 )
 
 # Only these orders can be sent to PayPal: a repeated press of Approve finds the order waiting for approval.
@@ -209,6 +212,20 @@ def load_part(session: Session, part_id: str) -> OrderPart:
     return part
 
 
+def seller_rail(seller: Seller, settings: Settings | None = None) -> Rail:
+    """The rail she is paid on (spec 3.5a). In sandbox mode the PayPal rail needs her (sandbox) PayPal account;
+    fake mode simulates every payout, so it needs none."""
+    settings = settings or get_settings()
+    return rail_for(
+        seller.country,
+        seller.venmo_handle,
+        seller.paypal_email,
+        seller.paypal_merchant_id,
+        override=seller.payout_rail.value if seller.payout_rail else None,
+        payee_required=settings.OPENSTALL_MODE == "sandbox",
+    )
+
+
 def share_of(part: OrderPart) -> Share:
     """A reserved share as the gateway needs it. `last`: no other share of the order is still reserved."""
     assert part.authorization_id is not None
@@ -221,6 +238,8 @@ def share_of(part: OrderPart) -> Share:
         payee_email=part.seller.paypal_email,
         note=f"Your share of OpenStall order {part.order_id}: {share_description(part)}",
         last=not others_open,
+        payout_rail=seller_rail(part.seller).kind,
+        venmo_handle=part.seller.venmo_handle,
     )
 
 
@@ -235,13 +254,17 @@ def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderP
         raise WrongStatus(f"{name}'s share is {part.status.value}, so it cannot be paid.")
     if not part.tracking_number:
         raise WrongStatus(f"{name}'s share is paid when her tracking is confirmed, and there is none yet.")
+    rail = seller_rail(part.seller)
+    if not rail.available:  # never captured without a way to pay her: she would be left half paid
+        raise WrongStatus(f"{name}'s share stays reserved and is not captured. {rail.reason}.")
+    share = share_of(part)
     with paypal_claim(
         session,
         f"capture:{part.id}",
         f"openstall-capture-{part.id}",
         busy=f"{name}'s share is being paid by another request. Try again in a moment.",
     ) as claim:
-        payment = gateway.pay_share(share_of(part))
+        payment = gateway.pay_share(share)
         claim.result = payment.capture_id
     part.capture_id = payment.capture_id
     move_part(part, PartStatus.CAPTURED)
@@ -254,6 +277,8 @@ def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderP
             "order_id": part.order_id,
             "capture_id": payment.capture_id,
             "payout_batch_id": payment.payout_batch_id,
+            "payout_rail": payment.payout_rail or share.payout_rail,
+            "payout_simulated": payment.payout_simulated,
             "amount_usd": part.amount_usd,
         },
     )
@@ -269,7 +294,15 @@ def release_share(session: Session, part_id: str, gateway: PaymentGateway) -> Or
         return part
     if part.status in PAID:
         raise WrongStatus(f"{name}'s share was already paid, so it cannot be released.")
+    voided_hold = False
     if part.status == PartStatus.AUTHORIZED:
+        # Her release closes the hold when no other share still uses it: the gateway voids it then (each share's own
+        # hold on the multiparty path, the last open share on the payouts path), and PayPal's VOIDED event follows.
+        voided_hold = not any(
+            other.authorization_id == part.authorization_id and other.status == PartStatus.AUTHORIZED
+            for other in part.order.parts
+            if other.id != part.id
+        )
         with paypal_claim(
             session,
             f"release:{part.id}",
@@ -285,7 +318,7 @@ def release_share(session: Session, part_id: str, gateway: PaymentGateway) -> Or
         EventType.PART_RELEASED,
         f"{name}'s share of ${part.amount_usd:,.2f} was released back to the buyer",
         entity_id=part.id,
-        payload={"order_id": part.order_id, "amount_usd": part.amount_usd},
+        payload={"order_id": part.order_id, "amount_usd": part.amount_usd, "voided_hold": voided_hold},
     )
     settle_order(part.order)
     return part

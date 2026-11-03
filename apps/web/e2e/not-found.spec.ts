@@ -10,7 +10,7 @@ test("an unknown address gets a 404 page in the site's own layout", async ({ pag
   await expect(page).toHaveTitle("Page not found · OpenStall Collective");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Page not found");
   await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
-  await expect(page.getByRole("contentinfo").getByText("Runs in the PayPal sandbox. No real money moves.")).toBeVisible();
+  await expect(page.getByRole("contentinfo").getByText("No real money moves: PayPal's sandbox, or simulated PayPal in test mode.")).toBeVisible();
 });
 
 test("the 404 page uses the site's colours and font, not Next.js's defaults", async ({ page }) => {

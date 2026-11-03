@@ -5,13 +5,18 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge, type BadgeTone } from "@/components/badge";
+import { RailChip } from "@/components/rail-chip";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, place } from "@/lib/catalog";
 import {
   PART_STATUS_LABELS,
+  authorizationSentence,
+  confirmedWords,
   formatDay,
   getOrder,
+  isSimulated,
   reserveOrder,
+  simulateProof,
   type Order,
   type OrderPart,
   type PartStatus,
@@ -27,9 +32,20 @@ type Load =
   | { state: "missing" }
   | { state: "failed"; message: string; canRetry: boolean };
 
-/** Shares PayPal has not confirmed yet, and nothing has gone wrong with: their webhooks are still on the way. */
+function isPaid(part: OrderPart): boolean {
+  return part.status === "captured" || part.status === "delivered";
+}
+
+/**
+ * Shares whose PayPal confirmation is still on the way: their status, or for a paid share her payout when it goes
+ * through PayPal. Not a share with a problem, nor one released mid-order, which PayPal never hears about.
+ */
 function awaitingPayPal(order: Order): boolean {
-  return order.parts.some((part) => part.status !== "pending" && !part.confirmed_by_paypal && !part.attention);
+  return order.parts.some((part) => {
+    if (part.status === "pending" || part.attention || part.nothing_to_confirm) return false;
+    if (!part.confirmed_by_paypal) return true;
+    return isPaid(part) && part.payout_via_paypal && !part.payout_confirmed;
+  });
 }
 
 const PART_TONES: Record<PartStatus, BadgeTone> = {
@@ -138,11 +154,31 @@ export function ReturnView() {
       </div>
     );
   }
-  return <Receipt order={load.order} backToOrder={backToOrder} />;
+  return (
+    <Receipt
+      order={load.order}
+      backToOrder={backToOrder}
+      onOrder={(order) => {
+        // A share was just paid: its confirmations follow, so look again from the start.
+        setLoad({ state: "reserved", order });
+        setPolls(0);
+      }}
+    />
+  );
 }
 
-function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.ReactNode }) {
+function Receipt({
+  order,
+  backToOrder,
+  onOrder,
+}: {
+  order: Order;
+  backToOrder: React.ReactNode;
+  onOrder: (order: Order) => void;
+}) {
   const total = formatUsd(order.total_usd);
+  const simulated = isSimulated(order);
+  const payPal = simulated ? "simulated PayPal" : "PayPal";
   return (
     <div className="max-w-3xl">
       <p className="text-sm font-semibold text-accent">
@@ -157,17 +193,27 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
             <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
-        <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">PayPal is holding {total}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+          {simulated ? "Simulated PayPal" : "PayPal"} is holding {total}
+        </h1>
       </div>
       <p className="mt-4 text-lg leading-8 text-muted">
         Nothing has been taken yet. Each maker is paid when she ships, and a share she cannot deliver goes back to
         you.
       </p>
+      {simulated ? (
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
+          <Badge tone="warning">Simulated</Badge>
+          Test mode: a simulated PayPal stands in for PayPal, and no money moves.
+        </p>
+      ) : null}
       <p role="status" className="mt-3 text-sm font-medium">
         {awaitingPayPal(order) ? (
-          <span className="text-muted">Waiting for PayPal to confirm each share…</span>
+          <span className="text-muted">Waiting for {payPal} to confirm each share…</span>
         ) : (
-          <span className="text-success">PayPal confirmed every share.</span>
+          <span className="text-success">
+            {simulated ? "Simulated PayPal confirmed every share." : "PayPal confirmed every share."}
+          </span>
         )}
       </p>
 
@@ -182,7 +228,7 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
           {order.parts.map((part) => {
             const where = place(part.seller.city, part.seller.country);
             return (
-              <li key={part.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <li key={part.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
                 <div className="min-w-0">
                   <p className="font-semibold">
                     {part.seller.name}
@@ -192,20 +238,27 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
                     {part.quantity} × {formatUsd(part.unit_price_usd)}
                     {part.delivery_date ? ` · ships by ${formatDay(part.delivery_date)}` : null}
                   </p>
+                  <div className="mt-2">
+                    <RailChip part={part} />
+                  </div>
+                  {simulated && part.status === "authorized" ? (
+                    <SimulateProof part={part} onOrder={onOrder} />
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-end">
                   <p className="font-semibold tabular-nums">{formatUsd(part.amount_usd)}</p>
                   <Badge tone={PART_TONES[part.status]}>{PART_STATUS_LABELS[part.status]}</Badge>
-                  <PayPalNote part={part} />
+                  <PayPalNote part={part} simulated={simulated} />
                 </div>
               </li>
             );
           })}
         </ul>
         <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 px-1">
-          <p className="text-muted">Reserved at PayPal</p>
+          <p className="text-muted">Reserved at {payPal}</p>
           <p className="text-3xl font-semibold tabular-nums">{total}</p>
         </div>
+        <p className="mt-2 px-1 text-sm text-muted">{authorizationSentence(order.total_usd)}</p>
         {order.paypal_order_id ? (
           <p className="mt-2 px-1 text-sm text-muted">
             PayPal order <span className="font-mono">{order.paypal_order_id}</span>
@@ -226,21 +279,69 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
   );
 }
 
-/** Whether PayPal itself confirmed where the share stands, from its verified webhooks. */
-function PayPalNote({ part }: { part: OrderPart }) {
+type ProofState = { state: "idle" } | { state: "sending" } | { state: "failed"; message: string };
+
+/**
+ * Fake mode only: stands in for her shipping receipt photo (prompt 32), so her share is paid on proof. Disabled, with
+ * the reason, for a maker no payout rail can reach yet: her share is never captured.
+ */
+function SimulateProof({ part, onOrder }: { part: OrderPart; onOrder: (order: Order) => void }) {
+  const [proof, setProof] = useState<ProofState>({ state: "idle" });
+  const blocked = part.payout_rail === "unavailable";
+  const reasonId = `proof-reason-${part.id}`;
+  async function send() {
+    setProof({ state: "sending" });
+    try {
+      onOrder(await simulateProof(part.id));
+    } catch (error) {
+      setProof({ state: "failed", message: errorMessage(error) });
+    }
+  }
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={send}
+        disabled={blocked || proof.state === "sending"}
+        aria-describedby={blocked ? reasonId : undefined}
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {proof.state === "sending" ? "Sending proof…" : "Simulate proof of shipping"}
+        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs text-warning">Simulated</span>
+      </button>
+      {blocked ? (
+        <p id={reasonId} className="mt-1 text-xs text-muted">
+          Not possible yet: {part.payout_label.charAt(0).toLowerCase() + part.payout_label.slice(1)}. Her share
+          stays reserved and is not captured.
+        </p>
+      ) : null}
+      {proof.state === "failed" ? (
+        <p role="alert" className="mt-1 text-xs font-semibold text-danger">
+          {proof.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Whether PayPal itself confirmed where the share stands, from its verified webhooks, or simulated PayPal did. */
+function PayPalNote({ part, simulated }: { part: OrderPart; simulated: boolean }) {
   if (part.attention) {
     return <p className="text-xs font-semibold text-danger">{part.attention}</p>;
   }
   if (part.status === "pending") return null;
+  if (part.nothing_to_confirm) {
+    return <p className="text-xs text-muted">Never captured; nothing for PayPal to confirm</p>;
+  }
   if (!part.confirmed_by_paypal) {
-    return <p className="text-xs text-muted">Waiting for PayPal…</p>;
+    return <p className="text-xs text-muted">{simulated ? "Waiting for simulated PayPal…" : "Waiting for PayPal…"}</p>;
   }
   return (
     <p className="inline-flex items-center gap-1 text-xs font-semibold text-success">
       <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5">
         <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      Confirmed by PayPal
+      {confirmedWords(simulated)}
     </p>
   );
 }

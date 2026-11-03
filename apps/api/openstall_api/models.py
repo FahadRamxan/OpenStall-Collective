@@ -112,6 +112,15 @@ class ClaimState(StrEnum):
     UNKNOWN = "unknown"  # the holder is finished without PayPal's answer saved: it may have landed
 
 
+class PayoutRailChoice(StrEnum):
+    """How a maker is paid once her share is captured (spec 3.5a), the values of openstall_paypal's PayoutRail."""
+
+    PAYPAL = "paypal"
+    VENMO = "venmo"
+    HYPERWALLET = "hyperwallet"  # prompt 52
+    UNAVAILABLE = "unavailable"
+
+
 class Base(DeclarativeBase):
     """Every foreign key also has a relationship(): SQLAlchemy orders inserts by relationships, so a seller and her
     passport can be saved together."""
@@ -132,6 +141,10 @@ class Seller(Base):
     web_chat_id: Mapped[str | None] = mapped_column(String(32), unique=True)
     paypal_merchant_id: Mapped[str | None] = mapped_column(String(64))
     paypal_email: Mapped[str | None] = mapped_column(String(254))
+    # Her Venmo handle, in the US: she is then paid on the Venmo rail (spec 3.5a).
+    venmo_handle: Mapped[str | None] = mapped_column(String(64))
+    # An operator's choice of rail for her. None: her country decides (openstall_paypal.rails.rail_for).
+    payout_rail: Mapped[PayoutRailChoice | None] = mapped_column(enum_type(PayoutRailChoice, "payout_rail"))
     policy_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     data_source: Mapped[DataSource] = mapped_column(enum_type(DataSource, "data_source"), default=DataSource.LIVE)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -21,6 +21,12 @@ Not in this SDK (40 operations, 5 controllers; none is Payouts or Notifications)
 `PayPalClient` (client.py): `POST /v1/payments/payouts` and `POST /v1/notifications/verify-webhook-signature`, and
 the status page's token check (`PayPalClient.token()`). The gateway holds both clients.
 
+Prompt 51 (payout rails, rails.py) changes nothing on the SDK side: `PayoutsGateway.pay_share` still captures with
+`capture_authorized_payment` and releases with `void_payment` as above. It now checks the maker's payout rail and
+builds her Payouts item (`rails.payout_item`: PayPal by EMAIL or PAYPAL_ID, or Venmo by USER_HANDLE with a note)
+before that capture, so a share no rail can reach is never captured. On the sandbox host a Venmo share is captured
+and its payout is simulated, because PayPal's sandbox refuses Venmo payouts; no Payouts call is made for it.
+
 ## Repo survey (pattern + exemplar)
 
 - Host is **sync**: FastAPI endpoints are `def`, run in the thread pool (exemplar: apps/api/openstall_api/orders_api.py).

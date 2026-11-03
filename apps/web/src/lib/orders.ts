@@ -1,4 +1,5 @@
 import { apiGet, apiPost } from "@/lib/api";
+import { formatUsd } from "@/lib/catalog";
 
 export type OrderStatus =
   | "draft"
@@ -27,9 +28,29 @@ export type OrderPart = {
   confirmed_by_paypal: boolean;
   /** PayPal reported a problem with this share, such as a denied payment. */
   attention: string | null;
+  /**
+   * Who confirms this share: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. A simulated
+   * confirmation is never shown as "Confirmed by PayPal".
+   */
+  confirmation_source: ConfirmationSource;
+  /** Released while the order's one PayPal hold still serves other shares: never captured, nothing to confirm. */
+  nothing_to_confirm: boolean;
+  /** How she is paid once her share is captured. */
+  payout_rail: PayoutRail;
+  /** Her rail in words, for example "Paid to Venmo (simulated)" or "Payout rail not connected yet (Pakistan)". */
+  payout_label: string;
+  /** Her payout goes through (simulated) PayPal Payouts, so PayPal's webhook will confirm it. */
+  payout_via_paypal: boolean;
+  /** PayPal said her payout succeeded. */
+  payout_confirmed: boolean;
   trust_score: string | null;
   trust_data_source: "seeded_demo" | "live" | null;
 };
+
+/** How a maker is paid once her share is captured (spec 3.5a). "unavailable": no rail can reach her yet. */
+export type PayoutRail = "paypal" | "venmo" | "hyperwallet" | "unavailable";
+
+export type ConfirmationSource = "paypal_sandbox" | "simulated";
 
 export type BuyerRequest = {
   summary: string;
@@ -68,6 +89,29 @@ export function startCheckout(id: string): Promise<Checkout> {
 /** Reserves the approved order at PayPal, once. Calling it again changes nothing and returns the order. */
 export function reserveOrder(id: string, init: RequestInit = {}): Promise<Order> {
   return apiPost<Order>(`/api/orders/${encodeURIComponent(id)}/reserve`, {}, init);
+}
+
+/**
+ * Fake mode only: simulated proof of shipping for one share, which pays her share as her receipt photo will.
+ * Returns the order with the share paid. The API refuses it (404) outside fake mode.
+ */
+export function simulateProof(partId: string): Promise<Order> {
+  return apiPost<Order>(`/api/dev/parts/${encodeURIComponent(partId)}/proof`, {});
+}
+
+/** Whether the order's PayPal is the simulated one of fake mode. */
+export function isSimulated(order: Order): boolean {
+  return order.parts.some((part) => part.confirmation_source === "simulated");
+}
+
+/** "Confirmed by PayPal" only for the real PayPal's verified webhooks; fake mode says it is simulated. */
+export function confirmedWords(simulated: boolean): string {
+  return simulated ? "Confirmed by simulated PayPal" : "Confirmed by PayPal";
+}
+
+/** The receipt's one sentence about the money: one authorization, captured share by share. */
+export function authorizationSentence(totalUsd: string): string {
+  return `One PayPal authorization for ${formatUsd(totalUsd)}. Each maker's share is captured when she ships.`;
 }
 
 /** Only a draft, or an order already waiting at PayPal, can be sent to PayPal. */

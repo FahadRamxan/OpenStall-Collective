@@ -6,8 +6,9 @@ the money. They differ in who the payees are:
 - MultipartyGateway: each seller is the payee of her own purchase unit, so each share has its own authorization.
   Paying a share captures her authorization; releasing it voids that authorization.
 - PayoutsGateway: the platform is the only payee and holds one authorization for the whole order, with each share
-  listed as an item. Paying a share captures just her amount and sends it to her with PayPal Payouts. Releasing a
-  share leaves her amount uncaptured; the order's last capture or void gives whatever is left back to the buyer.
+  listed as an item. Paying a share captures just her amount and sends it to her with PayPal Payouts on her payout
+  rail (rails.py: PayPal, or Venmo in the US). Releasing a share leaves her amount uncaptured; the order's last
+  capture or void gives whatever is left back to the buyer. This is the path we run; multiparty is a dead end.
 
 Every Orders and Payments call goes through APIMatic's PayPal Python SDK (sdk.py; the contract sheet is
 paypal-plan.md). Payouts are not in that SDK, so they go through our own PayPalClient, which also verifies webhooks.
@@ -60,6 +61,7 @@ from openstall_paypal.gateway import (
     Reservation,
     Share,
 )
+from openstall_paypal.rails import DEFAULT_NOTE, payout_item, receiver, venmo_payouts_simulated
 from openstall_paypal.sdk import REPRESENTATION, PayPalSdk
 
 BRAND_NAME = "OpenStall Collective"
@@ -220,7 +222,12 @@ class SandboxGateway:
 
 
 class MultipartyGateway(SandboxGateway):
-    """Each seller is a payee on the one PayPal order, so each share has its own authorization."""
+    """Each seller is a payee on the one PayPal order, so each share has its own authorization.
+
+    A recorded dead end, kept out of the demo and the README: the Orders v2 schema (v2.36) says intent AUTHORIZE "is
+    not supported when you have more than one purchase_unit", and PayPal's multi-seller guide requires CAPTURE, so
+    this path cannot do pay-on-proof (docs/decisions.md, "Payment path: payouts only").
+    """
 
     path = "multiparty"
 
@@ -252,9 +259,18 @@ class MultipartyGateway(SandboxGateway):
 
 
 class PayoutsGateway(SandboxGateway):
-    """The platform holds one authorization for the whole order and pays each seller with Payouts when she ships."""
+    """The platform holds one authorization for the whole order and pays each seller with Payouts when she ships.
+
+    `simulate_venmo`: record a Venmo payout instead of sending it. PayPal's sandbox refuses every Venmo payout
+    ("Recipient wallet not supported in sandbox"), and a refusal after the capture would leave her half paid, so on
+    the sandbox her capture is real and her payout is simulated (and labelled so). By default it follows the host.
+    """
 
     path = "payouts"
+
+    def __init__(self, client: PayPalClient, sdk: PayPalSdk, *, simulate_venmo: bool | None = None) -> None:
+        super().__init__(client, sdk)
+        self.simulate_venmo = venmo_payouts_simulated(client.base_url) if simulate_venmo is None else simulate_venmo
 
     def purchase_units(self, request: CheckoutRequest) -> list[PurchaseUnitRequest]:
         total = request.total_usd
@@ -281,10 +297,17 @@ class PayoutsGateway(SandboxGateway):
         ]
 
     def pay_share(self, share: Share) -> Payment:
-        receiver = self.receiver(share)  # before capturing, so a seller with no account is never half paid
+        # Her rail and her payout item first, so a maker no rail can reach is never captured and left half paid.
+        if share.payout_rail == "unavailable":
+            raise PaymentError(
+                "PAYOUT_RAIL_UNAVAILABLE", f"no payout rail can reach the maker of share {share.part_id} yet"
+            )
+        item = payout_item(share)
         capture_id = self.capture(
             share, CaptureRequest(amount=money(share.amount_usd), invoice_id=share.part_id, final_capture=share.last)
         )
+        if share.payout_rail == "venmo" and self.simulate_venmo:
+            return Payment(capture_id=capture_id, payout_rail="venmo", payout_simulated=True)
         with paypal_errors():
             payout = self.client.post(
                 "/v1/payments/payouts",
@@ -292,20 +315,17 @@ class PayoutsGateway(SandboxGateway):
                     "sender_batch_header": {
                         "sender_batch_id": f"openstall-{share.part_id}",  # PayPal refuses a batch id it has seen
                         "email_subject": "You have been paid for your OpenStall order",
-                        "email_message": share.note or "Your share of an OpenStall Collective order.",
+                        "email_message": share.note or DEFAULT_NOTE,
                     },
-                    "items": [
-                        {
-                            **receiver,
-                            "amount": {"currency": "USD", "value": f"{share.amount_usd:.2f}"},
-                            "sender_item_id": share.part_id,
-                            "note": share.note or "Your share of an OpenStall Collective order.",
-                        }
-                    ],
+                    "items": [item],
                 },
                 idempotency_key=f"openstall-payout-{share.part_id}",
             )
-        return Payment(capture_id=capture_id, payout_batch_id=payout["batch_header"]["payout_batch_id"])
+        return Payment(
+            capture_id=capture_id,
+            payout_batch_id=payout["batch_header"]["payout_batch_id"],
+            payout_rail=share.payout_rail,
+        )
 
     def release_share(self, share: Share) -> None:
         # Her amount is never captured. Only the last open share closes the hold, giving back whatever is left.
@@ -314,8 +334,5 @@ class PayoutsGateway(SandboxGateway):
 
     @staticmethod
     def receiver(share: Share) -> dict[str, str]:
-        if share.payee_email:
-            return {"recipient_type": "EMAIL", "receiver": share.payee_email}
-        if share.payee_merchant_id:
-            return {"recipient_type": "PAYPAL_ID", "receiver": share.payee_merchant_id}
-        raise PaymentError("PAYEE_MISSING", f"no PayPal account is linked for share {share.part_id}")
+        """Who a PayPal-rail payout goes to (rails.receiver)."""
+        return receiver(share)

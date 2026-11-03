@@ -62,12 +62,11 @@ def test_the_whole_fake_flow_ends_with_every_share_confirmed_by_paypal(demo_orde
     parts = order()["parts"]
 
     assert [(part["status"], part["confirmed_by_paypal"]) for part in parts] == [("authorized", True)] * 4
+    assert {part["confirmation_source"] for part in parts} == {"simulated"}  # fake mode: simulated PayPal says so
+    # The payouts path: one authorization for the whole order, so one event confirms every share.
     assert feed(demo_order, EventType.PAYMENT_WEBHOOK) == [
-        "PayPal confirmed the buyer approved order ord_demo",
-        "PayPal confirmed the money for Amina is reserved",
-        "PayPal confirmed the money for Priya is reserved",
-        "PayPal confirmed the money for Lucía is reserved",
-        "PayPal confirmed the money for Grace is reserved",
+        "Simulated PayPal confirmed the buyer approved order ord_demo",
+        "Simulated PayPal confirmed the money for Amina, Priya, Lucía and Grace is reserved",
     ]
 
 
@@ -79,7 +78,8 @@ def test_a_share_is_not_confirmed_until_paypal_says_so(reserved_quietly):
         fake_event("PAYMENT.AUTHORIZATION.CREATED", "authorization", {"id": amina.authorization_id}, "Authorized")
     )
 
-    assert [part["confirmed_by_paypal"] for part in order()["parts"]] == [True, False, False, False]
+    # Her authorization is the whole order's, so PayPal's one event confirms every share it holds.
+    assert [part["confirmed_by_paypal"] for part in order()["parts"]] == [True] * 4
 
 
 def test_an_event_without_paypals_signature_is_refused_and_recorded(demo_order):
@@ -115,8 +115,12 @@ def test_the_same_event_twice_changes_nothing_the_second_time(reserved_quietly, 
 
     assert (first.json(), second.json()) == ({"status": "processed"}, {"status": "repeat"})
     assert demo_order.scalar(select(func.count()).select_from(ProcessedWebhook)) == 1
+    # Voided at PayPal, the order's one hold releases every share it held, once.
     assert feed(demo_order, EventType.PART_RELEASED) == [
-        "Lucía's share of $220.00 was released: PayPal voided its hold"
+        "Amina's share of $216.00 was released: Simulated PayPal voided its hold",
+        "Priya's share of $176.00 was released: Simulated PayPal voided its hold",
+        "Lucía's share of $220.00 was released: Simulated PayPal voided its hold",
+        "Grace's share of $203.00 was released: Simulated PayPal voided its hold",
     ]
 
 
@@ -156,12 +160,8 @@ def test_a_reservation_confirmed_before_our_side_saved_it_counts_once_saved(demo
     checkout = start_checkout(demo_order, DEMO_ORDER_ID, fakes.payment_gateway, settings.WEB_BASE_URL)
     demo_order.commit()
     fakes.payment_gateway.approve(checkout.paypal_order_id)
-    early = [
-        fake_event("PAYMENT.AUTHORIZATION.CREATED", "authorization", {"id": f"{checkout.paypal_order_id}-AUTH-{n}"}, "")
-        for n in range(1, 5)
-    ]
-    for event in early:
-        assert post_event(event).json() == {"status": "processed"}
+    early = fake_event("PAYMENT.AUTHORIZATION.CREATED", "authorization", {"id": f"{checkout.paypal_order_id}-AUTH"}, "")
+    assert post_event(early).json() == {"status": "processed"}
 
     reserve_order(demo_order, DEMO_ORDER_ID, fakes.payment_gateway)
     demo_order.commit()
@@ -187,7 +187,7 @@ def test_a_payout_to_a_maker_is_reported_by_her_share(reserved_quietly, demo_ord
 
     post_event(fake_event("PAYMENT.PAYOUTS-ITEM.SUCCEEDED", "payouts_item", item, "Paid out"))
 
-    assert feed(demo_order, EventType.PAYMENT_WEBHOOK) == ["PayPal paid out Priya's share"]
+    assert feed(demo_order, EventType.PAYMENT_WEBHOOK) == ["Simulated PayPal paid out Priya's share"]
 
 
 def test_an_event_we_do_not_handle_is_kept_and_ignored(demo_order):
@@ -196,7 +196,7 @@ def test_an_event_we_do_not_handle_is_kept_and_ignored(demo_order):
     assert response.json() == {"status": "processed"}
     kept = demo_order.scalars(select(ProcessedWebhook)).one()
     assert (kept.event_type, kept.resource_id) == ("BILLING.PLAN.CREATED", "P-1")
-    assert feed(demo_order, EventType.PAYMENT_WEBHOOK) == ["PayPal sent BILLING.PLAN.CREATED; nothing to do"]
+    assert feed(demo_order, EventType.PAYMENT_WEBHOOK) == ["Simulated PayPal sent BILLING.PLAN.CREATED; nothing to do"]
 
 
 # In sandbox mode PayPal itself checks the signature.
@@ -276,3 +276,85 @@ def test_without_a_webhook_id_no_event_is_accepted(use_settings, db):
 
     assert response.status_code == 400
     assert not paypal.calls
+
+
+# Pay-on-proof on the payouts path: payout ticks, and shares released while the order's one hold stays open.
+
+
+def test_payout_succeeded_event_marks_payout_confirmed(reserved_quietly):
+    priya = reserved_quietly["s_priya"]
+    assert next(p for p in order()["parts"] if p["id"] == priya.id)["payout_confirmed"] is False
+    item = {
+        "payout_item_id": "ITEM-PRIYA",
+        "transaction_status": "SUCCESS",
+        "payout_item": {"sender_item_id": priya.id, "recipient_wallet": "PAYPAL"},
+    }
+
+    post_event(fake_event("PAYMENT.PAYOUTS-ITEM.SUCCEEDED", "payouts_item", item, "Paid out"))
+
+    parts = {p["id"]: p for p in order()["parts"]}
+    assert parts[priya.id]["payout_confirmed"] is True
+    assert [p["payout_confirmed"] for p in parts.values() if p["id"] != priya.id] == [False] * 3
+
+
+def release_through_the_api(db, fakes, part_id):
+    from openstall_api.payments import release_share
+
+    release_share(db, part_id, fakes.payment_gateway)
+    db.commit()
+
+
+def test_middle_release_needs_no_paypal_confirmation(reserved_quietly, demo_order, fakes):
+    lucia = reserved_quietly["s_lucia"]
+
+    release_through_the_api(demo_order, fakes, lucia.id)
+
+    assert fakes.payment_gateway.take_outbox() == []  # never captured, nothing voided: PayPal has nothing to say
+    share = next(p for p in order()["parts"] if p["id"] == lucia.id)
+    assert (share["status"], share["confirmed_by_paypal"], share["nothing_to_confirm"]) == ("released", False, True)
+    assert share["payout_label"] == "No payout: her share was released"
+    others = [p for p in order()["parts"] if p["id"] != lucia.id]
+    assert [p["nothing_to_confirm"] for p in others] == [False] * 3
+
+
+def test_final_void_confirms_every_released_share(reserved_quietly, demo_order, fakes):
+    for seller in ("s_lucia", "s_amina", "s_priya"):
+        release_through_the_api(demo_order, fakes, reserved_quietly[seller].id)
+    assert fakes.payment_gateway.take_outbox() == []
+
+    release_through_the_api(demo_order, fakes, reserved_quietly["s_grace"].id)  # the last: it voids the hold
+    [voided] = fakes.payment_gateway.take_outbox()
+    assert voided["event_type"] == "PAYMENT.AUTHORIZATION.VOIDED"
+    # Until PayPal's event arrives the shares wait for it: the hold is no longer used by any open share.
+    assert [p["nothing_to_confirm"] for p in order()["parts"]] == [False] * 4
+    assert [p["confirmed_by_paypal"] for p in order()["parts"]] == [False] * 4
+
+    post_event(voided)
+
+    assert [(p["status"], p["confirmed_by_paypal"]) for p in order()["parts"]] == [("released", True)] * 4
+    assert order()["status"] == "cancelled"
+
+
+def test_a_void_after_a_paid_share_is_awaited_by_every_released_share(reserved_quietly, demo_order, fakes):
+    from openstall_api.payments import pay_share
+
+    priya = reserved_quietly["s_priya"]
+    demo_order.get(OrderPart, priya.id).tracking_number = "LP00123456789IN"
+    pay_share(demo_order, priya.id, fakes.payment_gateway)
+    demo_order.commit()
+    fakes.payment_gateway.take_outbox()
+    for seller in ("s_lucia", "s_grace", "s_amina"):  # Amina, whom no rail can pay yet, is released last
+        release_through_the_api(demo_order, fakes, reserved_quietly[seller].id)
+    [voided] = fakes.payment_gateway.take_outbox()
+    assert voided["event_type"] == "PAYMENT.AUTHORIZATION.VOIDED"
+
+    released = [p for p in order()["parts"] if p["status"] == "released"]
+    assert len(released) == 3
+    # The void is on its way: every released share waits for it rather than reading "nothing to confirm".
+    assert [(p["nothing_to_confirm"], p["confirmed_by_paypal"]) for p in released] == [(False, False)] * 3
+
+    post_event(voided)
+
+    released = [p for p in order()["parts"] if p["status"] == "released"]
+    assert [(p["nothing_to_confirm"], p["confirmed_by_paypal"]) for p in released] == [(False, True)] * 3
+    assert order()["status"] == "shipped"

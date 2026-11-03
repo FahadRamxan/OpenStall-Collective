@@ -10,7 +10,7 @@ describe("SiteFooter", () => {
   it("says the app runs in the PayPal sandbox and moves no real money", () => {
     render(<SiteFooter />);
 
-    expect(screen.getByRole("contentinfo")).toHaveTextContent("Runs in the PayPal sandbox. No real money moves.");
+    expect(screen.getByRole("contentinfo")).toHaveTextContent("No real money moves: PayPal's sandbox, or simulated PayPal in test mode.");
   });
 
   it("links to the system status page", () => {

@@ -78,3 +78,31 @@ def test_webhooks_received_before_migration_0003_keep_working_after_it():
     with get_engine().connect() as connection:
         row = connection.execute(text("SELECT event_id, payload_json, event_type FROM processed_webhooks")).one()
     assert (row.event_id, row.payload_json, row.event_type) == ("WH-1", "{}", None)
+
+
+def test_migration_0006_adds_each_sellers_payout_rail_and_undoes_cleanly():
+    from sqlalchemy import text
+
+    command.upgrade(alembic_config(), "0005")
+    with get_engine().begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO sellers (id, name, country, data_source, created_at) "
+                "VALUES ('s_grace', 'Grace', 'US', 'seeded_demo', '2026-11-01')"
+            )
+        )
+
+    command.upgrade(alembic_config(), "0006")
+
+    with get_engine().connect() as connection:
+        row = connection.execute(text("SELECT name, venmo_handle, payout_rail FROM sellers")).one()
+    assert (row.name, row.venmo_handle, row.payout_rail) == ("Grace", None, None)
+    columns = {column["name"] for column in inspect(get_engine()).get_columns("sellers")}
+    assert {"venmo_handle", "payout_rail"} <= columns
+
+    command.downgrade(alembic_config(), "0005")
+
+    columns = {column["name"] for column in inspect(get_engine()).get_columns("sellers")}
+    assert not {"venmo_handle", "payout_rail"} & columns
+    with get_engine().connect() as connection:
+        assert connection.execute(text("SELECT name FROM sellers")).scalar_one() == "Grace"

@@ -59,21 +59,23 @@ test("Approve, then approving at the simulated PayPal page, reserves every maker
   await page.getByRole("button", { name: "Approve", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/approve/${orderId}/return\\?token=FAKE-[0-9A-F]+&PayerID=FAKEBUYER01$`));
-  await expect(page.getByRole("heading", { level: 1, name: "PayPal is holding $815.00" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Simulated PayPal is holding $815.00" })).toBeVisible();
   const receipt = page.getByRole("list", { name: "Each maker's share" }).getByRole("listitem");
   await expect(receipt).toHaveCount(4);
   for (const [index, share] of SHARES.entries()) {
     await expect(receipt.nth(index)).toContainText(share.name);
     await expect(receipt.nth(index)).toContainText(share.amount);
     await expect(receipt.nth(index)).toContainText("Reserved, paid when she ships");
-    await expect(receipt.nth(index)).toContainText("Confirmed by PayPal");
+    // Fake mode: simulated PayPal confirms, and says so. "Confirmed by PayPal" is only for PayPal's own webhooks.
+    await expect(receipt.nth(index)).toContainText("Confirmed by simulated PayPal");
   }
-  await expect(page.getByText("PayPal confirmed every share.")).toBeVisible();
+  await expect(page.getByText("Simulated PayPal confirmed every share.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Confirmed by PayPal", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-1280.png"), fullPage: true });
 
   // Reloading the receipt reserves nothing twice, and the order now points to its receipt instead of PayPal.
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "PayPal is holding $815.00" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Simulated PayPal is holding $815.00" })).toBeVisible();
   await page.goto(`/approve/${orderId}`);
   await expect(page.getByRole("button", { name: "Approve and pay with PayPal" })).toHaveCount(0);
   await page.getByRole("link", { name: "See the receipt" }).click();
@@ -81,7 +83,7 @@ test("Approve, then approving at the simulated PayPal page, reserves every maker
 
   // PayPal's verified webhooks show in the live feed too.
   await page.goto("/demo");
-  await expect(page.getByText(`PayPal confirmed the buyer approved order ${orderId}`)).toBeVisible();
+  await expect(page.getByText(`Simulated PayPal confirmed the buyer approved order ${orderId}`)).toBeVisible();
 });
 
 test("the receipt fits a phone screen", async ({ page, request }) => {

@@ -5,11 +5,13 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { RailChip } from "@/components/rail-chip";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, mediaUrl, place } from "@/lib/catalog";
 import { goTo } from "@/lib/navigation";
 import {
   ORDER_STATUS_LABELS,
+  authorizationSentence,
   canCheckout,
   formatDay,
   getOrder,
@@ -162,6 +164,7 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
             Total <span className="text-3xl font-semibold tabular-nums">{total}</span>
           </p>
         </div>
+        <p className="mt-2 px-1 text-sm text-muted sm:text-right">{authorizationSentence(order.total_usd)}</p>
       </section>
 
       <section aria-labelledby="proof-heading" className="mt-8 rounded-2xl border border-accent/30 bg-accent-soft p-5">
@@ -249,6 +252,7 @@ function ShareRow({ part }: { part: OrderPart }) {
               {part.trust_data_source === "seeded_demo" ? " (seeded)" : null}
             </span>
           ) : null}
+          <RailChip part={part} />
         </div>
       </div>
     </li>

@@ -64,8 +64,9 @@ def test_coming_back_from_paypal_reserves_the_whole_order(approved, demo_order):
     assert [part["status"] for part in order["parts"]] == ["authorized"] * 4
     demo_order.expire_all()
     parts = demo_order.get(Order, DEMO_ORDER_ID).parts
+    # The payouts path: one authorization holds every share.
     assert {part.reference_id: part.authorization_id for part in parts} == {
-        f"op_00{n}": f"{approved}-AUTH-{n}" for n in range(1, 5)
+        f"op_00{n}": f"{approved}-AUTH" for n in range(1, 5)
     }
 
 
@@ -218,24 +219,48 @@ def test_a_share_is_never_paid_before_her_tracking_is_confirmed(reserved, demo_o
 
 
 def test_a_share_with_confirmed_tracking_is_paid_once(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]
-    confirm_tracking(demo_order, amina)
+    priya = reserved["s_priya"]
+    confirm_tracking(demo_order, priya)
 
-    pay(demo_order, fakes, amina)
-    pay(demo_order, fakes, amina)
+    pay(demo_order, fakes, priya)
+    pay(demo_order, fakes, priya)
 
-    paid = part(demo_order, amina)
+    paid = part(demo_order, priya)
     assert paid.status == PartStatus.CAPTURED
-    assert paid.capture_id == f"{paid.authorization_id}-CAP"
+    assert paid.capture_id == f"{paid.authorization_id}-CAP-1"  # a partial capture of the order's one hold
     assert calls(fakes) == ["pay_share"]
     [event] = events(demo_order, EventType.PART_CAPTURED)
-    assert event.payload_json["summary"] == "Amina was paid $216.00 on proof of shipping"
+    assert event.payload_json["summary"] == "Priya was paid $176.00 on proof of shipping"
+    assert event.payload_json["payout_rail"] == "paypal"
+
+
+def test_a_maker_no_payout_rail_can_reach_is_never_captured(reserved, demo_order, fakes):
+    amina = reserved["s_amina"]  # Lahore: PayPal cannot pay out to Pakistan, and Hyperwallet is prompt 52
+    confirm_tracking(demo_order, amina)
+
+    with pytest.raises(WrongStatus, match=r"Amina's share stays reserved and is not captured. Payout rail not connected yet \(Pakistan\)"):
+        pay(demo_order, fakes, amina)
+
+    assert fakes.payment_gateway.calls == []
+    assert part(demo_order, amina).status == PartStatus.AUTHORIZED
+
+
+def test_grace_is_paid_on_the_venmo_rail(reserved, demo_order, fakes):
+    grace = reserved["s_grace"]
+    confirm_tracking(demo_order, grace)
+
+    pay(demo_order, fakes, grace)
+
+    [(_, share)] = fakes.payment_gateway.calls
+    assert (share.payout_rail, share.venmo_handle) == ("venmo", "grace-detroit-demo")
+    [event] = events(demo_order, EventType.PART_CAPTURED)
+    assert event.payload_json["payout_rail"] == "venmo"
 
 
 def test_paying_one_share_leaves_the_order_partly_shipped(reserved, demo_order, fakes):
-    confirm_tracking(demo_order, reserved["s_amina"])
+    confirm_tracking(demo_order, reserved["s_priya"])
 
-    pay(demo_order, fakes, reserved["s_amina"])
+    pay(demo_order, fakes, reserved["s_priya"])
 
     assert part(demo_order, reserved["s_priya"]).order.status == OrderStatus.PARTLY_SHIPPED
 
@@ -277,10 +302,10 @@ def test_only_the_last_open_share_may_close_the_hold(reserved, demo_order, fakes
 
 
 def test_the_order_is_shipped_once_no_share_waits(reserved, demo_order, fakes):
-    for seller in ("s_amina", "s_priya", "s_grace"):
+    release(demo_order, fakes, reserved["s_amina"])
+    for seller in ("s_priya", "s_lucia", "s_grace"):
         confirm_tracking(demo_order, reserved[seller])
         pay(demo_order, fakes, reserved[seller])
-    release(demo_order, fakes, reserved["s_lucia"])
 
     assert part(demo_order, reserved["s_lucia"]).order.status == OrderStatus.SHIPPED
 

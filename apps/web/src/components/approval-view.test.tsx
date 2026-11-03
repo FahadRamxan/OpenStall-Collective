@@ -26,6 +26,12 @@ function share(name: string, quantity: number, price: string, amount: string, se
     status: "pending" as const,
     confirmed_by_paypal: true,
     attention: null,
+    confirmation_source: "paypal_sandbox" as const,
+    nothing_to_confirm: false,
+    payout_rail: "paypal" as const,
+    payout_label: "Paid to PayPal",
+    payout_via_paypal: true,
+    payout_confirmed: false,
     trust_score: "0.95",
     trust_data_source: "seeded_demo" as const,
   };
@@ -90,6 +96,32 @@ describe("ApprovalView", () => {
     expect(screen.getByRole("heading", { name: "2 makers make it together" })).toBeInTheDocument();
     expect(screen.getByText("23 items from 2 makers")).toBeInTheDocument();
     expect(screen.getByText("$392.00")).toBeInTheDocument();
+  });
+
+  it("shows each maker's payout rail, and one authorization under the total", async () => {
+    const order: Order = {
+      ...ORDER,
+      parts: [
+        {
+          ...ORDER.parts[0],
+          confirmation_source: "simulated",
+          payout_rail: "unavailable",
+          payout_label: "Payout rail not connected yet (Pakistan)",
+          payout_via_paypal: false,
+        },
+        { ...ORDER.parts[1], confirmation_source: "simulated", payout_label: "Paid to PayPal (simulated)" },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(order)));
+
+    render(<ApprovalView />);
+
+    const shares = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(shares[0]).toHaveTextContent("Payout rail not connected yet (Pakistan)");
+    expect(shares[1]).toHaveTextContent("Paid to PayPal (simulated)");
+    expect(
+      screen.getByText("One PayPal authorization for $392.00. Each maker's share is captured when she ships."),
+    ).toBeInTheDocument();
   });
 
   it("explains pay-on-proof, under the button and above it", async () => {

@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
@@ -17,9 +17,10 @@ from openstall_api.claims import ClaimHeld
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
-from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, start_checkout
+from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, seller_rail, start_checkout
+from openstall_api.settings import Settings, get_settings
 from openstall_api.webhooks import PayPalConfirmation, confirmations, deliver_fake_webhooks
-from openstall_paypal import PaymentError, PaymentUnavailable
+from openstall_paypal import RAIL_NAMES, PaymentError, PaymentUnavailable, PayoutRail, venmo_payouts_simulated
 from openstall_trust import trust_score
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -48,6 +49,15 @@ class PartOut(BaseModel):
     status: PartStatus
     confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
     attention: str | None  # PayPal reported a problem with it, such as a denied payment
+    # Who confirms it: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. The page must
+    # never say "Confirmed by PayPal" for a simulated confirmation (spec 3.5).
+    confirmation_source: Literal["paypal_sandbox", "simulated"]
+    # Released while the order's one hold still serves other shares: never captured, so PayPal has nothing to say.
+    nothing_to_confirm: bool
+    payout_rail: PayoutRail  # how she is paid once her share is captured (spec 3.5a)
+    payout_label: str  # the rail in words, for example "Paid to Venmo (simulated)"
+    payout_via_paypal: bool  # her payout goes through (simulated) PayPal Payouts, so its webhook will confirm it
+    payout_confirmed: bool  # PayPal said her payout succeeded (PAYMENT.PAYOUTS-ITEM.SUCCEEDED)
     trust_score: Decimal | None
     trust_data_source: DataSource | None
 
@@ -75,8 +85,30 @@ class OrderOut(BaseModel):
     parts: list[PartOut]
 
 
-def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation) -> PartOut:
+SANDBOX_VENMO = "simulated: Venmo payouts don't run in PayPal's sandbox"
+
+
+def payout_words(part: OrderPart, settings: Settings) -> tuple[PayoutRail, str, bool]:
+    """Her rail, its label, and whether her payout goes through (simulated) PayPal Payouts."""
+    rail = seller_rail(part.seller, settings)
+    if part.status == PartStatus.RELEASED:
+        return rail.kind, "No payout: her share was released", False
+    if not rail.available:
+        return rail.kind, rail.reason or "Payout rail not connected yet", False
+    name = RAIL_NAMES[rail.kind]
+    # "Paid to" only once her share is captured; until then the chip says where the money will go.
+    paid = part.status in (PartStatus.CAPTURED, PartStatus.DELIVERED)
+    words = f"Paid to {name}" if paid else f"Paid to {name} when she ships"
+    if settings.OPENSTALL_MODE == "fake":
+        return rail.kind, f"{words} (simulated)", True
+    if rail.kind == "venmo" and venmo_payouts_simulated(settings.PAYPAL_API_BASE):
+        return rail.kind, f"{words} ({SANDBOX_VENMO})", False
+    return rail.kind, words, True
+
+
+def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation, settings: Settings) -> PartOut:
     passport = session.get(Passport, part.seller_id)
+    payout_rail, payout_label, payout_via_paypal = payout_words(part, settings)
     metrics = passport.metrics_json if passport else None
     product = part.product
     return PartOut(
@@ -94,6 +126,12 @@ def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation) -> Part
         status=part.status,
         confirmed_by_paypal=paypal.confirmed,
         attention=paypal.attention,
+        confirmation_source="simulated" if settings.OPENSTALL_MODE == "fake" else "paypal_sandbox",
+        nothing_to_confirm=paypal.nothing_to_confirm,
+        payout_rail=payout_rail,
+        payout_label=payout_label,
+        payout_via_paypal=payout_via_paypal,
+        payout_confirmed=paypal.payout_confirmed,
         trust_score=(
             trust_score(metrics["on_time_rate"], metrics["dispute_rate"], metrics["photo_originality"])
             if metrics
@@ -104,6 +142,7 @@ def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation) -> Part
 
 
 def order_out(session: Session, order: Order) -> OrderOut:
+    settings = get_settings()
     paypal = confirmations(session, order.parts)
     request = order.request
     items = request.items_json if request else []
@@ -128,7 +167,7 @@ def order_out(session: Session, order: Order) -> OrderOut:
             if request
             else None
         ),
-        parts=[_part(session, part, paypal[part.id]) for part in order.parts],
+        parts=[_part(session, part, paypal[part.id], settings) for part in order.parts],
     )
 
 

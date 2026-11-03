@@ -22,9 +22,10 @@ from sqlalchemy.orm import Session
 from openstall_api.adapters import get_registry
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event
-from openstall_api.models import Order, OrderPart, PartStatus, ProcessedWebhook
+from openstall_api.models import Event, Order, OrderPart, PartStatus, ProcessedWebhook
 from openstall_api.orders import move_part
 from openstall_api.payments import settle_order
+from openstall_api.settings import get_settings
 from openstall_paypal import (
     FakeGateway,
     FakeWebhookVerifier,
@@ -140,21 +141,23 @@ def _names(parts: Iterable[OrderPart]) -> str:
 
 
 def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any]) -> None:
-    """What a verified event changes, and its line in the live feed."""
+    """What a verified event changes, and its line in the live feed. In fake mode the event came from the fake
+    gateway, so the line names simulated PayPal, never PayPal itself."""
     order_id: str | None = None
+    who = "Simulated PayPal" if get_settings().OPENSTALL_MODE == "fake" else "PayPal"
     if kind == "CHECKOUT.ORDER.APPROVED":
         order = _order_of(session, resource)
         order_id = order.id if order else None
-        summary = f"PayPal confirmed the buyer approved order {order_id}" if order else "PayPal confirmed an approval"
+        summary = f"{who} confirmed the buyer approved order {order_id}" if order else f"{who} confirmed an approval"
     elif kind in ("PAYMENT.AUTHORIZATION.CREATED", "PAYMENT.AUTHORIZATION.VOIDED"):
         hold = resource_id(resource)
         parts = list(session.scalars(select(OrderPart).where(OrderPart.authorization_id == hold))) if hold else []
         order_id = parts[0].order_id if parts else None
         if kind == "PAYMENT.AUTHORIZATION.CREATED":
             summary = (
-                f"PayPal confirmed the money for {_names(parts)} is reserved"
+                f"{who} confirmed the money for {_names(parts)} is reserved"
                 if parts
-                else "PayPal confirmed a reservation; it counts as soon as the order is saved"
+                else f"{who} confirmed a reservation; it counts as soon as the order is saved"
             )
         else:
             held = [part for part in parts if part.status == PartStatus.AUTHORIZED]
@@ -163,13 +166,17 @@ def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any])
                 record_event(
                     session,
                     EventType.PART_RELEASED,
-                    f"{part.seller.name}'s share of ${part.amount_usd:,.2f} was released: PayPal voided its hold",
+                    f"{part.seller.name}'s share of ${part.amount_usd:,.2f} was released: {who} voided its hold",
                     entity_id=part.id,
-                    payload={"order_id": part.order_id, "amount_usd": part.amount_usd},
+                    payload={"order_id": part.order_id, "amount_usd": part.amount_usd, "voided_hold": True},
                 )
             if held:
                 settle_order(held[0].order)
-            summary = f"PayPal confirmed the hold for {_names(parts)} is released" if parts else "PayPal voided a hold"
+            # On the payouts path one hold covers every share: name only those it released, not those already paid.
+            released = [part for part in parts if part.status == PartStatus.RELEASED]
+            summary = (
+                f"{who} confirmed the hold for {_names(released)} is released" if released else f"{who} voided a hold"
+            )
     elif kind == "PAYMENT.CAPTURE.COMPLETED":
         part = session.get(OrderPart, reference(resource) or "")
         order_id = part.order_id if part else None
@@ -177,7 +184,7 @@ def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any])
             part.capture_id = resource_id(resource)
             move_part(part, PartStatus.CAPTURED)
             settle_order(part.order)
-        summary = f"PayPal confirmed {part.seller.name} was paid" if part else "PayPal confirmed a payment"
+        summary = f"{who} confirmed {part.seller.name} was paid" if part else f"{who} confirmed a payment"
     elif kind in ATTENTION:
         part = session.get(OrderPart, reference(resource) or "")
         order_id = part.order_id if part else None
@@ -185,20 +192,50 @@ def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any])
     elif kind == "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
         part = session.get(OrderPart, reference(resource) or "")
         order_id = part.order_id if part else None
-        summary = f"PayPal paid out {part.seller.name}'s share" if part else "PayPal paid out a share"
+        summary = f"{who} paid out {part.seller.name}'s share" if part else f"{who} paid out a share"
     elif kind == "PAYMENT.PAYOUTSBATCH.SUCCESS":
-        summary = "PayPal finished a payout batch"
+        summary = f"{who} finished a payout batch"
     else:
-        summary = f"PayPal sent {kind}; nothing to do"
+        summary = f"{who} sent {kind}; nothing to do"
     record_event(session, EventType.PAYMENT_WEBHOOK, summary, entity_id=order_id, payload={"event_type": kind})
 
 
 @dataclass(frozen=True)
 class PayPalConfirmation:
-    """For one share: whether PayPal confirmed where it stands now, and anything that needs a person."""
+    """For one share: whether PayPal confirmed where it stands now, and anything that needs a person.
+
+    `payout_confirmed`: PayPal said her payout succeeded (PAYMENT.PAYOUTS-ITEM.SUCCEEDED, found by our part id, which
+    is the payout item's sender_item_id). `nothing_to_confirm`: she was released and no void closed her hold, so
+    PayPal sends nothing about her: released mid-order while other shares still use the order's one hold (if the last
+    release later voids it, that VOIDED event confirms her too), or the hold was closed by a final capture instead.
+    """
 
     confirmed: bool
     attention: str | None
+    payout_confirmed: bool = False
+    nothing_to_confirm: bool = False
+
+
+def _voided_holds(session: Session, parts: list[OrderPart]) -> set[str]:
+    """Holds of these shares that a release closed with a void (release_share's `voided_hold`), so PayPal's VOIDED
+    event is on its way for every share released on them, whether or not it has arrived yet."""
+    holds: dict[str, str] = {
+        part.id: part.authorization_id
+        for part in parts
+        if part.status == PartStatus.RELEASED and part.authorization_id is not None
+    }
+    if not holds:
+        return set()
+    rows = session.execute(
+        select(Event.entity_id, Event.payload_json).where(
+            Event.type == EventType.PART_RELEASED.value, Event.entity_id.in_(holds)
+        )
+    ).all()
+    return {
+        holds[row.entity_id]
+        for row in rows
+        if row.entity_id in holds and (row.payload_json or {}).get("voided_hold")
+    }
 
 
 def confirmations(session: Session, parts: list[OrderPart]) -> dict[str, PayPalConfirmation]:
@@ -212,18 +249,26 @@ def confirmations(session: Session, parts: list[OrderPart]) -> dict[str, PayPalC
     ).all()
     by_resource = {(row.event_type, row.resource_id) for row in rows}
     by_reference = {(row.event_type, row.reference) for row in rows}
+    voided = _voided_holds(session, parts)
     result = {}
     for part in parts:
+        nothing_to_confirm = False
         if part.status == PartStatus.AUTHORIZED:
             confirmed = ("PAYMENT.AUTHORIZATION.CREATED", part.authorization_id) in by_resource
         elif part.status in (PartStatus.CAPTURED, PartStatus.DELIVERED):
             confirmed = ("PAYMENT.CAPTURE.COMPLETED", part.id) in by_reference
         elif part.status == PartStatus.RELEASED:
             confirmed = ("PAYMENT.AUTHORIZATION.VOIDED", part.authorization_id) in by_resource
+            nothing_to_confirm = not confirmed and part.authorization_id not in voided
         else:
             confirmed = False
         attention = next((words for kind, words in ATTENTION.items() if (kind, part.id) in by_reference), None)
-        result[part.id] = PayPalConfirmation(confirmed=confirmed, attention=attention)
+        result[part.id] = PayPalConfirmation(
+            confirmed=confirmed,
+            attention=attention,
+            payout_confirmed=("PAYMENT.PAYOUTS-ITEM.SUCCEEDED", part.id) in by_reference,
+            nothing_to_confirm=nothing_to_confirm,
+        )
     return result
 
 

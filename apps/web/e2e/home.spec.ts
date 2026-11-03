@@ -23,7 +23,7 @@ test('"See the live demo" goes to /demo', async ({ page }) => {
 });
 
 test("the footer says it runs in the PayPal sandbox", async ({ page }) => {
-  await expect(page.getByRole("contentinfo").getByText("Runs in the PayPal sandbox. No real money moves.")).toBeVisible();
+  await expect(page.getByRole("contentinfo").getByText("No real money moves: PayPal's sandbox, or simulated PayPal in test mode.")).toBeVisible();
 });
 
 test("the header links reach every page and mark the current one", async ({ page }) => {

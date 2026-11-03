@@ -3,6 +3,10 @@
 All of it is made up for the demo and marked seeded_demo wherever it appears. Amina normally joins live over
 WhatsApp, so she is seeded only when asked (with_amina): for tests, and for recording parts of the video out of
 order. Seeding is idempotent: the same input gives the same rows, signatures included.
+
+Payout rails (spec 3.5a): Grace has a fictional Venmo handle, so she is paid on the Venmo rail. In sandbox mode only,
+Priya, Lucía and Noor get the sandbox PayPal accounts named in PAYPAL_SANDBOX_PAYEE_PRIYA, _LUCIA and _NOOR; without
+one, a maker's rail is "not connected yet" there. Fake mode simulates every payout and needs no account.
 """
 
 from dataclasses import dataclass, field
@@ -26,6 +30,7 @@ from openstall_api.models import (
 )
 from openstall_api.orders import DraftPart, create_draft_order
 from openstall_api.passports import issue_passport
+from openstall_api.settings import Settings, get_settings
 
 MAX_DISCOUNT_PCT = 15
 MIN_LEAD_DAYS = 5
@@ -53,6 +58,8 @@ class SeedMaker:
     photos: tuple[str, ...]
     trust: dict[str, Any] = field(default_factory=dict)
     source_text: str | None = None
+    venmo_handle: str | None = None  # fictional, like every seeded maker
+    sandbox_payee_setting: str | None = None  # the setting naming her sandbox PayPal account, in sandbox mode
 
     def policy(self) -> dict[str, Any]:
         """The seller policy JSON from spec 3.3. Money as strings, so it stays exact."""
@@ -106,6 +113,7 @@ PRIYA = SeedMaker(
     variants=("indigo", "saffron"),
     photos=_photos("priya"),
     trust={"orders_delivered": 67, "on_time_rate": 0.97, "dispute_rate": 0.01, "photo_originality": 0.93},
+    sandbox_payee_setting="PAYPAL_SANDBOX_PAYEE_PRIYA",
 )
 LUCIA = SeedMaker(
     id="s_lucia",
@@ -123,6 +131,7 @@ LUCIA = SeedMaker(
     variants=("white", "black"),
     photos=_photos("lucia"),
     trust={"orders_delivered": 38, "on_time_rate": 0.92, "dispute_rate": 0.03, "photo_originality": 0.95},
+    sandbox_payee_setting="PAYPAL_SANDBOX_PAYEE_LUCIA",
 )
 GRACE = SeedMaker(
     id="s_grace",
@@ -140,6 +149,7 @@ GRACE = SeedMaker(
     variants=("natural", "sage"),
     photos=_photos("grace"),
     trust={"orders_delivered": 120, "on_time_rate": 0.98, "dispute_rate": 0.01, "photo_originality": 0.89},
+    venmo_handle="grace-detroit-demo",
 )
 NOOR = SeedMaker(
     id="s_noor",
@@ -157,6 +167,7 @@ NOOR = SeedMaker(
     variants=("rose", "forest"),
     photos=_photos("noor"),
     trust={"orders_delivered": 25, "on_time_rate": 0.96, "dispute_rate": 0.0, "photo_originality": 0.94},
+    sandbox_payee_setting="PAYPAL_SANDBOX_PAYEE_NOOR",
 )
 
 MAKERS = (AMINA, PRIYA, LUCIA, GRACE, NOOR)
@@ -175,14 +186,18 @@ def reset_all(session: Session) -> None:
         session.execute(delete(table))
 
 
-def seed(session: Session, *, with_amina: bool = False, reset: bool = False) -> SeedReport:
-    """Add the seeded makers, or bring them back to their seeded state. Other rows are kept unless reset is set."""
+def seed(
+    session: Session, *, with_amina: bool = False, reset: bool = False, settings: Settings | None = None
+) -> SeedReport:
+    """Add the seeded makers, or bring them back to their seeded state. Other rows are kept unless reset is set.
+    `settings` (the app's, by default) decide whether the sandbox PayPal payees are linked."""
+    settings = settings or get_settings()
     if reset:
         reset_all(session)
     for maker in MAKERS:
         if maker is AMINA and not with_amina:
             continue
-        _seed_maker(session, maker)
+        _seed_maker(session, maker, settings)
     session.flush()
     return SeedReport(
         sellers=session.scalar(select(func.count()).select_from(Seller)) or 0,
@@ -191,7 +206,15 @@ def seed(session: Session, *, with_amina: bool = False, reset: bool = False) -> 
     )
 
 
-def _seed_maker(session: Session, maker: SeedMaker) -> None:
+def sandbox_payee(maker: SeedMaker, settings: Settings) -> str | None:
+    """Her sandbox PayPal account's email, in sandbox mode only. Fake mode never links one."""
+    if settings.OPENSTALL_MODE != "sandbox" or maker.sandbox_payee_setting is None:
+        return None
+    value: str | None = getattr(settings, maker.sandbox_payee_setting)
+    return value or None
+
+
+def _seed_maker(session: Session, maker: SeedMaker, settings: Settings) -> None:
     session.merge(
         Seller(
             id=maker.id,
@@ -199,6 +222,8 @@ def _seed_maker(session: Session, maker: SeedMaker) -> None:
             language=maker.language,
             city=maker.city,
             country=maker.country,
+            paypal_email=sandbox_payee(maker, settings),
+            venmo_handle=maker.venmo_handle,
             policy_json=maker.policy(),
             data_source=DataSource.SEEDED_DEMO,
             created_at=SEEDED_AT,

@@ -61,6 +61,14 @@ services:
         sync: false
       - key: PAYPAL_WEBHOOK_ID
         sync: false
+      # Sandbox PayPal accounts that receive Priya's, Lucia's and Noor's payouts. They are written into the database
+      # when it is seeded, so set them before the first deploy, or run python scripts/seed_demo.py once after.
+      - key: PAYPAL_SANDBOX_PAYEE_PRIYA
+        sync: false
+      - key: PAYPAL_SANDBOX_PAYEE_LUCIA
+        sync: false
+      - key: PAYPAL_SANDBOX_PAYEE_NOOR
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN

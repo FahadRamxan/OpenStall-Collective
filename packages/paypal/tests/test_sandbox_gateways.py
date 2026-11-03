@@ -457,6 +457,82 @@ def test_a_failed_payout_after_the_capture_keeps_paypals_issue(fake: FakePayPal,
     assert error.value.issue == "RECEIVER_UNREGISTERED"
 
 
+
+# Payout rails (spec 3.5a, rails.py).
+
+GRACE_VENMO = Share(
+    "op_grace",
+    "AUTH-ALL",
+    Decimal("203.00"),
+    note="Your share of OpenStall order ord_demo",
+    last=True,
+    payout_rail="venmo",
+    venmo_handle="grace-detroit-demo",
+)
+
+
+def test_payouts_gateway_sends_the_venmo_item(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    """Where Venmo payouts run (live PayPal; the sandbox refuses them), her item goes to Venmo by her handle."""
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "CAPTURE-G"}))
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "BATCH-G"}})
+
+    payment = PayoutsGateway(client, sdk, simulate_venmo=False).pay_share(GRACE_VENMO)
+
+    assert capture.called
+    assert (payment.capture_id, payment.payout_batch_id, payment.payout_rail) == ("CAPTURE-G", "BATCH-G", "venmo")
+    assert not payment.payout_simulated
+    body, key = payout_sent(payout)
+    assert key == "openstall-payout-op_grace"
+    assert body["sender_batch_header"]["sender_batch_id"] == "openstall-op_grace"
+    assert body["items"] == [
+        {
+            "recipient_wallet": "Venmo",
+            "recipient_type": "USER_HANDLE",
+            "receiver": "grace-detroit-demo",
+            "note": "Your share of OpenStall order ord_demo",
+            "amount": {"currency": "USD", "value": "203.00"},
+            "sender_item_id": "op_grace",
+        }
+    ]
+
+
+def test_on_the_sandbox_a_venmo_share_is_captured_and_her_payout_simulated(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    """PayPal's sandbox refuses Venmo payouts after the capture would already have happened, so none is sent."""
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "CAPTURE-G"}))
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
+    gateway = PayoutsGateway(client, sdk)  # the client is on the sandbox host
+
+    payment = gateway.pay_share(GRACE_VENMO)
+
+    assert gateway.simulate_venmo
+    assert capture.called and not payout.called
+    assert (payment.capture_id, payment.payout_batch_id) == ("CAPTURE-G", None)
+    assert (payment.payout_rail, payment.payout_simulated) == ("venmo", True)
+
+
+def test_no_capture_call_when_rail_unavailable(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
+    amina = Share("op_amina", "AUTH-ALL", Decimal("216.00"), payee_email="amina@example.com", payout_rail="unavailable")
+
+    with pytest.raises(PaymentError) as error:
+        PayoutsGateway(client, sdk).pay_share(amina)
+
+    assert error.value.issue == "PAYOUT_RAIL_UNAVAILABLE"
+    assert not [r for r in fake.requests if urlsplit(r.url).path.startswith("/v2/payments/authorizations/")]
+    assert not [r for r in fake.requests if urlsplit(r.url).path.endswith("/capture")]
+    assert not payout.called
+
+
+def test_no_capture_call_for_a_venmo_maker_without_a_handle(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "C"}))
+
+    with pytest.raises(PaymentError) as error:
+        PayoutsGateway(client, sdk).pay_share(Share("op_grace", "AUTH-ALL", Decimal("203.00"), payout_rail="venmo"))
+
+    assert error.value.issue == "PAYEE_MISSING"
+    assert not capture.called
+
+
 # PayPal's refusals: PaymentError with PayPal's issue code.
 
 

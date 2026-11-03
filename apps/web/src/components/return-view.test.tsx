@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RECEIPT_POLL_MS, ReturnView } from "@/components/return-view";
-import type { Order } from "@/lib/orders";
+import type { Order, OrderPart } from "@/lib/orders";
 
 const params = { orderId: "ord_demo" };
 vi.mock("next/navigation", () => ({ useParams: () => params }));
@@ -21,6 +21,12 @@ function share(name: string, quantity: number, price: string, amount: string, se
     status: "authorized" as const,
     confirmed_by_paypal: true,
     attention: null,
+    confirmation_source: "paypal_sandbox" as const,
+    nothing_to_confirm: false,
+    payout_rail: "paypal" as const,
+    payout_label: "Paid to PayPal",
+    payout_via_paypal: true,
+    payout_confirmed: false,
     trust_score: "0.95",
     trust_data_source: "seeded_demo" as const,
   };
@@ -135,6 +141,98 @@ describe("ReturnView", () => {
     render(<ReturnView />);
 
     expect(await screen.findByText("PayPal denied this payment")).toBeInTheDocument();
+  });
+
+  it("in fake mode never says Confirmed by PayPal: simulated PayPal confirms, and says so", async () => {
+    const simulated: Order = {
+      ...RESERVED,
+      parts: RESERVED.parts.map((part) => ({ ...part, confirmation_source: "simulated" as const })),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(simulated)));
+
+    const { container } = render(<ReturnView />);
+
+    expect(await screen.findByText("Simulated PayPal confirmed every share.")).toBeInTheDocument();
+    expect(screen.getAllByText("Confirmed by simulated PayPal")).toHaveLength(2);
+    expect(container.textContent).not.toContain("Confirmed by PayPal");
+    expect(container.textContent).toContain("no money moves");
+  });
+
+  it("shows one authorization for the total under it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(RESERVED)));
+
+    render(<ReturnView />);
+
+    expect(
+      await screen.findByText("One PayPal authorization for $392.00. Each maker's share is captured when she ships."),
+    ).toBeInTheDocument();
+  });
+
+  it("in fake mode offers a simulated proof of shipping on each reserved row, except where no rail can pay her", async () => {
+    const amina: OrderPart = {
+      ...RESERVED.parts[0],
+      confirmation_source: "simulated",
+      payout_rail: "unavailable",
+      payout_label: "Payout rail not connected yet (Pakistan)",
+      payout_via_paypal: false,
+    };
+    const priya: OrderPart = {
+      ...RESERVED.parts[1],
+      confirmation_source: "simulated",
+      payout_label: "Paid to PayPal (simulated)",
+    };
+    const reserved: Order = { ...RESERVED, parts: [amina, priya] };
+    const paid: Order = {
+      ...reserved,
+      status: "partly_shipped",
+      parts: [amina, { ...priya, status: "captured", payout_confirmed: true }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(reserved))
+      .mockResolvedValueOnce(Response.json(paid));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReturnView />);
+
+    const rows = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    const aminaButton = within(rows[0]).getByRole("button", { name: /Simulate proof of shipping/ });
+    expect(aminaButton).toBeDisabled();
+    expect(aminaButton).toHaveTextContent("Simulated");
+    expect(aminaButton).toHaveAccessibleDescription(/payout rail not connected yet \(Pakistan\)/);
+    fireEvent.click(within(rows[1]).getByRole("button", { name: /Simulate proof of shipping/ }));
+
+    const after = within(screen.getByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    await vi.waitFor(() => expect(after[1]).toHaveTextContent("Paid on proof of shipping"));
+    expect(after[1]).toHaveTextContent("payout confirmed by simulated PayPal");
+    expect(within(after[1]).queryByRole("button", { name: /Simulate proof/ })).not.toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe(`http://api.test/api/dev/parts/${priya.id}/proof`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("offers no simulated proof against the real PayPal sandbox", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(RESERVED)));
+
+    render(<ReturnView />);
+
+    await screen.findByText("PayPal confirmed every share.");
+    expect(screen.queryByRole("button", { name: /Simulate proof/ })).not.toBeInTheDocument();
+  });
+
+  it("a share released mid-order is not waited for: PayPal never hears about it", async () => {
+    const released: Order = {
+      ...RESERVED,
+      parts: [
+        { ...RESERVED.parts[0], status: "released", confirmed_by_paypal: false, nothing_to_confirm: true },
+        RESERVED.parts[1],
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(released)));
+
+    render(<ReturnView />);
+
+    expect(await screen.findByText("Never captured; nothing for PayPal to confirm")).toBeInTheDocument();
+    expect(screen.getByText("PayPal confirmed every share.")).toBeInTheDocument();
   });
 
   it("says there is no order when the API does not know the id", async () => {
