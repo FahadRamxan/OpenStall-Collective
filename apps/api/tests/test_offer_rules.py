@@ -7,12 +7,14 @@ import pytest
 
 from openstall_allocator import Listing, Offer, QuoteRequest, RejectionReason, SellerPolicy, is_valid_offer
 from openstall_api.models import Order, OrderPart, OrderStatus, PartStatus, Product, Seller
+from openstall_api.models import QuoteRequest as QuoteRequestRow
 from openstall_api.offer_rules import (
     PolicyError,
     capacity_by_deadline,
     committed_units,
     default_deadline,
     listing_of,
+    quote_request_of,
     seller_policy,
 )
 from openstall_api.seed import MAKERS, seed
@@ -188,3 +190,18 @@ def test_only_reserved_shares_count_as_committed_whatever_their_date(seeded):
     assert capacity_by_deadline(product(seeded, "s_priya"), TODAY, deadline, committed["s_priya"]) == 11 - 7
     assert capacity_by_deadline(product(seeded, "s_lucia"), TODAY, deadline, committed["s_lucia"]) == 0
     assert committed_units(seeded, []) == {}
+
+
+def test_a_stored_quote_request_maps_onto_the_core_type():
+    row = QuoteRequestRow(
+        id="q_story",
+        items_json=[{"query": "hand-embroidered cushion covers"}],
+        quantity=40,
+        max_unit_price=Decimal("30.00"),
+        deadline=date(2026, 12, 10),
+        ship_to="Chicago",
+    )
+
+    assert quote_request_of(row) == QuoteRequest(
+        quantity=40, max_unit_price=Decimal("30.00"), deadline=date(2026, 12, 10), request_id="q_story"
+    )

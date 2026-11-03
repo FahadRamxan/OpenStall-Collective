@@ -5,14 +5,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from openstall_api.adapters import AdapterRegistry, get_registry
 from openstall_api.db import get_session
 from openstall_api.events_api import fake_mode_only
-from openstall_api.models import OrderPart
+from openstall_api.models import OrderPart, PartStatus
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
-from openstall_api.payments import pay_share
+from openstall_api.payments import pay_share, release_share
 from openstall_api.seed import story_order
 from openstall_api.webhooks import deliver_fake_webhooks
 
@@ -26,6 +27,10 @@ SIMULATED_CARRIER = "OTHER"
 
 class NewOrder(BaseModel):
     order_id: str
+
+
+class Released(BaseModel):
+    released: int  # shares released
 
 
 @router.post("/story-orders", status_code=201)
@@ -61,3 +66,24 @@ def simulate_proof(
     session.commit()
     background.add_task(deliver_fake_webhooks)  # simulated PayPal's capture and payout confirmations follow
     return order_out(session, _load(session, part.order_id))
+
+
+@router.post("/release-reserved-shares")
+def release_reserved_shares(
+    session: SessionDep,
+    registry: Annotated[AdapterRegistry, Depends(get_registry)],
+    background: BackgroundTasks,
+) -> Released:
+    """Release every reserved share, as if each of those makers had dropped out, so every maker has her seed capacity
+    back: reserved shares are her committed units (offer_rules.py). UI tests that check the seed table's numbers call
+    it first, because earlier spec files reserve story orders in the same database.
+    """
+    part_ids = session.scalars(
+        select(OrderPart.id).where(OrderPart.status == PartStatus.AUTHORIZED).order_by(OrderPart.id)
+    ).all()
+    with payment_errors():
+        for part_id in part_ids:
+            release_share(session, part_id, registry.payment_gateway)
+    session.commit()
+    background.add_task(deliver_fake_webhooks)  # simulated PayPal's VOIDED confirmations follow
+    return Released(released=len(part_ids))

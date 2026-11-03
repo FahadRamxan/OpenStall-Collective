@@ -11,6 +11,7 @@ from openstall_api.adapters import get_registry
 from openstall_api.catalog_api import router as catalog_router
 from openstall_api.chat_api import router as chat_router
 from openstall_api.db import REPO_ROOT, migrate
+from openstall_api.demo_api import router as demo_router
 from openstall_api.dev_api import router as dev_router
 from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
@@ -70,6 +71,7 @@ app.include_router(status_router)
 app.include_router(events_router)
 app.include_router(catalog_router)
 app.include_router(search_router)
+app.include_router(demo_router)
 app.include_router(orders_router)
 app.include_router(fake_paypal_router)
 app.include_router(dev_router)

@@ -5,13 +5,17 @@ the limits panel (prompt 22) and the seller agents (prompt 23) get the same numb
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from openstall_allocator import Listing, SellerPolicy, capacity_available
+from openstall_allocator import Listing, QuoteRequest, SellerPolicy, capacity_available, lowest_allowed_price
+from openstall_api.catalog import live_products
 from openstall_api.models import OrderPart, PartStatus, Product, Seller
+from openstall_api.models import QuoteRequest as QuoteRequestRow
 
 # Capacity is counted this far ahead when nobody names a deadline: the story's request is always due in 30 days.
 DEFAULT_DAYS_AHEAD = 30
@@ -75,6 +79,16 @@ def listing_of(product: Product) -> Listing:
     )
 
 
+def quote_request_of(request: QuoteRequestRow) -> QuoteRequest:
+    """A stored quote request as the core's QuoteRequest: what every offer made for it is checked against."""
+    return QuoteRequest(
+        quantity=request.quantity,
+        max_unit_price=request.max_unit_price,
+        deadline=request.deadline,
+        request_id=request.id,
+    )
+
+
 def committed_units(session: Session, seller_ids: Iterable[str]) -> dict[str, int]:
     """Units each seller has promised and not shipped yet: her shares in COMMITTED, whatever their dates.
 
@@ -104,3 +118,44 @@ def capacity_by_deadline(product: Product, today: date, deadline: date, committe
     policy = seller_policy(product.seller, product)
     capacity = capacity_available(policy, listing_of(product), today, deadline, committed)
     return capacity if deadline >= today + timedelta(days=policy.min_lead_days) else 0
+
+
+@dataclass(frozen=True)
+class MakerLimits:
+    """What the offer rules allow one live listing's maker by a deadline (spec 3.3): the lowest price her agent may
+    offer, and the units she can still make and ship by then, after her committed units."""
+
+    product: Product
+    policy: SellerPolicy
+    lowest_price: Decimal
+    committed: int
+    capacity: int
+
+
+def limits_by_deadline(session: Session, today: date, deadline: date) -> tuple[list[MakerLimits], list[str]]:
+    """Each live listing's limits by the deadline, from the core rules, oldest listing first.
+
+    A maker whose policy cannot be read is left out, and the second list says why in words, so one bad policy does not
+    hide everyone else's limits. This only reads.
+    """
+    products = live_products(session)
+    committed = committed_units(session, {product.seller_id for product in products})
+    limits: list[MakerLimits] = []
+    unreadable: list[str] = []
+    for product in products:
+        try:
+            policy = seller_policy(product.seller, product)
+        except PolicyError as error:
+            unreadable.append(f"{product.seller.name}'s limits cannot be checked: {error}.")
+            continue
+        units = committed[product.seller_id]
+        limits.append(
+            MakerLimits(
+                product=product,
+                policy=policy,
+                lowest_price=lowest_allowed_price(policy, listing_of(product)),
+                committed=units,
+                capacity=capacity_by_deadline(product, today, deadline, units),
+            )
+        )
+    return limits, unreadable

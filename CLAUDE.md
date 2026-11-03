@@ -5,9 +5,9 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 ## Where things are
 
 - **Spec and build plan live outside the repo**, one folder up: `../OpenStall Collective.md` (the spec) and `../prompt.md` (the numbered build prompts, with a status table at the top, the workflow every prompt follows, and "Changes to earlier prompts"). Read the prompt you are building, and the spec sections it names, before writing code.
-- `apps/api/openstall_api`: FastAPI app (`main.py`), settings and fake mode (`settings.py`, `adapters.py`), database (`models.py`, `migrations/`), event log (`events.py`), orders and payments (`orders.py`, `payments.py`, `claims.py`), PayPal webhooks (`webhooks.py`), WhatsApp (`whatsapp.py`, `chat/handler.py`), MCP storefront (`storefront.py`), its search and search log (`search.py`, `search_api.py`), the offer rules on database rows (`offer_rules.py`: capacity by deadline now; prompt 22 extends it), and the agent feeds: `/catalog.json` and `/llms.txt` (`feeds.py`, `feeds_api.py`; llms.txt lists the MCP tools by itself) and trust cards at `/passport/{seller_id}` (`passports.py`, `passports_api.py`). HTTP tests share one uvicorn server (`apps/api/tests/conftest.py`).
+- `apps/api/openstall_api`: FastAPI app (`main.py`), settings and fake mode (`settings.py`, `adapters.py`), database (`models.py`, `migrations/`), event log (`events.py`), orders and payments (`orders.py`, `payments.py`, `claims.py`), PayPal webhooks (`webhooks.py`), WhatsApp (`whatsapp.py`, `chat/handler.py`), MCP storefront (`storefront.py`), its search and search log (`search.py`, `search_api.py`), the offer rules on database rows (`offer_rules.py`: policy, listing and quote request mapping, capacity by deadline, and each live maker's limits for `GET /api/demo/limits` in `demo_api.py`), and the agent feeds: `/catalog.json` and `/llms.txt` (`feeds.py`, `feeds_api.py`; llms.txt lists the MCP tools by itself) and trust cards at `/passport/{seller_id}` (`passports.py`, `passports_api.py`). HTTP tests share one uvicorn server (`apps/api/tests/conftest.py`).
 - `apps/web`: Next.js 16 (App Router, Cache Components on) with Tailwind 4, Vitest and Playwright. Its `AGENTS.md` is written by `next dev`; Next's own docs are in `node_modules/next/dist/docs/`.
-- Live panels on `/demo` share one event stream (`EventStreamProvider` in `src/hooks/use-event-stream.ts`) and keep their rows with `useLiveList` (`src/hooks/use-live-list.ts`). Copy the "Agent searches" panel (`src/components/agent-searches.tsx`) for a new one. UI tests call the MCP storefront through `e2e/support/mcp.ts`.
+- Live panels on `/demo` share one event stream (`EventStreamProvider` in `src/hooks/use-event-stream.ts`) and keep their rows with `useLiveList` (`src/hooks/use-live-list.ts`). Copy the "Agent searches" panel (`src/components/agent-searches.tsx`) for a new one. UI tests call the MCP storefront through `e2e/support/mcp.ts`. A UI test that needs the seed table's capacities calls `POST /api/dev/release-reserved-shares` first: earlier spec files leave story orders reserved in the shared e2e database.
 - `packages/paypal/openstall_paypal`: the payment gateway (`gateway.py` interface and FakeGateway, `sandbox.py` sandbox gateways, `sdk.py` APIMatic SDK boundary, `client.py` our REST client for Payouts and webhook checks, `rails.py` payout rails, `webhooks.py` verifiers).
 - `packages/allocator`, `packages/trust`, `packages/agents`: offer rules and the allocator, trust passports, AI adapter interfaces and their fakes.
 - `docs/decisions.md` (why things are the way they are, newest last), `docs/day-one-checks.md` (account setup and the sandbox proof), `paypal-plan.md` (the APIMatic contract sheet).
@@ -40,7 +40,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 - **Never pipe Playwright into `head` or `tail`**: it kills Playwright before it stops its servers on ports 8100 and 3100. If a port is left busy, stop only that uvicorn or next process, by PID, after checking its command line.
 - **Migrations:** a model change needs an Alembic migration (`alembic revision --autogenerate`), and `test_db_migrations` checks they match exactly.
 
-## Status (2026-11-03)
+## Status (2026-11-04)
 
 | Prompt | What | State |
 |---|---|---|
@@ -51,9 +51,10 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 | 12 | Render blueprint | Done; the deploy waits for a Render account |
 | 13 | Verified, idempotent PayPal webhooks | Done; registering the real webhook waits for the hosted demo |
 | 14, 15 | Twilio WhatsApp webhook and media; one chat handler and /seller-chat | Done; a real phone test waits for a Twilio account |
-| 22, 25, 35 | Offer rules, allocator, passport signing | Core logic done; wiring is in prompts 22, 25 and 35 |
+| 25, 35 | Allocator, passport signing | Core logic done; wiring is in prompts 25 and 35 |
 | 51 | Fake mode follows the payouts path; a payout rail per maker | Done |
 | 58 | Orders and payments on APIMatic's PayPal SDK | Done, proven on the real sandbox |
 | 20 | Search with filters, the search log, and the "Agent searches" panel on /demo | Done |
 | 21 | get_product and get_trust_card, /catalog.json, /llms.txt, "For AI agents" on stall pages | Done |
-| 22–29 | Offers, seller agent, negotiation, allocator, explanations, MCP order tools, the scripted buyer | Next, in order |
+| 22 | The offer rules on real data: each live maker's limits on /demo | Done |
+| 23–29 | Seller agent, negotiation, allocator, explanations, MCP order tools, the scripted buyer | Next, in order |
