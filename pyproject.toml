@@ -40,6 +40,8 @@ dev = [
     "respx>=0.21,<1",
     # Reads render.yaml in its test.
     "pyyaml>=6,<7",
+    # Checks /catalog.json against docs/catalog.schema.json in its test. The MCP SDK installs it too; the test imports it.
+    "jsonschema>=4.18,<5",
     # Type checks the PayPal package against the SDK, which ships py.typed: mypy --strict packages/paypal.
     "mypy>=1.13",
 ]

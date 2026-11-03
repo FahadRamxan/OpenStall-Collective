@@ -1,7 +1,9 @@
 """Agent storefront: the MCP server that buyer agents talk to (spec 3.2).
 
-For now: search_products over the live listings in the database (search.py). It reads the listings and adds each
-search to the search log, which the public /demo page shows. No tool here can capture a payment.
+For now: search_products over the live listings in the database (search.py), which adds each search to the search
+log that the public /demo page shows; get_product, one listing in full; and get_trust_card, a maker's trust passport.
+The last two only read, and give exactly what the API's feeds give (GET /catalog/{product_id}.json and
+GET /passport/{seller_id}): the same functions make both. No tool here can capture a payment.
 """
 
 from datetime import date
@@ -16,9 +18,11 @@ from pydantic import Field
 from starlette.applications import Starlette
 
 from openstall_api import search
-from openstall_api.db import session_scope
+from openstall_api.catalog import CatalogEntry, NotFound, catalog_entry
+from openstall_api.db import new_session, session_scope
+from openstall_api.passports import TrustCard, trust_card
 from openstall_api.search import SearchError, SearchFilters, SearchResult
-from openstall_api.settings import Settings
+from openstall_api.settings import Settings, get_settings
 
 storefront = MCPServer(
     "OpenStall Collective",
@@ -30,6 +34,9 @@ storefront = MCPServer(
 LOGS_EACH_SEARCH = ToolAnnotations(
     read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
 )
+# Reading a listing or a trust card adds and changes nothing, so asking twice gives the same answer. Every hint is set,
+# as for search_products: a client that is told nothing must assume a tool may be destructive.
+READS_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 
 
 @storefront.tool(annotations=LOGS_EACH_SEARCH)
@@ -110,6 +117,56 @@ def search_products(
             raise ToolError(str(error)) from None
         search.log_search(session, words, filters, len(results))
     return results
+
+
+@storefront.tool(annotations=READS_ONLY)
+def get_product(
+    product_id: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=64,
+            description='A listing\'s product_id, as search_products gives it, for example "p_noor_cushion".',
+        ),
+    ],
+) -> CatalogEntry:
+    """One live listing in full. It only reads: it never spends money and changes no order.
+
+    It has everything a search_products result has (the maker's name, her trust record in brief, the list price in
+    USD, capacity per week and ship days, data_source: "seeded_demo" marks made-up demo data), plus her photos as
+    full URLs, her stall page for people, and her trust card's address. For how many she can make by a deadline, use
+    search_products with that deadline. A listing that is not live (a draft, or paused) is not found.
+    """
+    with new_session() as session:
+        try:
+            return catalog_entry(session, product_id, get_settings())
+        except NotFound as error:
+            raise ToolError(str(error)) from None
+
+
+@storefront.tool(annotations=READS_ONLY)
+def get_trust_card(
+    seller_id: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=64,
+            description='The maker\'s seller_id, as each listing gives it, for example "s_noor".',
+        ),
+    ],
+) -> TrustCard:
+    """A maker's trust passport. It only reads: it never spends money and changes no order.
+
+    Her orders delivered, on-time and dispute rates, photo originality, the score worked out from them (0.4 x on
+    time + 0.3 x (1 - disputes) + 0.3 x photo originality, from 0 to 1), when it was issued, and data_source:
+    "seeded_demo" marks made-up demo numbers. "signature" reads "pending": OpenStall does not yet publish the key that
+    checks passports, so treat the numbers as unverified.
+    """
+    with new_session() as session:
+        try:
+            return trust_card(session, seller_id)
+        except NotFound as error:
+            raise ToolError(str(error)) from None
 
 
 def storefront_http_app(settings: Settings) -> Starlette:

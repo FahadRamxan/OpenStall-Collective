@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenStall Collective catalog",
+  "description": "GET /catalog.json on the OpenStall API: every live listing, for AI agents that do not use MCP. A copy is at most 60 seconds old. Each entry is what the MCP tool get_product and GET /catalog/{product_id}.json give for that listing. apps/api/tests/test_agent_feeds.py checks the API's real output against this schema.",
+  "type": "object",
+  "required": ["name", "description", "generated_at", "mcp_url", "llms_txt_url", "products"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "const": "OpenStall Collective" },
+    "description": { "type": "string", "minLength": 1 },
+    "generated_at": {
+      "description": "When this copy was built, in UTC.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "mcp_url": {
+      "description": "The MCP storefront (Streamable HTTP).",
+      "$ref": "#/$defs/url"
+    },
+    "llms_txt_url": {
+      "description": "A short plain-text guide to OpenStall for language models.",
+      "$ref": "#/$defs/url"
+    },
+    "products": {
+      "description": "Every live listing, oldest first.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/product" }
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://[^\\s/]+(/\\S*)?$"
+    },
+    "data_source": {
+      "description": "\"seeded_demo\" marks made-up demo data; \"live\" real data.",
+      "enum": ["seeded_demo", "live"]
+    },
+    "rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "product": {
+      "type": "object",
+      "required": [
+        "product_id",
+        "seller_id",
+        "seller_name",
+        "title",
+        "description",
+        "category",
+        "variants",
+        "price_usd",
+        "capacity_per_week",
+        "ship_days",
+        "ship_from_city",
+        "data_source",
+        "trust",
+        "photos",
+        "stall_url",
+        "trust_card_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "product_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "seller_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "seller_name": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "category": { "type": "string", "minLength": 1 },
+        "variants": {
+          "description": "The colours or styles she offers.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "price_usd": {
+          "description": "List price per unit, in US dollars (whole cents).",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "capacity_per_week": {
+          "description": "Units she makes in a week.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "ship_days": {
+          "description": "Days in transit to the buyer; for now, days to a US city.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "ship_from_city": { "type": "string" },
+        "data_source": { "$ref": "#/$defs/data_source" },
+        "trust": {
+          "description": "The maker's trust record in brief; null until she has a trust passport.",
+          "anyOf": [{ "$ref": "#/$defs/trust" }, { "type": "null" }]
+        },
+        "photos": {
+          "description": "Her photos as full URLs, the main one first.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/url" }
+        },
+        "stall_url": {
+          "description": "Her stall page on OpenStall's website, for people.",
+          "$ref": "#/$defs/url"
+        },
+        "trust_card_url": {
+          "description": "Her trust card as JSON (GET /passport/{seller_id}), the same as the MCP tool get_trust_card gives; null until she has one.",
+          "anyOf": [{ "$ref": "#/$defs/url" }, { "type": "null" }]
+        }
+      }
+    },
+    "trust": {
+      "type": "object",
+      "required": ["score", "orders_delivered", "on_time_rate", "dispute_rate", "data_source", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "score": {
+          "description": "0.4 x on-time rate + 0.3 x (1 - dispute rate) + 0.3 x photo originality.",
+          "$ref": "#/$defs/rate"
+        },
+        "orders_delivered": { "type": "integer", "minimum": 0 },
+        "on_time_rate": { "$ref": "#/$defs/rate" },
+        "dispute_rate": { "$ref": "#/$defs/rate" },
+        "data_source": { "$ref": "#/$defs/data_source" },
+        "summary": {
+          "description": "The record in one line.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { ForAgents } from "@/components/for-agents";
 import { ApiError, errorMessage } from "@/lib/api";
 import {
   formatUsd,
@@ -119,6 +120,8 @@ function Stall({ seller }: { seller: SellerDetail }) {
       </section>
 
       {seller.trust ? <TrustRecord name={seller.name} trust={seller.trust} /> : null}
+
+      <ForAgents seller={seller} />
     </>
   );
 }
@@ -226,8 +229,8 @@ function TrustRecord({ name, trust }: { name: string; trust: TrustSummary }) {
         </p>
       </div>
       <p className="mt-2 text-sm leading-6 text-muted">
-        {trust.orders_delivered} orders delivered. Every number is signed with OpenStall&apos;s passport key, so an
-        AI agent can check it has not been changed.
+        {trust.orders_delivered} orders delivered. AI agents read these numbers as her trust card. Its signature,
+        which will let an agent check that nothing was changed, is still pending.
         {trust.data_source === "seeded_demo" ? " These are seeded demo numbers, not real sales." : null}
       </p>
       <dl className="mt-6 grid gap-5 sm:grid-cols-3">

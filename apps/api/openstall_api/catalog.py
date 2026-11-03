@@ -1,14 +1,29 @@
-"""What the stalls sell, read from the database: listings for the web app and for the agent storefront."""
+"""What the stalls sell, read from the database: listings for the web app and for the agent storefront.
 
+Agents read a listing in full the same way everywhere: the MCP tool get_product, GET /catalog/{product_id}.json and
+each entry of GET /catalog.json are all a CatalogEntry made by catalog_entry() or catalog_entries().
+"""
+
+import re
 from decimal import Decimal
 from typing import Any, Self
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from openstall_api.models import DataSource, Passport, Product, ProductStatus, Seller
+from openstall_api.settings import Settings
 from openstall_trust import trust_score
+
+# What our ids look like (s_amina, p_3f9a1c7e2b40). Anything else is not looked up: it cannot be one, and Postgres
+# would refuse some characters (NUL) with an error instead of "not found".
+ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+class NotFound(LookupError):
+    """No live listing or trust card has that id. The message says so in words an agent or a person can act on."""
 
 
 def photo_path(stored: str) -> str:
@@ -16,6 +31,13 @@ def photo_path(stored: str) -> str:
     if stored.startswith(("http://", "https://")):
         return stored
     return "/media/" + stored.lstrip("/")
+
+
+def public_url(settings: Settings, path: str) -> str:
+    """A path on the API as a full URL from outside (PUBLIC_BASE_URL). A full URL is returned as it is."""
+    if path.startswith(("http://", "https://")):
+        return path
+    return settings.PUBLIC_BASE_URL + "/" + path.lstrip("/")
 
 
 class ProductOut(BaseModel):
@@ -218,3 +240,56 @@ class ProductListing(BaseModel):
             trust=AgentTrust.of(passport) if passport else None,
             **extra,
         )
+
+
+class CatalogEntry(ProductListing):
+    """A live listing in full, as agents read it: get_product, GET /catalog/{product_id}.json and each entry of
+    GET /catalog.json. docs/catalog.schema.json describes it."""
+
+    photos: list[str] = Field(description="Her photos as full URLs, the main one first.")
+    stall_url: str = Field(description="Her stall page on OpenStall's website, for people.")
+    trust_card_url: str | None = Field(
+        description="Her trust card as JSON, the same as the MCP tool get_trust_card gives; null until she has one."
+    )
+
+    @classmethod
+    def at(cls, product: Product, passport: Passport | None, settings: Settings) -> "CatalogEntry":
+        """The entry with its links made from the API's and the website's public addresses."""
+        seller = quote(product.seller_id, safe="")
+        return cls.of(
+            product,
+            passport,
+            photos=[public_url(settings, photo_path(photo)) for photo in product.photos_json],
+            stall_url=f"{settings.WEB_BASE_URL}/stall/{seller}",
+            trust_card_url=public_url(settings, f"/passport/{seller}") if passport else None,
+        )
+
+
+def _passports(session: Session, seller_ids: set[str]) -> dict[str, Passport]:
+    if not seller_ids:
+        return {}
+    rows = session.scalars(select(Passport).where(Passport.seller_id.in_(seller_ids)))
+    return {passport.seller_id: passport for passport in rows}
+
+
+def catalog_entries(session: Session, settings: Settings) -> list[CatalogEntry]:
+    """Every live listing as agents read it, oldest first. This only reads."""
+    products = live_products(session)
+    passports = _passports(session, {product.seller_id for product in products})
+    return [CatalogEntry.at(product, passports.get(product.seller_id), settings) for product in products]
+
+
+def catalog_entry(session: Session, product_id: str, settings: Settings) -> CatalogEntry:
+    """One live listing as agents read it. A draft or paused listing is not found, like one that never existed: it is
+    not for sale. Raises NotFound with a message for the agent. This only reads."""
+    product = (
+        session.get(Product, product_id, options=[selectinload(Product.seller)])
+        if ID_PATTERN.fullmatch(product_id)
+        else None
+    )
+    if product is None or product.status is not ProductStatus.LIVE:
+        raise NotFound(
+            f"There is no live listing called {product_id!r}. search_products and /catalog.json give each live "
+            "listing's product_id."
+        )
+    return CatalogEntry.at(product, session.get(Passport, product.seller_id), settings)

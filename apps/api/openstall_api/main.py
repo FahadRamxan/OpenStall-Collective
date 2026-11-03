@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from openstall_api import __version__
 from openstall_api.adapters import get_registry
@@ -15,8 +14,11 @@ from openstall_api.db import REPO_ROOT, migrate
 from openstall_api.dev_api import router as dev_router
 from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
+from openstall_api.feeds_api import router as feeds_router
+from openstall_api.media_api import SeedPhotos
 from openstall_api.media_api import router as media_router
 from openstall_api.orders_api import router as orders_router
+from openstall_api.passports_api import router as passports_router
 from openstall_api.search_api import router as search_router
 from openstall_api.seller_chat_api import router as seller_chat_router
 from openstall_api.settings import get_settings
@@ -76,9 +78,13 @@ app.include_router(webhooks_router)
 app.include_router(whatsapp_router)
 app.include_router(chat_router)
 app.include_router(seller_chat_router)
+# For agents, at the root like /mcp: /catalog.json, /catalog/{product_id}.json, /llms.txt and /passport/{seller_id}.
+app.include_router(feeds_router)
+app.include_router(passports_router)
 
-# The seed photos (placeholders until the team adds its own), and the photos and voice notes sellers send.
-app.mount("/media/seed", StaticFiles(directory=REPO_ROOT / "assets" / "seed"), name="seed-media")
+# The seed photos (placeholders until the team adds its own), with caching headers. The photos and voice notes
+# sellers send are media_router's /media/uploads/{key}.
+app.mount("/media/seed", SeedPhotos(directory=REPO_ROOT / "assets" / "seed"), name="seed-media")
 
 # Add the MCP route itself rather than mounting the app, so the endpoint is exactly /mcp, not /mcp/.
 app.router.routes.extend(mcp_http.routes)

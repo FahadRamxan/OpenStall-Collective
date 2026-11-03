@@ -21,6 +21,7 @@ from openstall_agents.adapters import (
     SpeechToText,
 )
 from openstall_api.db import reset_engine
+from openstall_api.feeds import clear_catalog_cache
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
 from openstall_api.whatsapp import TwilioMessenger
@@ -258,7 +259,8 @@ def get_registry() -> AdapterRegistry:
 
 def reset_app_state() -> None:
     """Forget the settings, the registry and the database engine, so the next call reads settings again and makes
-    fresh adapters and a fresh connection pool. The old registry's clients are closed."""
+    fresh adapters and a fresh connection pool. The old registry's clients are closed, and the cached /catalog.json,
+    built from the old settings and database, is dropped."""
     global _registry
     with _registry_lock:
         registry, _registry = _registry, None
@@ -266,3 +268,4 @@ def reset_app_state() -> None:
         registry.close()
     get_settings.cache_clear()
     reset_engine()
+    clear_catalog_cache()

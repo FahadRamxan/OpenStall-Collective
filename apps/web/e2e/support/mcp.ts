@@ -27,7 +27,7 @@ export type FoundProduct = {
 /** What search_products takes besides the query. */
 export type SearchFilters = { max_price?: number; quantity?: number; deadline?: string; ship_to?: string };
 
-type ToolResult = { isError?: boolean; content: unknown[]; structuredContent?: { result: unknown } };
+type ToolResult = { isError?: boolean; content: unknown[]; structuredContent?: Record<string, unknown> };
 
 let nextId = 1;
 
@@ -58,16 +58,28 @@ export async function connect(request: APIRequestContext): Promise<string[]> {
   return listed.tools.map((tool) => tool.name);
 }
 
+/** Calls a storefront tool through the MCP endpoint, expecting it to succeed; returns its structured result. */
+async function callTool(request: APIRequestContext, name: string, args: object): Promise<Record<string, unknown>> {
+  const result = (await rpc(request, "tools/call", { name, arguments: args })) as ToolResult;
+  expect(result.isError, `${name}: ${JSON.stringify(result.content)}`).toBeFalsy();
+  return result.structuredContent ?? {};
+}
+
 /** Calls search_products through the MCP endpoint and returns what it found. */
 export async function searchProducts(
   request: APIRequestContext,
   query: string,
   filters: SearchFilters = {},
 ): Promise<FoundProduct[]> {
-  const result = (await rpc(request, "tools/call", {
-    name: "search_products",
-    arguments: { query, ...filters },
-  })) as ToolResult;
-  expect(result.isError, JSON.stringify(result.content)).toBeFalsy();
-  return result.structuredContent?.result as FoundProduct[];
+  return (await callTool(request, "search_products", { query, ...filters })).result as FoundProduct[];
+}
+
+/** Calls get_product through the MCP endpoint: one live listing in full, the same as its catalog entry. */
+export function getProduct(request: APIRequestContext, productId: string): Promise<Record<string, unknown>> {
+  return callTool(request, "get_product", { product_id: productId });
+}
+
+/** Calls get_trust_card through the MCP endpoint: a maker's trust passport, the same as GET /passport/{id}. */
+export function getTrustCard(request: APIRequestContext, sellerId: string): Promise<Record<string, unknown>> {
+  return callTool(request, "get_trust_card", { seller_id: sellerId });
 }

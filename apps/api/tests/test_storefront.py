@@ -1,20 +1,15 @@
 """The agent storefront over MCP: search_products with its filters, what each result says, and the search log."""
 
 import asyncio
-import socket
-import threading
-import time
 from datetime import date
 from decimal import Decimal
 
 import pytest
-import uvicorn
 from mcp import Client
 from sqlalchemy import func, select
 
 from openstall_allocator import FixedClock
 from openstall_api import search
-from openstall_api.main import app
 from openstall_api.models import Event, Order, OrderPart, OrderStatus, PartStatus, Passport, Product, ProductStatus
 from openstall_api.models import Search as SearchRow
 from openstall_api.seed import seed
@@ -86,25 +81,6 @@ def reserve_share(db, seller_id: str, product_id: str, quantity: int) -> None:
 def logged(db) -> list[SearchRow]:
     db.expire_all()
     return list(db.scalars(select(SearchRow).order_by(SearchRow.created_at)))
-
-
-@pytest.fixture(scope="module")
-def server_url():
-    """Run the real FastAPI app on a free local port, so the test goes over Streamable HTTP."""
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    give_up = time.monotonic() + 10
-    while not server.started:
-        if time.monotonic() > give_up:
-            raise RuntimeError("API did not start")
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}/mcp"
-    server.should_exit = True
-    thread.join(timeout=5)
 
 
 # ---------- the filters, on the seeded data ----------

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StallView } from "@/components/stall-view";
@@ -105,6 +105,107 @@ describe("StallView", () => {
     expect(trust).toHaveTextContent("25 orders delivered");
     expect(trust).toHaveTextContent("96%");
     expect(trust).toHaveTextContent("These are seeded demo numbers, not real sales.");
+    // Agents cannot check a signature yet, so the page does not say they can.
+    expect(trust).toHaveTextContent("Its signature, which will let an agent check that nothing was changed, is still");
+  });
+
+  it("has a For AI agents box linking to her catalog entry and trust card on the API", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(NOOR)));
+
+    render(<StallView />);
+
+    const agents = await screen.findByRole("region", { name: "For AI agents" });
+    // Only what agents can do today: read and search, not order.
+    expect(agents).toHaveTextContent(
+      "Buyer agents can read Noor's stall as JSON, or search it through OpenStall's MCP server.",
+    );
+    expect(
+      within(agents).getByRole("link", { name: "Catalog entry: Chain-stitch embroidered cushion cover" }),
+    ).toHaveAttribute("href", "http://api.test/catalog/p_noor_cushion.json");
+    expect(within(agents).getByRole("link", { name: "Trust card: Noor's passport" })).toHaveAttribute(
+      "href",
+      "http://api.test/passport/s_noor",
+    );
+    expect(within(agents).getByText("Signature pending")).toBeInTheDocument();
+    // The addresses themselves, for people setting up an agent.
+    expect(within(agents).getByText("http://api.test/catalog/p_noor_cushion.json")).toBeInTheDocument();
+    expect(within(agents).getByRole("group", { name: "MCP server address" })).toHaveTextContent("http://api.test/mcp");
+    expect(within(agents).getByRole("link", { name: "catalog.json" })).toHaveAttribute(
+      "href",
+      "http://api.test/catalog.json",
+    );
+    expect(within(agents).getByRole("link", { name: "llms.txt" })).toHaveAttribute("href", "http://api.test/llms.txt");
+    expect(agents).toHaveTextContent("no agent tool can move money");
+  });
+
+  it("copies the MCP server address with one click", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(NOOR)));
+    render(<StallView />);
+    const agents = await screen.findByRole("region", { name: "For AI agents" });
+
+    await act(async () => {
+      fireEvent.click(within(agents).getByRole("button", { name: "Copy the MCP server address" }));
+    });
+
+    expect(writeText).toHaveBeenCalledWith("http://api.test/mcp");
+    expect(within(agents).getByRole("status")).toHaveTextContent("Copied");
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("links her listings but no trust card for a maker who has no passport yet", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...NOOR, trust: null })));
+
+    render(<StallView />);
+
+    const agents = await screen.findByRole("region", { name: "For AI agents" });
+    expect(within(agents).getAllByRole("listitem")).toHaveLength(1);
+    expect(
+      within(agents).getByRole("link", { name: "Catalog entry: Chain-stitch embroidered cushion cover" }),
+    ).toHaveAttribute("href", "http://api.test/catalog/p_noor_cushion.json");
+    expect(within(agents).queryByRole("link", { name: /^Trust card/ })).not.toBeInTheDocument();
+    expect(within(agents).queryByText("Signature pending")).not.toBeInTheDocument();
+    expect(agents).toHaveTextContent("Buyer agents can read Noor's stall as JSON, or search it");
+  });
+
+  it("links only her trust card when she has nothing listed", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...NOOR, products: [] })));
+
+    render(<StallView />);
+
+    const agents = await screen.findByRole("region", { name: "For AI agents" });
+    const [card] = within(agents).getAllByRole("listitem");
+    expect(within(agents).getAllByRole("listitem")).toHaveLength(1);
+    expect(within(card).getByRole("link", { name: "Trust card: Noor's passport" })).toHaveAttribute(
+      "href",
+      "http://api.test/passport/s_noor",
+    );
+    expect(within(card).getByText("Signature pending")).toBeInTheDocument();
+    expect(within(agents).queryByRole("link", { name: /^Catalog entry/ })).not.toBeInTheDocument();
+    expect(agents).toHaveTextContent(
+      "Noor has nothing listed right now, so agents can read only her trust card. OpenStall's MCP server and " +
+        "catalog.json have the other makers' listings.",
+    );
+    expect(agents).not.toHaveTextContent("read Noor's stall as JSON");
+  });
+
+  it("says a maker with nothing listed and no passport has nothing for agents yet", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...NOOR, products: [], trust: null })));
+
+    render(<StallView />);
+
+    const agents = await screen.findByRole("region", { name: "For AI agents" });
+    expect(within(agents).queryByRole("link", { name: /^Trust card/ })).not.toBeInTheDocument();
+    expect(within(agents).queryByRole("link", { name: /^Catalog entry/ })).not.toBeInTheDocument();
+    expect(within(agents).queryByRole("list")).not.toBeInTheDocument();
+    // It does not promise JSON or a search of hers; the MCP server and the catalog are for the other makers.
+    expect(agents).toHaveTextContent(
+      "Noor has nothing for agents to read yet: no live listing and no trust card. OpenStall's MCP server and " +
+        "catalog.json have the other makers' listings.",
+    );
+    expect(agents).not.toHaveTextContent("read Noor's stall as JSON");
+    expect(within(agents).getByRole("button", { name: "Copy the MCP server address" })).toBeInTheDocument();
   });
 
   it("says there is no stall when the API does not know the id", async () => {
