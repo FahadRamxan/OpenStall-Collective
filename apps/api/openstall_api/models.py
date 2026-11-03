@@ -120,6 +120,7 @@ class Seller(Base):
     name: Mapped[str] = mapped_column(String(120))
     language: Mapped[str | None] = mapped_column(String(16))  # ISO 639-1, set from her first voice note
     city: Mapped[str | None] = mapped_column(String(80))
+    country: Mapped[str | None] = mapped_column(String(2))  # ISO 3166-1 alpha-2, such as PK; decides how she is paid
     whatsapp_number: Mapped[str | None] = mapped_column(String(32), unique=True)
     paypal_merchant_id: Mapped[str | None] = mapped_column(String(64))
     paypal_email: Mapped[str | None] = mapped_column(String(254))

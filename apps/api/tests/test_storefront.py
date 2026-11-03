@@ -9,9 +9,17 @@ import uvicorn
 from mcp import Client
 
 from openstall_api.main import app
+from openstall_api.seed import seed
 from openstall_api.storefront import storefront
 
-ALL_SELLERS = {"s_amina", "s_priya", "s_lucia", "s_grace"}
+ALL_SELLERS = {"s_amina", "s_priya", "s_lucia", "s_grace", "s_noor"}
+
+
+@pytest.fixture(autouse=True)
+def seeded(db):
+    """Every test searches the seeded demo world, Amina included, in its own database."""
+    seed(db, with_amina=True)
+    db.commit()
 
 
 def search(target, query, **filters):

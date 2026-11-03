@@ -1,10 +1,11 @@
 """Agent storefront: the MCP server that buyer agents talk to (spec 3.2).
 
-Day-one version: one read-only tool over the seeded demo catalog. No tool here can capture a payment.
+For now: one read-only tool over the live listings in the database. No tool here can capture a payment.
 """
 
 import logging
 import re
+from decimal import Decimal
 from urllib.parse import urlsplit
 
 from mcp.server import MCPServer
@@ -12,7 +13,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from starlette.applications import Starlette
 
-from openstall_api.catalog import DEMO_PRODUCTS, Product
+from openstall_api.catalog import ProductListing, live_products
+from openstall_api.db import new_session
 from openstall_api.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -36,7 +38,7 @@ def search_products(
     ship_to: str | None = None,
     deadline: str | None = None,
     quantity: int | None = None,
-) -> list[Product]:
+) -> list[ProductListing]:
     """Search handmade products from OpenStall sellers.
 
     Args:
@@ -47,11 +49,14 @@ def search_products(
         quantity: Units needed. Accepted, not used yet.
     """
     wanted = _words(query)
-    matches = [
-        p
-        for p in DEMO_PRODUCTS
-        if wanted & _words(f"{p.title} {p.category}") and (max_price is None or p.price_usd <= max_price)
-    ]
+    cap = None if max_price is None else Decimal(str(max_price))
+    with new_session() as session:
+        matches = [
+            ProductListing.of(product)
+            for product in live_products(session)
+            if wanted & _words(f"{product.title} {product.category} {' '.join(product.variants_json)}")
+            and (cap is None or product.price_usd <= cap)
+        ]
     if not matches:
         # Demand Radar (spec 3.8) will read these; for now they only go to the log.
         log.info("search with no results: %r", query)

@@ -5,9 +5,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from openstall_api import __version__
-from openstall_api.db import migrate
+from openstall_api.catalog_api import router as catalog_router
+from openstall_api.db import REPO_ROOT, migrate
 from openstall_api.events_api import router as events_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
@@ -52,6 +54,10 @@ def health() -> dict[str, str]:
 
 app.include_router(status_router)
 app.include_router(events_router)
+app.include_router(catalog_router)
+
+# The seed photos (placeholders until the team adds its own). Seller photos from chats come in a later prompt.
+app.mount("/media/seed", StaticFiles(directory=REPO_ROOT / "assets" / "seed"), name="seed-media")
 
 # Add the MCP route itself rather than mounting the app, so the endpoint is exactly /mcp, not /mcp/.
 app.router.routes.extend(mcp_http.routes)

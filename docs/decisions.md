@@ -135,3 +135,16 @@ Code: `apps/api/openstall_api/events.py` (event types, `record_event`, the strea
 - **The page loads past events first, then follows the stream from the last one it has** (`?after_id=`), so nothing falls in the gap between the two. Events are shown newest first and only once, however often they arrive.
 - **Times are UTC.** SQLite drops the time zone, so the API marks event times as UTC before sending them; the page shows them in the viewer's own time zone.
 - **`POST /api/dev/events` exists only in fake mode.** Anywhere else it is a plain 404, so the hosted demo cannot be filled with test events by strangers.
+
+## November 3: demo seed data and stall pages (prompt 06)
+
+Code: `apps/api/openstall_api/seed.py` (the makers), `scripts/seed_demo.py` (the command), `catalog.py` and `catalog_api.py` (stalls over HTTP), `passports.py` (signing keys), and in the web app `src/components/stall-view.tsx` and `maker-stalls.tsx`.
+
+- **Five makers, straight from the spec's seed table,** including the backup Noor. Amina is seeded only with `--with-amina`, because in the story she joins live over WhatsApp. The table's three rules are tested through the real offer rules: 30-day capacities of 12, 11, 10 and 11 (10 for Noor), no three of the first four reach 40, and every lowest price is under the buyer's $30 cap.
+- **Seeding is idempotent, signatures included.** Rows have fixed ids and a fixed issue time, and Ed25519 signatures are deterministic, so seeding twice gives a byte-identical database. `--reset` empties every table first; `--if-empty` seeds only a database with no sellers, for the hosted demo's first start (prompt 12). The command runs the migrations itself, so it works on a fresh database.
+- **Seeded passports are signed now.** In fake mode with no `PASSPORT_SIGNING_KEY`, a fixed key that anyone can rebuild from `passports.py` signs them: it is not secret and nothing signed with it is trusted. Sandbox mode refuses to sign without a real key. The verify endpoints come in prompt 35.
+- **Sellers have a country** (migration 0002, ISO code such as `PK`). The web app turns it into "Lahore, Pakistan" with the browser's own `Intl.DisplayNames`, and the language code into "Speaks Urdu". The country will also decide how a maker can be paid.
+- **Placeholder photos are SVGs** in `assets/seed`, two per maker (the cushion and a close-up), each in that maker's embroidery style and clearly labelled "Placeholder photo". The API serves them under `/media/seed/`. Replace them with the team's own photos (same file names) before the video.
+- **Prices travel as strings** ("16.00") in the web API, so they stay exact; the MCP storefront still gives agents a number. Photo addresses are paths on the API (`/media/seed/...`), so they work on every host; the web app adds the API's base URL.
+- **The storefront searches the database,** live listings only, matching words in the title, category and colours. The in-memory catalog is gone.
+- **Stall pages render in the browser,** like the status page: the id comes from the URL inside a Suspense boundary (needed with Cache Components), and the page has loading, not-found and error states.

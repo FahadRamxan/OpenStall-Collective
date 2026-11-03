@@ -1,0 +1,229 @@
+"""The demo world from spec section 2: five makers, one listing each, and their trust records.
+
+All of it is made up for the demo and marked seeded_demo wherever it appears. Amina normally joins live over
+WhatsApp, so she is seeded only when asked (with_amina): for tests, and for recording parts of the video out of
+order. Seeding is idempotent: the same input gives the same rows, signatures included.
+"""
+
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
+
+from openstall_api.models import Base, DataSource, Passport, Product, ProductStatus, Seller
+from openstall_api.passports import issue_passport
+
+MAX_DISCOUNT_PCT = 15
+MIN_LEAD_DAYS = 5
+FREE_SHIPPING_MIN_QTY = 3
+CATEGORY = "home textiles"
+# A fixed issue time, so seeding twice signs exactly the same passports.
+SEEDED_AT = datetime(2026, 11, 1, tzinfo=UTC)
+
+
+@dataclass(frozen=True)
+class SeedMaker:
+    id: str
+    name: str
+    city: str
+    country: str
+    language: str
+    list_price: Decimal
+    floor: Decimal
+    per_week: int
+    ship_days: int  # to Chicago, where the story's buyer is
+    product_id: str
+    title: str
+    description: str
+    variants: tuple[str, ...]
+    photos: tuple[str, ...]
+    trust: dict[str, Any] = field(default_factory=dict)
+    source_text: str | None = None
+
+    def policy(self) -> dict[str, Any]:
+        """The seller policy JSON from spec 3.3. Money as strings, so it stays exact."""
+        return {
+            "seller_id": self.id,
+            "floor_price_usd": str(self.floor),
+            "max_discount_pct": MAX_DISCOUNT_PCT,
+            "capacity_per_week": self.per_week,
+            "min_lead_days": MIN_LEAD_DAYS,
+            "free_shipping_min_qty": FREE_SHIPPING_MIN_QTY,
+        }
+
+
+def _photos(seller: str) -> tuple[str, ...]:
+    return (f"seed/{seller}-cushion-1.svg", f"seed/{seller}-cushion-2.svg")
+
+
+# The seed table in spec section 2. Keep its three rules if you change a number: no three of the first four makers
+# can fill a 40-unit order in 30 days, every floor is below the buyer's $30 cap, and Noor's offer stays above Grace's.
+AMINA = SeedMaker(
+    id="s_amina",
+    name="Amina",
+    city="Lahore",
+    country="PK",
+    language="ur",
+    list_price=Decimal("18.00"),
+    floor=Decimal("15.00"),
+    per_week=4,
+    ship_days=9,
+    product_id="p_amina_cushion",
+    title="Hand-embroidered cushion cover",
+    description="Cotton cover, 16 by 16 inches, with a floral motif embroidered by hand in three colours.",
+    variants=("red", "teal", "mustard"),
+    photos=_photos("amina"),
+    trust={"orders_delivered": 42, "on_time_rate": 0.95, "dispute_rate": 0.02, "photo_originality": 0.91},
+    source_text="Embroidered cushion covers, 3 colours, 18 dollars, I can make 4 a week.",
+)
+PRIYA = SeedMaker(
+    id="s_priya",
+    name="Priya",
+    city="Jaipur",
+    country="IN",
+    language="hi",
+    list_price=Decimal("16.00"),
+    floor=Decimal("13.00"),
+    per_week=4,
+    ship_days=10,
+    product_id="p_priya_cushion",
+    title="Mirror-work embroidered cushion cover",
+    description="Cotton cover, 16 by 16 inches, with small mirrors stitched in by hand in the Rajasthani style.",
+    variants=("indigo", "saffron"),
+    photos=_photos("priya"),
+    trust={"orders_delivered": 67, "on_time_rate": 0.97, "dispute_rate": 0.01, "photo_originality": 0.93},
+)
+LUCIA = SeedMaker(
+    id="s_lucia",
+    name="Lucía",
+    city="Oaxaca",
+    country="MX",
+    language="es",
+    list_price=Decimal("22.00"),
+    floor=Decimal("19.00"),
+    per_week=3,
+    ship_days=6,
+    product_id="p_lucia_cushion",
+    title="Oaxacan embroidered cushion cover",
+    description="Cotton manta cover, 16 by 16 inches, with a band of flowers in Oaxacan satin stitch.",
+    variants=("white", "black"),
+    photos=_photos("lucia"),
+    trust={"orders_delivered": 38, "on_time_rate": 0.92, "dispute_rate": 0.03, "photo_originality": 0.95},
+)
+GRACE = SeedMaker(
+    id="s_grace",
+    name="Grace",
+    city="Detroit",
+    country="US",
+    language="en",
+    list_price=Decimal("32.00"),
+    floor=Decimal("27.00"),
+    per_week=3,
+    ship_days=3,
+    product_id="p_grace_cushion",
+    title="Hand-embroidered linen cushion cover",
+    description="Washed linen cover, 16 by 16 inches, with a leaf sprig worked in crewel wool.",
+    variants=("natural", "sage"),
+    photos=_photos("grace"),
+    trust={"orders_delivered": 120, "on_time_rate": 0.98, "dispute_rate": 0.01, "photo_originality": 0.89},
+)
+NOOR = SeedMaker(
+    id="s_noor",
+    name="Noor",
+    city="Manchester",
+    country="GB",
+    language="ur",
+    list_price=Decimal("31.00"),
+    floor=Decimal("28.50"),
+    per_week=3,
+    ship_days=5,
+    product_id="p_noor_cushion",
+    title="Chain-stitch embroidered cushion cover",
+    description="Cotton cover, 16 by 16 inches, with paisleys in fine chain stitch.",
+    variants=("rose", "forest"),
+    photos=_photos("noor"),
+    trust={"orders_delivered": 25, "on_time_rate": 0.96, "dispute_rate": 0.0, "photo_originality": 0.94},
+)
+
+MAKERS = (AMINA, PRIYA, LUCIA, GRACE, NOOR)
+
+
+@dataclass(frozen=True)
+class SeedReport:
+    sellers: int
+    products: int
+    passports: int
+
+
+def reset_all(session: Session) -> None:
+    """Empty every table, children first."""
+    for table in reversed(Base.metadata.sorted_tables):
+        session.execute(delete(table))
+
+
+def seed(session: Session, *, with_amina: bool = False, reset: bool = False) -> SeedReport:
+    """Add the seeded makers, or bring them back to their seeded state. Other rows are kept unless reset is set."""
+    if reset:
+        reset_all(session)
+    for maker in MAKERS:
+        if maker is AMINA and not with_amina:
+            continue
+        _seed_maker(session, maker)
+    session.flush()
+    return SeedReport(
+        sellers=session.scalar(select(func.count()).select_from(Seller)) or 0,
+        products=session.scalar(select(func.count()).select_from(Product)) or 0,
+        passports=session.scalar(select(func.count()).select_from(Passport)) or 0,
+    )
+
+
+def _seed_maker(session: Session, maker: SeedMaker) -> None:
+    session.merge(
+        Seller(
+            id=maker.id,
+            name=maker.name,
+            language=maker.language,
+            city=maker.city,
+            country=maker.country,
+            policy_json=maker.policy(),
+            data_source=DataSource.SEEDED_DEMO,
+            created_at=SEEDED_AT,
+        )
+    )
+    session.merge(
+        Product(
+            id=maker.product_id,
+            seller_id=maker.id,
+            title=maker.title,
+            description=maker.description,
+            category=CATEGORY,
+            variants_json=list(maker.variants),
+            price_usd=maker.list_price,
+            capacity_per_week=maker.per_week,
+            ship_days=maker.ship_days,
+            ship_from_city=maker.city,
+            photos_json=list(maker.photos),
+            source_text=maker.source_text,
+            status=ProductStatus.LIVE,
+            data_source=DataSource.SEEDED_DEMO,
+            created_at=SEEDED_AT,
+        )
+    )
+    signed = issue_passport(
+        maker.id,
+        {**maker.trust, "paypal_account_verified": True},
+        DataSource.SEEDED_DEMO.value,
+        SEEDED_AT,
+    )
+    session.merge(
+        Passport(
+            seller_id=maker.id,
+            metrics_json={key: value for key, value in signed.items() if key != "signature"},
+            signature=signed["signature"],
+            data_source=DataSource.SEEDED_DEMO,
+            issued_at=SEEDED_AT,
+        )
+    )

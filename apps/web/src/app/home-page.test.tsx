@@ -1,16 +1,26 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import HomePage from "@/app/page";
+
+// The makers grid loads from the API; it has its own tests.
+vi.mock("@/components/maker-stalls", () => ({ MakerStalls: () => <p>The makers grid</p> }));
 
 describe("home page", () => {
   it("says what OpenStall is", () => {
     render(<HomePage />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Small sellers on WhatsApp, selling to AI shopping agents",
+      "Many small makers. One big order. One PayPal checkout.",
     );
-    expect(screen.getByText(/one PayPal checkout pays them all/)).toBeInTheDocument();
+    expect(screen.getByText(/each maker is paid the moment she sends a photo of her shipping receipt/)).toBeInTheDocument();
+  });
+
+  it("introduces the makers", () => {
+    render(<HomePage />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "Meet the makers" })).toBeInTheDocument();
+    expect(screen.getByText("The makers grid")).toBeInTheDocument();
   });
 
   it("does not repeat the name the header already shows", () => {

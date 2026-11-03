@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const HEADLINE = "Small sellers on WhatsApp, selling to AI shopping agents";
+const HEADLINE = "Many small makers. One big order. One PayPal checkout.";
 
 // Cache Components keeps pages you navigated away from in the DOM, hidden. getByRole skips hidden
 // elements, so these tests find things by role rather than by CSS selector.

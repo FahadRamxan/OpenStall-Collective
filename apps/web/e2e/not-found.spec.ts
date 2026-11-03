@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-// Stall pages do not exist yet, so a stall link is the most likely way to reach this page today.
-const MISSING = "/stall/does-not-exist";
+// An address no route matches. (A wrong stall id has its own "No stall here" page: see stall.spec.ts.)
+const MISSING = "/no-such-page";
 
 test("an unknown address gets a 404 page in the site's own layout", async ({ page }) => {
   const response = await page.goto(MISSING);
@@ -35,6 +35,6 @@ test('"Go to the home page" goes home', async ({ page }) => {
 
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Small sellers on WhatsApp, selling to AI shopping agents",
+    "Many small makers. One big order. One PayPal checkout.",
   );
 });

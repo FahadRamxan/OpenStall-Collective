@@ -22,7 +22,7 @@ cp .env.example .env
 uvicorn openstall_api.main:app --reload
 ```
 
-The API keeps its data in a SQLite file at `data/openstall.db` and brings the tables up to date when it starts. To use Postgres instead, set `DATABASE_URL` (see `.env.example`). After changing the tables in `apps/api/openstall_api/models.py`, make a migration with `alembic revision --autogenerate -m "what changed"`.
+Load the demo world, the five seeded makers from the spec, with `python scripts/seed_demo.py --with-amina` (add `--reset` to start from an empty database). The API keeps its data in a SQLite file at `data/openstall.db` and brings the tables up to date when it starts. To use Postgres instead, set `DATABASE_URL` (see `.env.example`). After changing the tables in `apps/api/openstall_api/models.py`, make a migration with `alembic revision --autogenerate -m "what changed"`.
 
 The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP).
 
@@ -80,7 +80,7 @@ docs/            day-one checks and decisions
 
 ## Demo data
 
-The four demo sellers and their listings are seeded and marked `seeded_demo`. They are not real sellers or real sales.
+The five demo makers (Amina, Priya, Lucía, Grace and the backup Noor), their listings and their trust records are seeded and marked `seeded_demo` everywhere they appear. They are not real sellers or real sales. Their product photos are labelled placeholders until the team adds its own.
 
 ## License
 
