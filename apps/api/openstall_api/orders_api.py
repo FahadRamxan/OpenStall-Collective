@@ -6,8 +6,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from openstall_allocator import usd
@@ -185,6 +186,18 @@ def _load(session: Session, order_id: str) -> Order:
     if order is None:
         raise HTTPException(status_code=404, detail=f"There is no order called {order_id!r}.")
     return order
+
+
+@router.get("/orders")
+def recent_orders(session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10) -> list[OrderOut]:
+    """The most recent orders, newest first. A new draft arrives on the event stream as order.drafted."""
+    rows = session.scalars(
+        select(Order)
+        .options(selectinload(Order.parts).selectinload(OrderPart.seller), selectinload(Order.request))
+        .order_by(Order.created_at.desc(), Order.id.desc())
+        .limit(limit)
+    )
+    return [order_out(session, order) for order in rows]
 
 
 @router.get("/orders/{order_id}")

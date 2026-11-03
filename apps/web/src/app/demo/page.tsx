@@ -4,6 +4,7 @@ import { AgentSearches } from "@/components/agent-searches";
 import { AllocationPanel } from "@/components/allocation-panel";
 import { LiveActivity } from "@/components/live-activity";
 import { OfferRules } from "@/components/offer-rules";
+import { OrderCard } from "@/components/order-card";
 import { OffersGrid } from "@/components/offers-grid";
 import { RequestCard } from "@/components/request-card";
 import { EventStreamProvider } from "@/hooks/use-event-stream";
@@ -26,6 +27,7 @@ export default function DemoPage() {
           <AgentSearches />
           <OffersGrid />
           <AllocationPanel />
+          <OrderCard />
           <LiveActivity />
         </EventStreamProvider>
       </div>

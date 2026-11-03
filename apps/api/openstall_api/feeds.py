@@ -27,11 +27,13 @@ ABOUT = (
     "Handmade goods from home makers who sell over WhatsApp, pooled into one collective supplier for AI shopping "
     "agents that buy in bulk."
 )
-# Until an MCP tool takes orders (create_collective_order, prompt 27), llms.txt says ordering is still being built. A
-# test fails once that tool exists and this sentence is still here.
-ORDERING_NOT_YET = (
-    "Ordering through agents is still being built: each maker's seller agent will negotiate within limits she sets, "
-    "enforced in code, and plain code will split an order too big for one maker across several."
+# How an agent orders, now that MCP tools take orders (prompt 27). A test checks llms.txt says this only while
+# create_collective_order exists.
+ORDERING = (
+    "Agents can also order: request_quote asks each matching maker's seller agent for an offer, negotiated within "
+    "limits she set and checked in code, and plain code splits the order across makers, cheapest first. "
+    "create_collective_order turns that plan into a draft order, which a person approves on OpenStall before PayPal "
+    "holds any money."
 )
 
 # Seconds that only ever go up; tests move it forward.
@@ -118,7 +120,7 @@ def llms_txt(settings: Settings, tools: Sequence[Tool]) -> str:
         f"> {ABOUT}",
         "",
         "Agents can search the makers' live listings, and read each listing in full and each maker's trust card. "
-        f"{ORDERING_NOT_YET} Seeded makers and their numbers are made-up demo data, marked data_source "
+        f"{ORDERING} Seeded makers and their numbers are made-up demo data, marked data_source "
         '"seeded_demo" wherever they appear.',
         "",
         "## MCP storefront",

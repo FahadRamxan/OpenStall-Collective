@@ -140,7 +140,7 @@ test("the box links to catalog.json, and to llms.txt, which opens in the browser
     await expect(text).toContainText(`- ${tool}(`);
   }
   await expect(text).toContainText("Its tools (none of them spends money):");
-  await expect(text).toContainText("Ordering through agents is still being built");
+  await expect(text).toContainText("create_collective_order turns that plan into a draft order");
   await expect(text).toContainText("- No MCP tool captures, refunds or moves money.");
   await expect(text).toContainText(`[Catalog](${E2E_API_URL}/catalog.json)`);
   await expect(text).toContainText('every trust card\'s "signature" reads "pending"');

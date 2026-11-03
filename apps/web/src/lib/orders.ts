@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "@/lib/api";
 import { formatUsd } from "@/lib/catalog";
+import type { FeedEvent } from "@/lib/events";
 
 export type OrderStatus =
   | "draft"
@@ -77,6 +78,17 @@ export type Order = {
   request: BuyerRequest | null;
   parts: OrderPart[];
 };
+
+/** The latest order, or null when there is none yet. */
+export async function getLatestOrder(init: RequestInit = {}): Promise<Order | null> {
+  const [latest] = await apiGet<Order[]>("/api/orders?limit=1", init);
+  return latest ?? null;
+}
+
+/** Events after which the latest order may read differently: an order or one of its shares changed. */
+export function changesOrders(event: FeedEvent): boolean {
+  return event.type.startsWith("order.") || event.type.startsWith("part.");
+}
 
 export function getOrder(id: string, init: RequestInit = {}): Promise<Order> {
   return apiGet<Order>(`/api/orders/${encodeURIComponent(id)}`, init);

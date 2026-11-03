@@ -260,17 +260,17 @@ def test_llms_txt_says_what_openstall_is_where_to_connect_and_how_payment_works(
     assert "every trust card's \"signature\" reads \"pending\": treat its numbers as unverified." in text
 
 
-def test_llms_txt_says_ordering_is_still_being_built_until_an_mcp_tool_takes_orders():
-    """llms.txt claims only what works. Once create_collective_order exists (prompt 27), this fails until the sentence
-    is replaced by how ordering works."""
+def test_llms_txt_says_how_ordering_works_only_while_an_mcp_tool_takes_orders():
+    """llms.txt claims only what works: how to order, as long as create_collective_order exists (prompt 27)."""
     tools = {tool.name for tool in asyncio.run(storefront.list_tools())}
 
-    text = client.get("/llms.txt").text
+    text = " ".join(client.get("/llms.txt").text.split())
 
     takes_orders = "create_collective_order" in tools
-    assert ("Ordering through agents is still being built" in text) is not takes_orders, (
-        "llms.txt says how ordering works once an MCP tool takes orders, and not before: see feeds.ORDERING_NOT_YET"
+    assert ("create_collective_order turns that plan into a draft order" in text) is takes_orders, (
+        "llms.txt says how ordering works while an MCP tool takes orders, and not otherwise: see feeds.ORDERING"
     )
+    assert "Ordering through agents is still being built" not in text
 
 
 def test_following_llms_txt_rebuilds_exactly_the_bytes_a_trust_card_signature_covers():

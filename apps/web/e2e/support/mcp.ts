@@ -83,3 +83,26 @@ export function getProduct(request: APIRequestContext, productId: string): Promi
 export function getTrustCard(request: APIRequestContext, sellerId: string): Promise<Record<string, unknown>> {
   return callTool(request, "get_trust_card", { seller_id: sellerId });
 }
+
+/** What request_quote takes. */
+export type QuoteRequest = {
+  items: string[];
+  quantity: number;
+  max_unit_price: number;
+  deadline: string;
+  ship_to: string;
+};
+
+/** Calls request_quote through the MCP endpoint: the valid offers, the plan and its explanation. */
+export function requestQuote(request: APIRequestContext, quote: QuoteRequest): Promise<Record<string, unknown>> {
+  return callTool(request, "request_quote", quote);
+}
+
+/** Calls create_collective_order through the MCP endpoint: the draft order made from the quote's plan. */
+export function createCollectiveOrder(
+  request: APIRequestContext,
+  requestId: string,
+  acceptPartial = false,
+): Promise<Record<string, unknown>> {
+  return callTool(request, "create_collective_order", { request_id: requestId, accept_partial: acceptPartial });
+}

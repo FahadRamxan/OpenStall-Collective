@@ -1,25 +1,35 @@
 """Agent storefront: the MCP server that buyer agents talk to (spec 3.2).
 
-For now: search_products over the live listings in the database (search.py), which adds each search to the search
-log that the public /demo page shows; get_product, one listing in full; and get_trust_card, a maker's trust passport.
-The last two only read, and give exactly what the API's feeds give (GET /catalog/{product_id}.json and
-GET /passport/{seller_id}): the same functions make both. No tool here can capture a payment.
+search_products over the live listings in the database (search.py), which adds each search to the search log that
+the public /demo page shows; get_product, one listing in full; and get_trust_card, a maker's trust passport. The last
+two only read, and give exactly what the API's feeds give (GET /catalog/{product_id}.json and
+GET /passport/{seller_id}): the same functions make both. request_quote asks the makers' seller agents for offers and
+plans the split (quotes.py); create_collective_order turns the plan into a draft order (collective.py). No tool here
+can reserve, capture or pay out money, and none takes a price or a total from an agent.
 """
 
 from datetime import date
+from decimal import Decimal
+from functools import partial
 from typing import Annotated
 from urllib.parse import urlsplit
 
+import anyio
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from starlette.applications import Starlette
 
-from openstall_api import search
-from openstall_api.catalog import CatalogEntry, NotFound, catalog_entry
+from openstall_api import collective, quotes, search
+from openstall_api.adapters import get_registry
+from openstall_api.allocation import PlanOut, stored_plan
+from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_entry
+from openstall_api.collective import DraftOrder
 from openstall_api.db import new_session, session_scope
+from openstall_api.models import Passport
 from openstall_api.passports import TrustCard, trust_card
 from openstall_api.search import SearchError, SearchFilters, SearchResult
 from openstall_api.settings import Settings, get_settings
@@ -167,6 +177,156 @@ def get_trust_card(
             return trust_card(session, seller_id)
         except NotFound as error:
             raise ToolError(str(error)) from None
+
+
+# Asking for a quote stores the request and the makers' offers, which /demo shows, and asks each maker's agent: it
+# changes OpenStall's records but spends no money. Asked twice, it makes two requests.
+ASKS_FOR_A_QUOTE = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False
+)
+# Drafting an order from a plan writes the draft once: asked again for the same request, it gives back the same draft.
+DRAFTS_AN_ORDER = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False
+)
+
+
+class QuotedOffer(BaseModel):
+    """One maker's valid offer: the price her agent proposed and code accepted, for the units code set."""
+
+    seller_id: str
+    seller_name: str
+    unit_price: Decimal = Field(description="USD per unit, in whole cents, as a string such as \"29.00\".")
+    quantity: int = Field(description="Units she offers: the most she can make by the deadline, at most the request.")
+    delivery_date: date
+    trust_score: float | None = Field(description="Her trust score from 0 to 1; null until she has a passport.")
+    message: str | None = Field(description="Her agent's one sentence to the buyer.")
+
+
+class Quote(BaseModel):
+    """A finished quote: each maker's valid offer, and the plan that splits the order across them."""
+
+    request_id: str = Field(description="Give this to create_collective_order to draft the order.")
+    rounds: int = Field(description="Negotiation rounds run, at most 3.")
+    makers_asked: int
+    offers: list[QuotedOffer] = Field(description="Each maker's valid offer, cheapest first.")
+    plan: PlanOut = Field(description="How the order is split, cheapest first, with its explanation in words.")
+    next_step: str
+
+
+@storefront.tool(annotations=ASKS_FOR_A_QUOTE)
+async def request_quote(
+    items: Annotated[
+        list[Annotated[str, Field(min_length=1, max_length=300)]],
+        Field(
+            min_length=1,
+            max_length=5,
+            description='What the buyer wants, one entry per item, in plain words, for example ["40 '
+            'hand-embroidered cushion covers for corporate gifts"]. Makers are matched as search_products matches.',
+        ),
+    ],
+    quantity: Annotated[int, Field(ge=1, le=100_000, description="Units the buyer needs in all.")],
+    max_unit_price: Annotated[
+        float,
+        Field(gt=0, le=1_000_000, allow_inf_nan=False, description="The most the buyer pays per unit, in USD."),
+    ],
+    deadline: Annotated[
+        date, Field(description="Date the goods must arrive by, as YYYY-MM-DD, after today (UTC).")
+    ],
+    ship_to: Annotated[
+        str,
+        Field(
+            min_length=1,
+            max_length=120,
+            description='Delivery city, for example "Chicago". For now ship days are days to a US city.',
+        ),
+    ],
+) -> Quote:
+    """Ask OpenStall's makers for a quote. It spends no money: it stores the request and asks each maker's agent.
+
+    Every maker whose listing matches is asked, side by side: her seller agent proposes a price within limits she
+    set, and code checks each one against those limits and max_unit_price. A refused price goes back to her agent
+    with the reason; makers without a valid offer get up to 3 rounds. The valid offers are then split across makers
+    by plain code, cheapest first, and the plan comes with 2 or 3 sentences explaining it (every number in them is
+    checked against the plan). This can take up to a minute. Nothing is ordered: create_collective_order turns the
+    plan into a draft, and a person must approve that before any money is reserved through PayPal.
+    """
+    try:
+        cap = search.price_cap(max_unit_price)
+        queries = [search.one_line(item, "Each item") for item in items]
+        city = search.one_line(ship_to, "ship_to")
+    except SearchError as error:
+        raise ToolError(str(error)) from None
+    return await anyio.to_thread.run_sync(partial(_request_quote, queries, quantity, cap, deadline, city))
+
+
+def _request_quote(queries: list[str], quantity: int, cap: Decimal, deadline: date, ship_to: str) -> Quote:
+    today = quotes.clock.today()
+    with new_session() as session:
+        try:
+            request, products = quotes.create_quote_request(session, queries, quantity, cap, deadline, ship_to, today)
+        except quotes.QuoteError as error:
+            raise ToolError(str(error)) from None
+        session.commit()
+        result = quotes.run_quote(session, request, products, get_registry().llm, today)
+        plan = stored_plan(session, request)
+        assert plan is not None  # run_quote plans every finished quote
+        offers = sorted(result.offers.values(), key=lambda offer: (offer.unit_price, offer.seller_id))
+        passports = {p.seller_id: p for p in session.scalars(select(Passport).where(Passport.seller_id.in_(result.offers)))}
+        return Quote(
+            request_id=request.id,
+            rounds=result.rounds,
+            makers_asked=len(result.asked),
+            offers=[
+                QuotedOffer(
+                    seller_id=offer.seller_id,
+                    seller_name=offer.seller.name,
+                    unit_price=offer.unit_price,
+                    quantity=offer.quantity,
+                    delivery_date=offer.delivery_date,
+                    trust_score=(
+                        float(TrustSummary.of(passports[offer.seller_id]).score)
+                        if offer.seller_id in passports
+                        else None
+                    ),
+                    message=offer.message,
+                )
+                for offer in offers
+            ],
+            plan=plan,
+            next_step=(
+                f"Call create_collective_order with request_id {request.id!r} to draft the order"
+                + ("." if plan.complete else ", with accept_partial true to order only what is possible.")
+            ),
+        )
+
+
+@storefront.tool(annotations=DRAFTS_AN_ORDER)
+def create_collective_order(
+    request_id: Annotated[
+        str,
+        Field(min_length=1, max_length=64, description="The request_id that request_quote gave."),
+    ],
+    accept_partial: Annotated[
+        bool,
+        Field(
+            description="Draft the order even if the plan covers only part of the quantity. Without it, a plan "
+            "that is short is refused, and nothing is drafted."
+        ),
+    ] = False,
+) -> DraftOrder:
+    """Turn a quote's plan into one draft collective order. It spends no money.
+
+    Each maker's share and the total come from the stored plan and are worked out by OpenStall: no tool takes a
+    price or a total from an agent. Calling it again for the same request gives back the same draft. Nothing is
+    reserved or paid: a person must approve the draft on OpenStall's approval page, and only then does PayPal hold the
+    money, with each maker's share captured when she proves she shipped.
+    """
+    with session_scope() as session:
+        try:
+            order = collective.draft_from_plan(session, request_id, accept_partial=accept_partial)
+        except collective.DraftError as error:
+            raise ToolError(str(error)) from None
+        return collective.draft_out(order)
 
 
 def storefront_http_app(settings: Settings) -> Starlette:
