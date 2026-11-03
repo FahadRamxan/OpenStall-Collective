@@ -61,6 +61,14 @@ export function OrderCard() {
               ? "A person approves it before anything is reserved: PayPal then holds the total, and each maker is paid when she ships."
               : "Approved. Each maker's share is paid when she proves she shipped."}
           </p>
+          {order.approval_link ? (
+            <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-sm leading-6">
+              <span className="font-semibold">Approval link sent to the human:</span>{" "}
+              <a href={order.approval_link.url} className="font-mono break-all text-accent underline underline-offset-4">
+                {order.approval_link.url}
+              </a>
+            </p>
+          ) : null}
           <Link
             href={`/approve/${encodeURIComponent(order.id)}`}
             className="mt-4 inline-flex min-h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-foreground hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"

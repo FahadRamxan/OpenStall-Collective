@@ -7,16 +7,19 @@ an agent. A request gets one draft: asked again, it gives back the same one.
 
 from datetime import date
 from decimal import Decimal
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from openstall_api.allocation import PlanLineOut, stored_plan
 from openstall_api.catalog import ID_PATTERN
-from openstall_api.models import Offer, Order
+from openstall_api.events import EventType, record_event
+from openstall_api.models import Event, Offer, Order, OrderPart, OrderStatus, PartStatus
 from openstall_api.models import QuoteRequest as QuoteRequestRow
 from openstall_api.orders import DraftPart, create_draft_order, server_total
+from openstall_api.settings import get_settings
 
 
 class DraftError(ValueError):
@@ -35,7 +38,9 @@ class DraftOrder(BaseModel):
     next_step: str
 
 
-def draft_from_plan(session: Session, request_id: str, *, accept_partial: bool = False) -> Order:
+def draft_from_plan(
+    session: Session, request_id: str, *, accept_partial: bool = False, source: str | None = None
+) -> Order:
     """The request's draft order, made from its plan, or the one already made. Raises DraftError in words."""
     request = session.get(QuoteRequestRow, request_id) if ID_PATTERN.fullmatch(request_id) else None
     if request is None:
@@ -72,7 +77,9 @@ def draft_from_plan(session: Session, request_id: str, *, accept_partial: bool =
         )
         for line in plan.lines
     ]
-    return create_draft_order(session, parts, request_id=request.id)
+    order = create_draft_order(session, parts, request_id=request.id)
+    order.source = source
+    return order
 
 
 def draft_out(order: Order) -> DraftOrder:
@@ -96,11 +103,72 @@ def draft_out(order: Order) -> DraftOrder:
             for part in order.parts
         ],
         next_step=(
-            "A person must approve this draft on OpenStall before any money is reserved: PayPal then holds the "
-            "total, and each maker's share is captured only when she proves she shipped."
+            "A person must approve this draft on OpenStall before any money is reserved: call checkout with this "
+            "order_id for the approval link to send them. PayPal then holds the total, and each maker's share is "
+            "captured only when she proves she shipped."
         ),
     )
 
 
 def _day(day: date) -> str:
     return f"{day:%B} {day.day}, {day.year}"
+
+
+# What each status means to a buyer agent, in words.
+ORDER_STATUS_WORDS = {
+    OrderStatus.DRAFT: "Draft: waiting for a person to approve it. Nothing is reserved.",
+    OrderStatus.AWAITING_APPROVAL: "At PayPal: waiting for the person to approve it there. Nothing is reserved yet.",
+    OrderStatus.AUTHORIZED: "Approved: PayPal holds the total, and each maker is paid when she proves she shipped.",
+    OrderStatus.PARTLY_SHIPPED: "Partly shipped: some makers have proved they shipped and are paid.",
+    OrderStatus.SHIPPED: "Shipped: every maker has proved she shipped and is paid.",
+    OrderStatus.COMPLETED: "Completed.",
+    OrderStatus.CANCELLED: "Cancelled: every share was released, and nothing was charged.",
+}
+PART_STATUS_WORDS = {
+    PartStatus.PENDING: "Not approved yet.",
+    PartStatus.AUTHORIZED: "Reserved at PayPal: paid when she proves she shipped.",
+    PartStatus.CAPTURED: "Paid: she proved she shipped.",
+    PartStatus.DELIVERED: "Delivered.",
+    PartStatus.RELEASED: "Released: she could not deliver, and her share was never charged.",
+}
+
+
+def load_order(session: Session, order_id: str) -> Order:
+    """An order with its shares and makers. Raises DraftError, in words, for one that does not exist."""
+    order = (
+        session.get(
+            Order,
+            order_id,
+            options=[selectinload(Order.parts).selectinload(OrderPart.seller), selectinload(Order.request)],
+        )
+        if ID_PATTERN.fullmatch(order_id)
+        else None
+    )
+    if order is None:
+        raise DraftError(f"There is no order called {order_id!r}. create_collective_order gives each order's id.")
+    return order
+
+
+def approval_link(session: Session, order: Order) -> str:
+    """The order's approval page on OpenStall's web app. The first time it is given out, checkout.link_issued says
+    so in the feed; after that the same link is given and nothing more is recorded. The caller commits."""
+    url = f"{get_settings().WEB_BASE_URL}/approve/{quote(order.id, safe='')}"
+    if link_issued(session, order.id) is None:
+        record_event(
+            session,
+            EventType.CHECKOUT_LINK_ISSUED,
+            f"Approval link for order {order.id} sent to the human",
+            entity_id=order.id,
+            payload={"url": url},
+        )
+    return url
+
+
+def link_issued(session: Session, order_id: str) -> Event | None:
+    """When the order's approval link was first given out, if it was."""
+    return session.scalars(
+        select(Event)
+        .where(Event.type == EventType.CHECKOUT_LINK_ISSUED.value, Event.entity_id == order_id)
+        .order_by(Event.id)
+        .limit(1)
+    ).first()

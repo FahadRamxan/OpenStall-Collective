@@ -274,6 +274,8 @@ class Order(Base):
     total_usd: Mapped[Decimal] = mapped_column(Money())
     paypal_order_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who drafted it: "mcp" for a buyer agent's create_collective_order, None for a seeded or demo order (prompt 28).
+    source: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     request: Mapped[QuoteRequest | None] = relationship()

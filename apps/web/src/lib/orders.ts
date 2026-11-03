@@ -76,6 +76,10 @@ export type Order = {
   paypal_order_id: string | null;
   parent_order_id: string | null;
   request: BuyerRequest | null;
+  /** Drafted by a buyer agent through MCP (create_collective_order). */
+  requested_by_agent?: boolean;
+  /** The approval link a buyer agent was given to send its human (MCP checkout), once it was. */
+  approval_link?: { url: string; issued_at: string } | null;
   parts: OrderPart[];
 };
 

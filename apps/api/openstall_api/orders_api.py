@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 
@@ -15,6 +15,7 @@ from openstall_allocator import usd
 from openstall_api.adapters import AdapterRegistry, AdapterUnavailable, get_registry
 from openstall_api.catalog import photo_path
 from openstall_api.claims import ClaimHeld
+from openstall_api.collective import link_issued
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
@@ -76,6 +77,13 @@ class RequestOut(BaseModel):
     explanation_by: str | None = None
 
 
+class ApprovalLinkOut(BaseModel):
+    """The approval link a buyer agent was given (MCP checkout), and when it first was."""
+
+    url: str
+    issued_at: datetime
+
+
 class OrderOut(BaseModel):
     id: str
     status: OrderStatus
@@ -87,6 +95,10 @@ class OrderOut(BaseModel):
     parent_order_id: str | None
     request: RequestOut | None
     parts: list[PartOut]
+    # Drafted by a buyer agent through MCP (create_collective_order): /approve says so (prompt 28).
+    requested_by_agent: bool = False
+    # The approval link a buyer agent was given to send its human, once it was (MCP checkout).
+    approval_link: ApprovalLinkOut | None = None
 
 
 SANDBOX_VENMO = "simulated: Venmo payouts don't run in PayPal's sandbox"
@@ -148,6 +160,7 @@ def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation, setting
 def order_out(session: Session, order: Order) -> OrderOut:
     settings = get_settings()
     paypal = confirmations(session, order.parts)
+    issued = link_issued(session, order.id)
     request = order.request
     items = request.items_json if request else []
     summary = next((item.get("query") for item in items if isinstance(item, dict) and item.get("query")), None)
@@ -171,6 +184,12 @@ def order_out(session: Session, order: Order) -> OrderOut:
                 explanation_by=(request.plan_json or {}).get("explanation_by"),
             )
             if request
+            else None
+        ),
+        requested_by_agent=order.source == "mcp",
+        approval_link=(
+            ApprovalLinkOut(url=str(issued.payload_json.get("url", "")), issued_at=_utc(issued.created_at))
+            if issued is not None
             else None
         ),
         parts=[_part(session, part, paypal[part.id], settings) for part in order.parts],
@@ -284,3 +303,8 @@ def reserve(order_id: str, session: SessionDep, registry: RegistryDep, backgroun
     session.commit()
     background.add_task(deliver_fake_webhooks)  # fake mode: PayPal's confirmations follow, as they would for real
     return order_out(session, _load(session, order_id))
+
+
+def _utc(moment: datetime) -> datetime:
+    """SQLite drops the zone; we always store UTC, so say so for the browser."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)

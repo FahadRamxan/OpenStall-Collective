@@ -14,6 +14,7 @@ export const CATEGORIES: Record<string, Category> = {
   offer: { label: "Offer", tone: "neutral" },
   allocation: { label: "Split", tone: "accent" },
   order: { label: "Order", tone: "accent" },
+  checkout: { label: "Approval", tone: "accent" },
   part: { label: "Payment", tone: "success" },
   topup: { label: "Top-up", tone: "warning" },
   advance: { label: "Advance", tone: "success" },

@@ -77,6 +77,23 @@ describe("OrderCard", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 
+  it("says when the approval link was sent to the human, with the link", async () => {
+    mockOrders([
+      {
+        ...DRAFT,
+        approval_link: { url: "http://localhost:3000/approve/ord_7f3a", issued_at: "2026-11-10T10:01:00Z" },
+      },
+    ]);
+
+    render(<OrderCard />);
+
+    expect(await screen.findByText("Approval link sent to the human:")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "http://localhost:3000/approve/ord_7f3a" })).toHaveAttribute(
+      "href",
+      "http://localhost:3000/approve/ord_7f3a",
+    );
+  });
+
   it("says when the latest order cannot be loaded", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 

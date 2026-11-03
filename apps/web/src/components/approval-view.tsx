@@ -129,6 +129,12 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
         <Badge tone={order.status === "draft" ? "warning" : "accent"}>{ORDER_STATUS_LABELS[order.status]}</Badge>
       </div>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Approve this order</h1>
+      {order.requested_by_agent ? (
+        <p className="mt-3 rounded-lg bg-accent-soft px-4 py-2 leading-7">
+          <span className="font-semibold">Requested by an AI agent.</span> It asked OpenStall&apos;s makers for this
+          quote and drafted the order through the MCP storefront. Only you can approve it.
+        </p>
+      ) : null}
 
       {order.request?.explanation ? (
         <section aria-labelledby="why-heading" className="mt-6 border-l-2 border-accent pl-4">

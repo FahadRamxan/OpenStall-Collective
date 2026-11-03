@@ -5,7 +5,7 @@ the public /demo page shows; get_product, one listing in full; and get_trust_car
 two only read, and give exactly what the API's feeds give (GET /catalog/{product_id}.json and
 GET /passport/{seller_id}): the same functions make both. request_quote asks the makers' seller agents for offers and
 plans the split (quotes.py); create_collective_order turns the plan into a draft order (collective.py). No tool here
-can reserve, capture or pay out money, and none takes a price or a total from an agent.
+can reserve, capture or pay out money, and none takes a price or a total from an agent: checkout gives the link a person approves on, and get_order_status only reads (tests/test_no_tool_moves_money.py calls every tool).
 """
 
 from datetime import date
@@ -29,14 +29,23 @@ from openstall_api.allocation import PlanOut, stored_plan
 from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_entry
 from openstall_api.collective import DraftOrder
 from openstall_api.db import new_session, session_scope
-from openstall_api.models import Passport
+from openstall_api.models import OrderStatus, Passport
+from openstall_api.orders import server_total
+from openstall_api.orders_api import payout_words
 from openstall_api.passports import TrustCard, trust_card
 from openstall_api.search import SearchError, SearchFilters, SearchResult
 from openstall_api.settings import Settings, get_settings
 
 storefront = MCPServer(
     "OpenStall Collective",
-    instructions="Handmade goods from small sellers who work over WhatsApp. Tools here never spend money.",
+    instructions=(
+        "Handmade goods from small sellers who work over WhatsApp, pooled into one collective supplier. Tools here "
+        "never spend money. To order: request_quote asks each matching maker's seller agent for an offer and splits "
+        "the order across makers; create_collective_order drafts it; checkout gives the link a person opens to "
+        "approve it. Approving reserves the total through one PayPal authorization; each maker's share is captured "
+        "only when she proves she shipped, and a share she cannot deliver is released. No tool approves, captures, "
+        "refunds or pays out: get_order_status follows each share."
+    ),
 )
 
 # A search changes nothing a buyer or seller has, but it is not read-only: each one adds a row to the search log, and
@@ -323,10 +332,134 @@ def create_collective_order(
     """
     with session_scope() as session:
         try:
-            order = collective.draft_from_plan(session, request_id, accept_partial=accept_partial)
+            order = collective.draft_from_plan(session, request_id, accept_partial=accept_partial, source="mcp")
         except collective.DraftError as error:
             raise ToolError(str(error)) from None
         return collective.draft_out(order)
+
+
+# Giving the approval link records, once per order, that it was sent: the order, its total and the money stay as they
+# are. Asked again, it gives the same link and records nothing more.
+GIVES_THE_APPROVAL_LINK = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False
+)
+
+
+class ApprovalLink(BaseModel):
+    """Where a person approves the order: OpenStall's own approval page, never PayPal's."""
+
+    order_id: str
+    approval_url: str = Field(description="OpenStall's approval page for the order. Send it to your human.")
+    status: str = Field(description='The order\'s status, such as "draft" (waiting for approval) or "authorized".')
+    total_usd: Decimal = Field(description="The order's total, worked out by OpenStall, in whole cents.")
+    next_step: str
+
+
+class ShareStatus(BaseModel):
+    """One maker's share of the order, and where its payment stands."""
+
+    seller_id: str
+    seller_name: str
+    quantity: int
+    status: str = Field(description="pending, authorized (reserved at PayPal), captured (paid), delivered or released.")
+    status_words: str
+    carrier: str | None = Field(description="Her courier, once she has sent the tracking.")
+    tracking_number: str | None
+    payout_rail: str = Field(description="How she is paid: paypal, venmo, hyperwallet, or unavailable.")
+    payout_words: str
+    paid_through_paypal: bool = Field(description="Whether her payout goes through PayPal Payouts.")
+
+
+class OrderStatusOut(BaseModel):
+    """An order's status and each maker's share, as a buyer agent follows it."""
+
+    order_id: str
+    status: str
+    status_words: str
+    total_usd: Decimal
+    units: int
+    approved: bool = Field(description="Whether a person has approved it and PayPal holds the money.")
+    shares: list[ShareStatus]
+    simulated: bool = Field(description="True in test mode, where PayPal is simulated and no payment is real.")
+
+
+@storefront.tool(annotations=GIVES_THE_APPROVAL_LINK)
+def checkout(
+    order_id: Annotated[
+        str, Field(min_length=1, max_length=64, description="The order_id that create_collective_order gave.")
+    ],
+) -> ApprovalLink:
+    """The link your human opens to approve the order. It spends no money and changes no order.
+
+    The link is OpenStall's own approval page, never PayPal's, so the person sees each maker's share, the total and
+    why the split before PayPal is involved. Approving there reserves the total through one PayPal authorization;
+    each maker's share is captured only when she proves she shipped. No tool can approve, capture, refund or pay out.
+    """
+    with session_scope() as session:
+        try:
+            order = collective.load_order(session, order_id)
+        except collective.DraftError as error:
+            raise ToolError(str(error)) from None
+        url = collective.approval_link(session, order)
+        return ApprovalLink(
+            order_id=order.id,
+            approval_url=url,
+            status=order.status.value,
+            total_usd=server_total(order),
+            next_step=(
+                "Send this link to your human. After they approve, get_order_status shows the money reserved and "
+                "each maker's share paid as she ships."
+                if order.status is OrderStatus.DRAFT
+                else "This order is already approved: get_order_status shows each maker's share."
+            ),
+        )
+
+
+@storefront.tool(annotations=READS_ONLY)
+def get_order_status(
+    order_id: Annotated[
+        str, Field(min_length=1, max_length=64, description="The order_id that create_collective_order gave.")
+    ],
+) -> OrderStatusOut:
+    """An order's status and each maker's share. It only reads: it never spends money and changes no order.
+
+    For each share: her units, where her payment stands (reserved at PayPal, captured when she proved she shipped,
+    or released if she could not deliver), her courier and tracking number once she has sent them, and how she is
+    paid. In test mode PayPal is simulated, and the answer says so.
+    """
+    settings = get_settings()
+    with new_session() as session:
+        try:
+            order = collective.load_order(session, order_id)
+        except collective.DraftError as error:
+            raise ToolError(str(error)) from None
+        shares = []
+        for part in order.parts:
+            rail, words, via_paypal = payout_words(part, settings)
+            shares.append(
+                ShareStatus(
+                    seller_id=part.seller_id,
+                    seller_name=part.seller.name,
+                    quantity=part.quantity,
+                    status=part.status.value,
+                    status_words=collective.PART_STATUS_WORDS[part.status],
+                    carrier=part.carrier,
+                    tracking_number=part.tracking_number,
+                    payout_rail=rail,
+                    payout_words=words,
+                    paid_through_paypal=via_paypal,
+                )
+            )
+        return OrderStatusOut(
+            order_id=order.id,
+            status=order.status.value,
+            status_words=collective.ORDER_STATUS_WORDS[order.status],
+            total_usd=server_total(order),
+            units=sum(part.quantity for part in order.parts),
+            approved=order.approved_at is not None,
+            shares=shares,
+            simulated=settings.OPENSTALL_MODE == "fake",
+        )
 
 
 def storefront_http_app(settings: Settings) -> Starlette:

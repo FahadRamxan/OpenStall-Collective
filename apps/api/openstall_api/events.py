@@ -39,6 +39,7 @@ class EventType(StrEnum):
     ALLOCATION_PLANNED = "allocation.planned"
     ORDER_DRAFTED = "order.drafted"
     ORDER_CHECKOUT_STARTED = "order.checkout_started"
+    CHECKOUT_LINK_ISSUED = "checkout.link_issued"  # an agent was given the order's approval link
     ORDER_AUTHORIZED = "order.authorized"
     ORDER_REPLANNED = "order.replanned"
     ORDER_COMPLETED = "order.completed"

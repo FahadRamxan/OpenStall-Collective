@@ -106,3 +106,13 @@ export function createCollectiveOrder(
 ): Promise<Record<string, unknown>> {
   return callTool(request, "create_collective_order", { request_id: requestId, accept_partial: acceptPartial });
 }
+
+/** Calls checkout through the MCP endpoint: OpenStall's approval link for the order. */
+export function checkout(request: APIRequestContext, orderId: string): Promise<Record<string, unknown>> {
+  return callTool(request, "checkout", { order_id: orderId });
+}
+
+/** Calls get_order_status through the MCP endpoint: the order's status and each maker's share. */
+export function getOrderStatus(request: APIRequestContext, orderId: string): Promise<Record<string, unknown>> {
+  return callTool(request, "get_order_status", { order_id: orderId });
+}

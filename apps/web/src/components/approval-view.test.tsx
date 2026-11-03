@@ -80,6 +80,18 @@ describe("ApprovalView", () => {
     expect(request).toHaveTextContent("To Chicago by December 10, 2026");
   });
 
+  it("says when an AI agent asked for the order, and not otherwise", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...ORDER, requested_by_agent: true })));
+    const view = render(<ApprovalView />);
+    expect(await screen.findByText("Requested by an AI agent.")).toBeInTheDocument();
+    view.unmount();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(ORDER)));
+    render(<ApprovalView />);
+    await screen.findByRole("region", { name: "What your AI agent asked for" });
+    expect(screen.queryByText("Requested by an AI agent.")).not.toBeInTheDocument();
+  });
+
   it("opens with why this split when the order has a plan in words, and without it otherwise", async () => {
     const explained: Order = {
       ...ORDER,
