@@ -18,6 +18,12 @@
   --success-soft: #e3f4e8;
   --danger: #a3261b;
   --danger-soft: #fbe5e3;
+  /* Chart series, in fixed order: blue, orange, aqua, yellow, magenta. Never status colours. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +43,11 @@
     --success-soft: #10301c;
     --danger: #f29b92;
     --danger-soft: #3b1512;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
   }
 }
 

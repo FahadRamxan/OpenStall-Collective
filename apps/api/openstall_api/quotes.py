@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from openstall_agents.adapters import LLM
 from openstall_agents.seller_agent import OfferOutcome, Proposal, make_offer
 from openstall_allocator import Clock, SystemClock
+from openstall_api.allocation import plan_quote
 from openstall_api.events import EventType, record_event
 from openstall_api.models import Offer, Product
 from openstall_api.models import QuoteRequest as QuoteRequestRow
@@ -132,8 +133,8 @@ def run_quote(
     time_limit: float = AGENT_TIME_LIMIT,
     max_rounds: int = MAX_ROUNDS,
 ) -> QuoteResult:
-    """Ask each maker's agent, side by side, round by round, and keep each maker's valid offer. Commits after each
-    round and at the end."""
+    """Ask each maker's agent, side by side, round by round, and keep each maker's valid offer. When the rounds are
+    done, the valid offers are split with the allocator (allocation.py). Commits after each round and at the end."""
     by_seller = {product.seller_id: product for product in products}
     waiting = list(by_seller)
     history: dict[str, list[Proposal]] = defaultdict(list)
@@ -191,6 +192,7 @@ def run_quote(
             "requested": request.quantity,
         },
     )
+    plan_quote(session, request)
     session.commit()
     return result
 

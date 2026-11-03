@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AgentSearches } from "@/components/agent-searches";
+import { AllocationPanel } from "@/components/allocation-panel";
 import { LiveActivity } from "@/components/live-activity";
 import { OfferRules } from "@/components/offer-rules";
 import { OffersGrid } from "@/components/offers-grid";
@@ -24,6 +25,7 @@ export default function DemoPage() {
           <OfferRules />
           <AgentSearches />
           <OffersGrid />
+          <AllocationPanel />
           <LiveActivity />
         </EventStreamProvider>
       </div>

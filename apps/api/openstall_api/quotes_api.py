@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from openstall_api.allocation import PlanOut, stored_plan
 from openstall_api.db import get_session
 from openstall_api.models import Offer
 from openstall_api.models import QuoteRequest as QuoteRequestRow
@@ -77,3 +78,17 @@ def get_quote(request_id: str, session: SessionDep) -> QuoteOut:
     if request is None:
         raise HTTPException(status_code=404, detail=f"There is no quote request called {request_id!r}.")
     return QuoteOut.of(session, request)
+
+
+@router.get("/quotes/{request_id}/plan")
+def get_plan(request_id: str, session: SessionDep) -> PlanOut:
+    """How the quote's order is split across makers, cheapest first, and whether it is complete or short."""
+    request = session.get(QuoteRequestRow, request_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail=f"There is no quote request called {request_id!r}.")
+    plan = stored_plan(session, request)
+    if plan is None:
+        raise HTTPException(
+            status_code=404, detail=f"Quote request {request_id!r} has no plan yet: its rounds are not done."
+        )
+    return plan

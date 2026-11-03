@@ -355,3 +355,13 @@ Code: `apps/api/openstall_api/quotes.py` (`create_quote_request`, `run_quote`), 
 - **Five valid offers, not four.** Prompt 24's text says the story gives 4 valid offers; spec section 2 says Noor, the backup, makes one too ("her offer, about $29.50, is above Grace's $29, so she gets nothing at first"). The quote has 5 valid offers (12, 11, 10, 11 and 10 units, 54 in all); the allocator (prompt 25) leaves Noor out.
 - **`POST /api/dev/quote`** (fake mode only) runs the story's request through `create_quote_request` and `run_quote`, as `request_quote` will (prompt 27). It replaces prompt 23's `story-offers`.
 - **The Request card** reloads `GET /api/quotes?limit=1` when a `quote.*` event arrives and says where the negotiation stands in one sentence; the offers table shows the latest proposal's round ("Round 1 of 3").
+
+## November 4: the allocator on real quotes (prompt 25)
+
+Code: `apps/api/openstall_api/allocation.py` (`plan_quote`, `stored_plan`), `quotes_api.py` (`GET /api/quotes/{id}/plan`), and in the web app `src/components/allocation-panel.tsx`, `share-bar.tsx` and `src/lib/plans.ts`.
+
+- **The core decides, the API only maps.** `plan_quote` hands each maker's valid offer (one per maker; her latest, should a quote ever save two) to the core's `allocate()`, which fills the quantity cheapest first, each maker up to what she offered, and states a shortfall in a plain sentence. The story gives Priya 11, Amina 12, Lucía 10 and Grace 7 ($815.00); Noor's $29.50 is the most expensive, so she is left out.
+- **Planned when the quote is done,** in the same commit as `quote.completed`, and stored on the request (`plan_json`) with each line's offer id, so prompt 27's draft order can be built from it. Planning the same quote again stores the same plan and records no second `allocation.planned`.
+- **A short plan is still a plan:** `complete` false, the shortfall in units and the core's reason ("Only 14 of 40 units can be supplied by 2026-12-10."). The panel heads it "Only 14 of 40 possible".
+- **The share bar** follows the dataviz method: one 24px bar, a 2px surface gap between shares, the baseline end square and the far end rounded, the first five categorical slots of the reference palette in fixed order (`--series-1` to `--series-5` in `globals.css`, validated light and dark with its script: every hard gate passes; three light slots are under 3:1 against white, so the legend names every share with its units and the table has every number). A plan that falls short ends in a hatched "Short" share. Each share is focusable and shows its units and part of the whole on hover or focus; screen readers read the shares as a list.
+- **The plan table is AG Grid,** like the offers table, with the total in a pinned last row.
