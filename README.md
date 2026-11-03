@@ -14,10 +14,11 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Sellers chat on WhatsApp or in the browser.** A verified Twilio webhook stores their messages, photos and voice notes; `/seller-chat` is the same chat as a phone in the browser. One handler serves both.
 - **Stalls and the agent storefront.** Five seeded makers with stall pages and trust records (marked as demo data), and an MCP server at `/mcp`. Its `search_products` searches the live listings, with filters for price, quantity and deadline, and each result has the maker's trust record and how many she can still make by the deadline. Every search is logged, and `/demo` lists them live, with the ones that found nothing in amber. `get_product` and `get_trust_card` read a listing in full and a maker's trust card (its signature says "pending" until passports are signed). Agents without MCP read the same listings at `/catalog.json` and a short guide at `/llms.txt`, and each stall page has a "For AI agents" box with these links and the MCP address to copy.
 - **The offer rules, shown before any offer.** `/demo` lists each maker's lowest allowed price (her floor, or her list price less her maximum discount) and how many she can still make and ship in 30 days, worked out by the same code that will check every offer. Reserved orders use up her capacity, and the panel updates live.
+- **Seller agents that negotiate within limits, checked by code.** Each maker's agent proposes a price and a sentence to the buyer; code checks it against her limits and the buyer's maximum, and a refused price goes back with the reason, at most twice. A buyer's words can never talk a price below her floor. `/demo` shows every proposal live in an AG Grid table. The agents run on Claude in sandbox mode and on deterministic stand-ins in test mode.
 - **A live feed** on `/demo` of everything that happens, and a status page at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
-Still being built: seller agents that negotiate, quote requests and the allocator on `/demo`, the MCP order and checkout tools, a buyer agent you can run, receipt photos read into tracking, signed trust passports, the order that heals itself, and the hosted demo.
+Still being built: quote requests with rounds of negotiation and the allocator on `/demo`, the MCP order and checkout tools, a buyer agent you can run, receipt photos read into tracking, signed trust passports, the order that heals itself, and the hosted demo.
 
 ## Run it locally
 
@@ -39,7 +40,7 @@ Load the demo world, the five seeded makers from the spec, with `python scripts/
 
 The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP).
 
-It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real PayPal (sandbox) and Twilio (WhatsApp) adapters exist; the AI model adapters arrive with the seller agent, and until one exists the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.
+It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real PayPal (sandbox), Twilio (WhatsApp) and Claude (the language model) adapters exist; speech to text and the other AI services arrive later, and until one exists the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.
 
 Point any MCP client at the storefront, or, with the API running, use the included one in a second terminal:
 

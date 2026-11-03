@@ -242,6 +242,8 @@ class Offer(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: new_id("off"))
     request_id: Mapped[str] = mapped_column(ForeignKey("quote_requests.id", ondelete="CASCADE"), index=True)
     seller_id: Mapped[str] = mapped_column(ForeignKey("sellers.id", ondelete="CASCADE"), index=True)
+    # The listing it offers, which an order share needs (prompt 27). None only if the listing was deleted since.
+    product_id: Mapped[str | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"), index=True)
     unit_price: Mapped[Decimal] = mapped_column(Money())
     quantity: Mapped[int] = mapped_column(Integer)
     delivery_date: Mapped[date] = mapped_column(Date)
@@ -249,6 +251,8 @@ class Offer(Base):
     is_valid: Mapped[bool] = mapped_column(Boolean)
     rejection_reason: Mapped[str | None] = mapped_column(String(32))  # openstall_allocator.RejectionReason values
     round: Mapped[int] = mapped_column(Integer, default=1)
+    # 1 to 3 within the round: a proposal the code check refuses is retried with the reason (spec 3.3).
+    attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     request: Mapped[QuoteRequest] = relationship()

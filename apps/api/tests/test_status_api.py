@@ -74,13 +74,22 @@ def test_sandbox_mode_with_missing_keys_reports_missing_key(use_settings):
 
 
 def test_sandbox_mode_with_a_key_but_no_real_adapter_says_not_built(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox", OPENAI_API_KEY="sk-made-up-openai-4c7b")
+
+    adapters = adapters_by_name(get_status())
+
+    assert adapters["speech_to_text"]["status"] == "not built"
+    assert adapters["speech_to_text"]["missing_keys"] == []
+    assert adapters["messenger"]["status"] == "missing key"
+
+
+def test_sandbox_mode_with_an_anthropic_key_has_the_real_llm(use_settings):
     use_settings(OPENSTALL_MODE="sandbox", ANTHROPIC_API_KEY="sk-ant-made-up-4c7b")
 
     adapters = adapters_by_name(get_status())
 
-    assert adapters["llm"]["status"] == "not built"
+    assert adapters["llm"]["status"] == "real"
     assert adapters["llm"]["missing_keys"] == []
-    assert adapters["messenger"]["status"] == "missing key"
 
 
 @pytest.mark.parametrize("mode", ["fake", "sandbox"])

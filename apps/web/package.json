@@ -13,6 +13,8 @@
     "e2e:smoke": "playwright test --grep @smoke"
   },
   "dependencies": {
+    "ag-grid-community": "36.2.0",
+    "ag-grid-react": "36.2.0",
     "geist": "^1.8.1",
     "next": "16.4.3",
     "react": "19.3.0",

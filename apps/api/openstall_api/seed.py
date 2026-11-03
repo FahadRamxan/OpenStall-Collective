@@ -283,21 +283,26 @@ def seed_demo_order(session: Session, today: date) -> Order:
     return story_order(session, today, order_id=DEMO_ORDER_ID, request_id=DEMO_REQUEST_ID)
 
 
+def story_request(session: Session, today: date, *, request_id: str | None = None) -> QuoteRequest:
+    """The story's request (spec section 2, step 4): 40 covers, at most $30 each, due 30 days from `today`, to
+    Chicago. Without an id it gets a new one."""
+    request = QuoteRequest(
+        id=request_id or new_id("q"),
+        items_json=[{"query": DEMO_REQUEST}],
+        quantity=40,
+        max_unit_price=Decimal("30.00"),
+        deadline=today + timedelta(days=30),
+        ship_to="Chicago",
+    )
+    session.add(request)
+    return request
+
+
 def story_order(session: Session, today: date, *, order_id: str | None = None, request_id: str | None = None) -> Order:
     """A draft of the story's order with its own request, due 30 days from `today`. Without ids it gets new ones, so
     UI tests can each pay for an order of their own."""
-    request_id = request_id or new_id("q")
+    request_id = story_request(session, today, request_id=request_id).id
     deadline = today + timedelta(days=30)
-    session.add(
-        QuoteRequest(
-            id=request_id,
-            items_json=[{"query": DEMO_REQUEST}],
-            quantity=40,
-            max_unit_price=Decimal("30.00"),
-            deadline=deadline,
-            ship_to="Chicago",
-        )
-    )
     session.flush()
     parts = [DraftPart(maker.id, maker.product_id, quantity, price, deadline) for maker, quantity, price in DEMO_SPLIT]
     return create_draft_order(session, parts, order_id=order_id, request_id=request_id)

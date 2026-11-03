@@ -1,6 +1,6 @@
 """The language model: text and photos in, plain text or JSON out (spec 3.1, 3.3, 3.4 and 3.6).
 
-The real adapter (Claude, model from LLM_MODEL) comes with the listing builder. FakeLLM stands in for it in fake mode.
+The real adapter is ClaudeLLM (claude.py, model from LLM_MODEL). FakeLLM stands in for it in fake mode.
 """
 
 import copy
@@ -13,6 +13,11 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from openstall_agents.adapters.media import Media
 
 JSONObject = dict[str, Any]
+
+
+class LLMError(RuntimeError):
+    """The model gave no usable answer: it declined, was cut off, timed out, or the request failed. The message says
+    which, in words an agent's log can show."""
 
 
 @runtime_checkable

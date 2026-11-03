@@ -8,13 +8,16 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from openstall_api import offers
 from openstall_api.adapters import AdapterRegistry, get_registry
 from openstall_api.db import get_session
 from openstall_api.events_api import fake_mode_only
-from openstall_api.models import OrderPart, PartStatus
+from openstall_api.models import Offer, OrderPart, PartStatus, Product
+from openstall_api.offers import OfferOut, ask_seller
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
 from openstall_api.payments import pay_share, release_share
-from openstall_api.seed import story_order
+from openstall_api.search import SearchFilters, find_products
+from openstall_api.seed import DEMO_REQUEST, story_order, story_request
 from openstall_api.webhooks import deliver_fake_webhooks
 
 router = APIRouter(prefix="/api/dev", tags=["dev"], dependencies=[Depends(fake_mode_only)])
@@ -31,6 +34,11 @@ class NewOrder(BaseModel):
 
 class Released(BaseModel):
     released: int  # shares released
+
+
+class StoryOffers(BaseModel):
+    request_id: str
+    offers: list[OfferOut]  # every proposal, in the order the agents made them
 
 
 @router.post("/story-orders", status_code=201)
@@ -87,3 +95,29 @@ def release_reserved_shares(
     session.commit()
     background.add_task(deliver_fake_webhooks)  # simulated PayPal's VOIDED confirmations follow
     return Released(released=len(part_ids))
+
+
+@router.post("/story-offers", status_code=201)
+def run_story_offers(session: SessionDep, registry: Annotated[AdapterRegistry, Depends(get_registry)]) -> StoryOffers:
+    """The story's request (40 covers, at most $30 each, due in 30 days) asked of every maker whose listing matches it,
+    one round each, with fake mode's seller agents: their proposals, valid and refused, go to /demo's offers table.
+
+    Matching is search_products' own: the request's words, and makers who can make some by the deadline. A list price
+    over the buyer's maximum does not leave a maker out, since her agent can come down to it. Prompt 24's quote
+    requests add more rounds, time limits and running the agents side by side.
+    """
+    today = offers.clock.today()
+    request = story_request(session, today)
+    session.flush()
+    found = find_products(session, DEMO_REQUEST, SearchFilters(quantity=request.quantity, deadline=request.deadline), today)
+    for result in found:
+        product = session.get(Product, result.product_id)
+        assert product is not None
+        ask_seller(session, request, product, registry.llm, today)
+    session.commit()
+    rows = sorted(request_offers(session, request.id), key=lambda offer: (offer.created_at, offer.attempt))
+    return StoryOffers(request_id=request.id, offers=rows)
+
+
+def request_offers(session: Session, request_id: str) -> list[OfferOut]:
+    return [OfferOut.of(offer) for offer in session.scalars(select(Offer).where(Offer.request_id == request_id))]

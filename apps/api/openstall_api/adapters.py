@@ -20,6 +20,8 @@ from openstall_agents.adapters import (
     ImageSearch,
     SpeechToText,
 )
+from openstall_agents.adapters.claude import ClaudeLLM
+from openstall_agents.fake_answers import fake_answer
 from openstall_api.db import reset_engine
 from openstall_api.feeds import clear_catalog_cache
 from openstall_api.messaging import FakeMessenger, Messenger
@@ -62,6 +64,12 @@ def make_paypal_gateway(settings: Settings) -> PaymentGateway:
     )
 
 
+def make_claude(settings: Settings) -> ClaudeLLM:
+    """Claude through Anthropic's SDK, with the model from LLM_MODEL. The registry checks the key is set first."""
+    assert settings.ANTHROPIC_API_KEY
+    return ClaudeLLM(settings.ANTHROPIC_API_KEY.get_secret_value(), settings.LLM_MODEL)
+
+
 def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
     """Twilio's WhatsApp sandbox. The registry checks the keys are set before calling it."""
     assert settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN
@@ -77,7 +85,8 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         purpose="Reads sellers' photos and messages, and writes listings, offers and replies.",
         service="Claude (Anthropic)",
         keys=("ANTHROPIC_API_KEY",),
-        make_fake=lambda settings: FakeLLM(),
+        make_fake=lambda settings: FakeLLM(responder=fake_answer),
+        make_real=lambda settings: make_claude(settings),
     ),
     AdapterSpec(
         name="speech_to_text",

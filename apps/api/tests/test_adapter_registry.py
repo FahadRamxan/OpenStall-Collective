@@ -14,6 +14,8 @@ from openstall_agents.adapters import (
     ImageSearch,
     SpeechToText,
 )
+from openstall_agents.adapters.claude import ClaudeLLM
+from openstall_agents.fake_answers import fake_answer
 from openstall_api.adapters import ADAPTERS, AdapterRegistry, AdapterSpec, AdapterUnavailable, get_registry
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_paypal import (
@@ -121,12 +123,29 @@ def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_se
 
     assert statuses(registry) == {
         **dict.fromkeys(ALL_ADAPTERS, "not built"),
+        "llm": "real",
         "payment_gateway": "real",
         "messenger": "real",
     }
     assert all(report.missing_keys == () for report in registry.report())
-    with pytest.raises(AdapterUnavailable, match=r"real LLM adapter \(Claude \(Anthropic\)\).*not built yet"):
-        registry.llm
+    with pytest.raises(AdapterUnavailable, match=r"real Speech to text adapter \(OpenAI transcription\).*not built yet"):
+        registry.speech_to_text
+
+
+def test_sandbox_mode_uses_claude_with_the_model_from_the_settings(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", LLM_MODEL="claude-opus-5-5", **EVERY_KEY))
+
+    llm = registry.llm
+    assert isinstance(llm, ClaudeLLM)
+    assert llm.model == "claude-opus-5-5"
+    registry.close()
+
+
+def test_fake_modes_model_answers_as_the_seller_agents_would(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="fake"))
+
+    assert isinstance(registry.llm, FakeLLM)
+    assert registry.llm.responder is fake_answer
 
 
 @pytest.mark.parametrize(("path", "gateway"), [("payouts", PayoutsGateway), ("multiparty", MultipartyGateway)])

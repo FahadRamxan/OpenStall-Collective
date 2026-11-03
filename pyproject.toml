@@ -25,6 +25,8 @@ dependencies = [
     "paypal @ git+https://github.com/context-plugins/paypal-python-sdk.git@143e57f2a3729d7df3727386b8c9ddf023d9a5df",
     # The SDK's HTTP library: our error boundary tells its connection failures apart.
     "httpx2>=2.13.1,<3",
+    # Claude, the language model in sandbox mode (packages/agents/openstall_agents/adapters/claude.py).
+    "anthropic>=2.4,<3",
     # Form posts: Twilio's webhook, and photos and voice notes sent from /seller-chat.
     "python-multipart>=0.0.18",
 ]

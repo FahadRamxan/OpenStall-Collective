@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AgentSearches } from "@/components/agent-searches";
 import { LiveActivity } from "@/components/live-activity";
 import { OfferRules } from "@/components/offer-rules";
+import { OffersGrid } from "@/components/offers-grid";
 import { EventStreamProvider } from "@/hooks/use-event-stream";
 
 export const metadata: Metadata = { title: "Live demo" };
@@ -20,6 +21,7 @@ export default function DemoPage() {
         <EventStreamProvider>
           <OfferRules />
           <AgentSearches />
+          <OffersGrid />
           <LiveActivity />
         </EventStreamProvider>
       </div>
