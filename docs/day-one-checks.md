@@ -35,6 +35,17 @@ Once the hosted API is up (prompt 12) and the sandbox REST app exists:
 
 In fake mode the fake gateway sends the same events to the same endpoint, signed with a fixed fake key, so none of this is needed offline.
 
+## Twilio WhatsApp
+
+Once the hosted API is up and the Twilio account exists:
+
+1. In the Twilio console, open **Messaging > Try it out > Send a WhatsApp message**, and join the sandbox from each demo phone (send the sandbox's join code to its number).
+2. In the sandbox's settings, set **When a message comes in** to `https://openstall-collective-api.onrender.com/api/webhooks/twilio`, method POST. The URL must be exactly `PUBLIC_BASE_URL` plus `/api/webhooks/twilio`: Twilio signs the URL it calls, and the API checks the signature against that address.
+3. Put `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` in `.env` and in the Render dashboard. `TWILIO_WHATSAPP_FROM` is the sandbox number, `whatsapp:+14155238886` unless Twilio shows another.
+4. Check it (row 7): from a joined phone, send a photo and a voice note. Both appear on the hosted `/seller-chat` within a few seconds. Send a PDF: it is refused, and the phone gets a polite WhatsApp reply.
+
+In fake mode, `POST /api/dev/inbound` plays a seller's message with a made-up photo or voice note, so none of this is needed offline.
+
 ## Sandbox accounts
 
 Sandbox emails and merchant IDs only.

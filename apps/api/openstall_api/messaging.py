@@ -1,6 +1,6 @@
 """WhatsApp messages to sellers (spec 3.1 and 3.6): the Messenger interface, and a fake that records instead of sending.
 
-The real adapter (Twilio's WhatsApp sandbox) comes with the Twilio webhook. FakeMessenger stands in for it in fake mode.
+The real adapter, TwilioMessenger, is in whatsapp.py. FakeMessenger stands in for it in fake mode.
 """
 
 from collections.abc import Sequence

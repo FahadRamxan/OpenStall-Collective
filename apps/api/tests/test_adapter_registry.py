@@ -118,7 +118,11 @@ def test_sandbox_mode_never_falls_back_to_a_fake(use_settings):
 def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_settings):
     registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY))
 
-    assert statuses(registry) == {**dict.fromkeys(ALL_ADAPTERS, "not built"), "payment_gateway": "real"}
+    assert statuses(registry) == {
+        **dict.fromkeys(ALL_ADAPTERS, "not built"),
+        "payment_gateway": "real",
+        "messenger": "real",
+    }
     assert all(report.missing_keys == () for report in registry.report())
     with pytest.raises(AdapterUnavailable, match=r"real LLM adapter \(Claude \(Anthropic\)\).*not built yet"):
         registry.llm

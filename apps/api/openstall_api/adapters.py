@@ -23,6 +23,7 @@ from openstall_agents.adapters import (
 from openstall_api.db import reset_engine
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
+from openstall_api.whatsapp import TwilioMessenger
 from openstall_paypal import FakeGateway, MultipartyGateway, PaymentGateway, PayoutsGateway, PayPalClient
 
 # fake: a stand-in, in fake mode. real: the real service, in sandbox mode. missing key: sandbox mode, but a key the
@@ -54,6 +55,14 @@ def make_paypal_gateway(settings: Settings) -> PaymentGateway:
         settings.PAYPAL_API_BASE, settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET.get_secret_value()
     )
     return MultipartyGateway(client) if settings.PAYMENT_PATH == "multiparty" else PayoutsGateway(client)
+
+
+def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
+    """Twilio's WhatsApp sandbox. The registry checks the keys are set before calling it."""
+    assert settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN
+    return TwilioMessenger(
+        settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN.get_secret_value(), settings.TWILIO_WHATSAPP_FROM
+    )
 
 
 ADAPTERS: tuple[AdapterSpec, ...] = (
@@ -88,6 +97,7 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         service="Twilio WhatsApp sandbox",
         keys=("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
         make_fake=lambda settings: FakeMessenger(),
+        make_real=lambda settings: make_twilio_messenger(settings),
     ),
     AdapterSpec(
         name="payment_gateway",

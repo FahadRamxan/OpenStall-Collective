@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
-import { ComingSoon } from "@/components/coming-soon";
+import { SellerChatView } from "@/components/seller-chat-view";
 
 export const metadata: Metadata = { title: "Seller chat" };
 
 export default function SellerChatPage() {
   return (
-    <ComingSoon title="Seller chat">
-      The seller&apos;s side of OpenStall, in your browser. Send photos and a voice note, answer a few short
-      questions, say yes, and the listing goes live. It works the same way as the WhatsApp chat, so you can try it
-      without WhatsApp.
-    </ComingSoon>
+    <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+      <div className="max-w-2xl">
+        <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Seller chat</h1>
+        <p className="mt-3 text-lg leading-8 text-muted">
+          The sellers&apos; side of OpenStall: what each maker sends on WhatsApp, photos and voice notes included,
+          and what OpenStall answers. New messages appear as they arrive.
+        </p>
+      </div>
+      <div className="mt-8">
+        {/* The chosen seller is in the query string, which is only known per request. */}
+        <Suspense fallback={null}>
+          <SellerChatView />
+        </Suspense>
+      </div>
+    </section>
   );
 }
