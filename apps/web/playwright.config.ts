@@ -51,7 +51,7 @@ export default defineConfig({
   webServer: [
     {
       name: "API",
-      command: `node "${resetDataScript}" "${dataDir}" && "${python()}" scripts/seed_demo.py --reset --with-amina && "${python()}" -m uvicorn openstall_api.main:app --host 127.0.0.1 --port ${apiPort} --log-level warning`,
+      command: `node "${resetDataScript}" "${dataDir}" && "${python()}" scripts/seed_demo.py --reset --demo-order && "${python()}" -m uvicorn openstall_api.main:app --host 127.0.0.1 --port ${apiPort} --log-level warning`,
       cwd: repoRoot,
       url: `${apiURL}/health`,
       env: {

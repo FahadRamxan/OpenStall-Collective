@@ -6,14 +6,15 @@ order. Seeding is idempotent: the same input gives the same rows, signatures inc
 """
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from openstall_api.models import Base, DataSource, Passport, Product, ProductStatus, Seller
+from openstall_api.models import Base, DataSource, Order, Passport, Product, ProductStatus, QuoteRequest, Seller
+from openstall_api.orders import DraftPart, create_draft_order
 from openstall_api.passports import issue_passport
 
 MAX_DISCOUNT_PCT = 15
@@ -227,3 +228,34 @@ def _seed_maker(session: Session, maker: SeedMaker) -> None:
             issued_at=SEEDED_AT,
         )
     )
+
+
+# The story's order (spec section 2, step 7) as a draft, so the approval page can be shown before the allocator runs.
+# Grace's $29 is her negotiated price: her $32 list price is over the buyer's $30 cap.
+DEMO_ORDER_ID = "ord_demo"
+DEMO_REQUEST_ID = "q_demo"
+DEMO_REQUEST = "40 hand-embroidered cushion covers for corporate gifts"
+DEMO_SPLIT = ((AMINA, 12, "18.00"), (PRIYA, 11, "16.00"), (LUCIA, 10, "22.00"), (GRACE, 7, "29.00"))
+
+
+def seed_demo_order(session: Session, today: date) -> Order:
+    """A fresh draft of the story's order, due 30 days from `today`. An earlier demo order is replaced."""
+    for model, row_id in ((Order, DEMO_ORDER_ID), (QuoteRequest, DEMO_REQUEST_ID)):
+        existing = session.get(model, row_id)
+        if existing is not None:
+            session.delete(existing)
+    session.flush()
+    deadline = today + timedelta(days=30)
+    session.add(
+        QuoteRequest(
+            id=DEMO_REQUEST_ID,
+            items_json=[{"query": DEMO_REQUEST}],
+            quantity=40,
+            max_unit_price=Decimal("30.00"),
+            deadline=deadline,
+            ship_to="Chicago",
+        )
+    )
+    session.flush()
+    parts = [DraftPart(maker.id, maker.product_id, quantity, price, deadline) for maker, quantity, price in DEMO_SPLIT]
+    return create_draft_order(session, parts, order_id=DEMO_ORDER_ID, request_id=DEMO_REQUEST_ID)

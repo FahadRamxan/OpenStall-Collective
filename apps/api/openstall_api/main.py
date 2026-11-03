@@ -11,6 +11,7 @@ from openstall_api import __version__
 from openstall_api.catalog_api import router as catalog_router
 from openstall_api.db import REPO_ROOT, migrate
 from openstall_api.events_api import router as events_router
+from openstall_api.orders_api import router as orders_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
 from openstall_api.storefront import storefront, storefront_http_app
@@ -55,6 +56,7 @@ def health() -> dict[str, str]:
 app.include_router(status_router)
 app.include_router(events_router)
 app.include_router(catalog_router)
+app.include_router(orders_router)
 
 # The seed photos (placeholders until the team adds its own). Seller photos from chats come in a later prompt.
 app.mount("/media/seed", StaticFiles(directory=REPO_ROOT / "assets" / "seed"), name="seed-media")

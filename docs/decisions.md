@@ -148,3 +148,13 @@ Code: `apps/api/openstall_api/seed.py` (the makers), `scripts/seed_demo.py` (the
 - **Prices travel as strings** ("16.00") in the web API, so they stay exact; the MCP storefront still gives agents a number. Photo addresses are paths on the API (`/media/seed/...`), so they work on every host; the web app adds the API's base URL.
 - **The storefront searches the database,** live listings only, matching words in the title, category and colours. The in-memory catalog is gone.
 - **Stall pages render in the browser,** like the status page: the id comes from the URL inside a Suspense boundary (needed with Cache Components), and the page has loading, not-found and error states.
+
+## November 3: draft orders and the approval page (prompt 09)
+
+Code: `apps/api/openstall_api/orders.py` (shares, totals, status rules), `orders_api.py`, and in the web app `src/components/approval-view.tsx`.
+
+- **Totals are worked out on the server, in cents.** `create_draft_order` takes each share's quantity and unit price and nothing else about money; the total is the sum of the shares. `POST /api/orders/{id}/verify-total` answers 409 when a client's total differs (spec section 7). Unit prices must be whole cents, so a sub-cent price is refused rather than rounded.
+- **One share per seller,** numbered `op_001`, `op_002` ... within the order. A seller listed twice is refused: her capacity is hers, and two shares could promise the same units twice.
+- **The status rules live in two tables** (`ORDER_MOVES`, `PART_MOVES`) and every change goes through `move_order` or `move_part`, which refuse anything else. They encode pay-on-proof: a share is captured only after the order is authorized, a released share is never captured, and a captured share is never released.
+- **The demo order** (`seed_demo.py --demo-order`, id `ord_demo`) is the story's split, Amina 12 × $18, Priya 11 × $16, Lucía 10 × $22, Grace 7 × $29 = $815.00, due 30 days after the run date, with the buyer's request. It lets the approval page be built and tested before the allocator and the MCP tools exist. Grace's $29 stands for her negotiated price.
+- **The approval page explains pay-on-proof before the button,** in plain words: PayPal reserves the total, each maker is paid when she sends her shipping receipt, and a maker who cannot deliver has her share released. The button stays disabled, with a note, until prompt 10 turns on the PayPal sandbox checkout.
