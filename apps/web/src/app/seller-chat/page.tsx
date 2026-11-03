@@ -11,8 +11,8 @@ export default function SellerChatPage() {
       <div className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Seller chat</h1>
         <p className="mt-3 text-lg leading-8 text-muted">
-          The sellers&apos; side of OpenStall: what each maker sends on WhatsApp, photos and voice notes included,
-          and what OpenStall answers. New messages appear as they arrive.
+          The sellers&apos; side of OpenStall. Be a seller from your demo phone, with the same chat makers have on
+          WhatsApp, or watch what they send: photos, voice notes and OpenStall&apos;s answers, as they arrive.
         </p>
       </div>
       <div className="mt-8">

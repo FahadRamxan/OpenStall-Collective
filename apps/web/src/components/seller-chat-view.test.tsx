@@ -1,17 +1,20 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SellerChatView } from "@/components/seller-chat-view";
 import type { ChatSummary, Conversation } from "@/lib/chats";
+import { saveDemoPhone } from "@/lib/demo-phone";
 import type { FeedEvent } from "@/lib/events";
 
 const search = { params: new URLSearchParams("seller=s_amina") };
 const stream = { events: [] as FeedEvent[] };
-vi.mock("next/navigation", () => ({ useSearchParams: () => search.params }));
+const router = { push: vi.fn() };
+vi.mock("next/navigation", () => ({ useSearchParams: () => search.params, useRouter: () => router }));
 vi.mock("@/hooks/use-event-stream", () => ({
   useEventStream: () => ({ events: stream.events, connected: true, error: null }),
 }));
 
+const WELCOME = "Welcome to OpenStall! Send photos of what you make.";
 const AMINA = { id: "s_amina", name: "Amina", city: "Lahore", country: "PK" };
 const CHATS: ChatSummary[] = [
   {
@@ -56,18 +59,33 @@ const CONVERSATION: Conversation = {
     },
   ],
 };
+const MINE: Conversation = {
+  seller: { id: "s_web", name: "Web seller 2B40", city: null, country: null },
+  messages: [
+    { id: "cm_9", direction: "inbound", channel: "web", text: "I make quilts", media: [], created_at: "2026-11-03T11:00:00Z" },
+    { id: "cm_10", direction: "outbound", channel: "web", text: WELCOME, media: [], created_at: "2026-11-03T11:00:01Z" },
+  ],
+};
 
-function api(routes: Record<string, () => Response>) {
-  return vi.fn((url: string) => {
-    const path = new URL(url).pathname;
-    const route = routes[path];
-    return Promise.resolve(route ? route() : Response.json({ detail: "Not found" }, { status: 404 }));
+type Handler = (init?: RequestInit) => Response;
+
+function api(routes: Record<string, Handler>) {
+  return vi.fn((url: string, init?: RequestInit) => {
+    const route = routes[`${init?.method ?? "GET"} ${new URL(url).pathname}`];
+    return Promise.resolve(route ? route(init) : Response.json({ detail: "Not found" }, { status: 404 }));
   });
 }
+
+const BROWSING: Record<string, Handler> = {
+  "GET /api/chats": () => Response.json(CHATS),
+  "GET /api/chats/s_amina": () => Response.json(CONVERSATION),
+};
 
 beforeEach(() => {
   search.params = new URLSearchParams("seller=s_amina");
   stream.events = [];
+  router.push.mockClear();
+  saveDemoPhone(null);
   vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://api.test");
 });
 
@@ -76,9 +94,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("SellerChatView", () => {
-  it("lists the sellers who have chatted and marks the chosen one", async () => {
-    vi.stubGlobal("fetch", api({ "/api/chats": () => Response.json(CHATS), "/api/chats/s_amina": () => Response.json(CONVERSATION) }));
+describe("SellerChatView, watching a WhatsApp chat", () => {
+  it("lists the sellers who have chatted and marks the one shown", async () => {
+    vi.stubGlobal("fetch", api(BROWSING));
 
     render(<SellerChatView />);
 
@@ -92,7 +110,7 @@ describe("SellerChatView", () => {
   });
 
   it("shows her messages as bubbles, with her photo, her voice note and what could not be kept", async () => {
-    vi.stubGlobal("fetch", api({ "/api/chats": () => Response.json(CHATS), "/api/chats/s_amina": () => Response.json(CONVERSATION) }));
+    vi.stubGlobal("fetch", api(BROWSING));
 
     render(<SellerChatView />);
 
@@ -107,15 +125,8 @@ describe("SellerChatView", () => {
     expect(fromHer.querySelector("audio")).toHaveAttribute("src", "http://api.test/media/uploads/def.wav");
     expect(fromHer).toHaveTextContent("A file that was not kept: Only photos and voice notes can be kept.");
     expect(reply).toHaveTextContent("OpenStall: Sorry, I could not keep one of your files.");
-  });
-
-  it("without a choice, shows the most recent conversation", async () => {
-    search.params = new URLSearchParams();
-    vi.stubGlobal("fetch", api({ "/api/chats": () => Response.json(CHATS), "/api/chats/s_amina": () => Response.json(CONVERSATION) }));
-
-    render(<SellerChatView />);
-
-    expect(await screen.findByRole("list", { name: "Messages with Amina" })).toBeInTheDocument();
+    expect(screen.getByText(/You are watching this chat. It happens on WhatsApp./)).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Send a message" })).not.toBeInTheDocument();
   });
 
   it("a new message appears without reloading", async () => {
@@ -130,8 +141,8 @@ describe("SellerChatView", () => {
     vi.stubGlobal(
       "fetch",
       api({
-        "/api/chats": () => Response.json(CHATS),
-        "/api/chats/s_amina": () => Response.json(conversations.length > 1 ? conversations.shift() : conversations[0]),
+        "GET /api/chats": () => Response.json(CHATS),
+        "GET /api/chats/s_amina": () => Response.json(conversations.length > 1 ? conversations.shift() : conversations[0]),
       }),
     );
     const { rerender } = render(<SellerChatView />);
@@ -152,21 +163,126 @@ describe("SellerChatView", () => {
     expect(await screen.findByText("Mirror work too")).toBeInTheDocument();
   });
 
-  it("before anyone writes, says how a chat begins", async () => {
-    search.params = new URLSearchParams();
-    vi.stubGlobal("fetch", api({ "/api/chats": () => Response.json([]) }));
-
-    render(<SellerChatView />);
-
-    expect(await screen.findByText(/No seller has written yet/)).toBeInTheDocument();
-  });
-
   it("an unknown seller says so", async () => {
     search.params = new URLSearchParams("seller=s_nobody");
-    vi.stubGlobal("fetch", api({ "/api/chats": () => Response.json(CHATS) }));
+    vi.stubGlobal("fetch", api({ "GET /api/chats": () => Response.json(CHATS) }));
 
     render(<SellerChatView />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("There is no seller at this address.");
+  });
+});
+
+describe("SellerChatView, your own demo phone", () => {
+  beforeEach(() => {
+    search.params = new URLSearchParams();
+  });
+
+  it("starts empty, ready for your first message", async () => {
+    vi.stubGlobal("fetch", api({ "GET /api/chats": () => Response.json([]) }));
+
+    render(<SellerChatView />);
+
+    expect(await screen.findByText(/No seller has written yet/)).toBeInTheDocument();
+    expect(screen.getByText("Send a photo of something you make, or tell OpenStall about it, to start.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
+  it("sends your message from a new demo phone and shows OpenStall's reply", async () => {
+    let sent: FormData | null = null;
+    const fetchMock = api({
+      "GET /api/chats": () => Response.json([]),
+      "POST /api/seller-chat/messages": (init) => {
+        sent = init?.body as FormData;
+        return Response.json({ seller_id: "s_web", message_id: "cm_9", replies: [WELCOME] });
+      },
+      "GET /api/chats/s_web": () => Response.json(MINE),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SellerChatView />);
+
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "I make quilts" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(WELCOME)).toBeInTheDocument();
+    const thread = screen.getByRole("list", { name: "Your messages with OpenStall" });
+    const [mine, reply] = within(thread).getAllByRole("listitem");
+    expect(mine).toHaveTextContent(/^You: I make quilts/);
+    expect(mine).toHaveTextContent("Sent");
+    expect(reply).toHaveTextContent(`OpenStall: ${WELCOME}`);
+    expect(sent!.get("text")).toBe("I make quilts");
+    expect(sent!.get("sender")).toMatch(/^demo-[0-9a-f]{12}$/);
+    expect(JSON.parse(window.localStorage.getItem("openstall-demo-phone")!)).toEqual({
+      id: sent!.get("sender"),
+      sellerId: "s_web",
+    });
+    expect(screen.getByLabelText("Message")).toHaveValue("");
+  });
+
+  it("sends an attached photo with the message", async () => {
+    let sent: FormData | null = null;
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json([]),
+        "POST /api/seller-chat/messages": (init) => {
+          sent = init?.body as FormData;
+          return Response.json({ seller_id: "s_web", message_id: "cm_9", replies: [WELCOME] });
+        },
+        "GET /api/chats/s_web": () => Response.json(MINE),
+      }),
+    );
+    render(<SellerChatView />);
+    const photo = new File(["png"], "cushion.png", { type: "image/png" });
+
+    fireEvent.change(screen.getByLabelText("Attach a photo"), { target: { files: [photo] } });
+    expect(within(screen.getByRole("list", { name: "Attached" })).getByText("cushion.png")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(WELCOME)).toBeInTheDocument();
+    expect((sent!.getAll("files")[0] as File).name).toBe("cushion.png");
+  });
+
+  it("a message that could not be sent stays in the box, with the reason", async () => {
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json([]),
+        "POST /api/seller-chat/messages": () =>
+          Response.json({ detail: "Write a message or attach a photo or voice note." }, { status: 422 }),
+      }),
+    );
+    render(<SellerChatView />);
+
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Hello?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Not sent: Write a message or attach");
+    expect(screen.getByLabelText("Message")).toHaveValue("Hello?");
+  });
+
+  it("without a microphone, offers to upload a voice note instead", async () => {
+    vi.stubGlobal("fetch", api({ "GET /api/chats": () => Response.json([]) }));
+
+    render(<SellerChatView />);
+
+    expect(await screen.findByLabelText("Upload a voice note")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Record a voice note" })).not.toBeInTheDocument();
+  });
+
+  it("Start as a new seller forgets this browser's seller", async () => {
+    saveDemoPhone({ id: "demo-3f9a1c7e2b40", sellerId: "s_web" });
+    vi.stubGlobal(
+      "fetch",
+      api({ "GET /api/chats": () => Response.json([]), "GET /api/chats/s_web": () => Response.json(MINE) }),
+    );
+    render(<SellerChatView />);
+    expect(await screen.findByText("I make quilts")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start as a new seller" }));
+
+    expect(window.localStorage.getItem("openstall-demo-phone")).toBeNull();
+    expect(router.push).toHaveBeenCalledWith("/seller-chat");
+    expect(screen.queryByText("I make quilts")).not.toBeInTheDocument();
   });
 });

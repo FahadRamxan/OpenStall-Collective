@@ -57,3 +57,39 @@ test("the seller chat fits a phone screen", async ({ page, request }) => {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await page.screenshot({ path: path.join(SCREENSHOTS, "seller-chat-375.png"), fullPage: true });
 });
+
+test("from your demo phone, a photo and a message get OpenStall's welcome, and you can start over", async ({
+  page,
+  request,
+}) => {
+  // A real photo to upload: the made-up embroidery photo, as the API keeps it.
+  await sendOnWhatsApp(request, { sender: `+92302${String(Date.now()).slice(-7)}`, text: "photo", photo: true });
+  const [chat] = (await (await request.get(`${E2E_API_URL}/api/chats`)).json()) as { seller: { id: string } }[];
+  const conversation = await (await request.get(`${E2E_API_URL}/api/chats/${chat.seller.id}`)).json();
+  const photo = await (await request.get(`${E2E_API_URL}${conversation.messages[0].media[0].url}`)).body();
+
+  await page.goto("/seller-chat");
+  const thread = page.getByRole("list", { name: "Your messages with OpenStall" });
+  await expect(thread).toContainText("Send a photo of something you make");
+
+  await page.getByRole("textbox", { name: "Message" }).fill("Salaam! I embroider cushion covers in Lahore.");
+  await page.getByLabel("Attach a photo").setInputFiles({ name: "cushion.png", mimeType: "image/png", buffer: photo });
+  await expect(page.getByRole("list", { name: "Attached" })).toContainText("cushion.png");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(thread).toContainText("Salaam! I embroider cushion covers in Lahore.");
+  await expect(thread).toContainText("Welcome to OpenStall!");
+  await expect(thread.getByRole("img", { name: "A photo the seller sent" })).toBeVisible();
+  await expect(thread.getByText(/· Sent$/)).toHaveCount(1);
+
+  await page.getByRole("textbox", { name: "Message" }).fill("$18 each, 4 a week.");
+  await page.getByRole("textbox", { name: "Message" }).press("Enter");
+  await expect(thread).toContainText("Thank you, I have your message.");
+  await expect(page.getByRole("list", { name: "Sellers who have chatted" })).toContainText("(you)");
+  await page.screenshot({ path: path.join(SCREENSHOTS, "seller-chat-phone-1280.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "Start as a new seller" }).click();
+
+  await expect(thread).toContainText("Send a photo of something you make");
+  await expect(thread).not.toContainText("Welcome to OpenStall!");
+});

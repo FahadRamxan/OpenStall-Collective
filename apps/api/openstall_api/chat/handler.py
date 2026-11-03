@@ -1,9 +1,13 @@
-"""The chat handler: what happens when a seller sends us something, on any channel.
+"""The chat handler: what happens when a seller sends us something, on WhatsApp or on /seller-chat.
 
-handle_inbound finds or creates the seller and her chat, stores her message and the replies, and records both in the
-event log, so pages showing the chat update live. The caller delivers the replies: the WhatsApp webhook sends them
-through the Messenger. Later steps add the listing conversation itself (spec 3.1); for now the replies only say
-when a file could not be kept.
+handle_inbound is the one function both channels call (spec 3.1), so the same input gives the same stored messages
+and the same replies. It finds or creates the seller and her chat, stores her message and the replies, and records
+both in the event log, so pages showing the chat update live. The caller delivers the replies: the WhatsApp webhook
+sends them through the Messenger, and the web chat shows them.
+
+The chat moves through the states collecting, asking, awaiting_confirmation and live. Later steps give each state its
+own turn (transcribing, drafting the listing, asking what is missing, publishing); for now every turn welcomes a new
+seller, or says what arrived.
 """
 
 from collections.abc import Sequence
@@ -22,9 +26,17 @@ DIALING_CODES = {"92": "PK", "91": "IN", "52": "MX", "44": "GB", "1": "US"}
 CHANNEL_WORDS = {Channel.WHATSAPP: "on WhatsApp", Channel.WEB: "in the web chat"}
 
 
+WELCOME = (
+    "Welcome to OpenStall! Send photos of what you make and tell me about it, by text or a voice note. I will "
+    "turn it into a listing that AI shopping agents can find, and you are paid through PayPal when you ship."
+)
+NUDGE = "Send more photos, or tell me the price and how many you can make each week."
+
+
 @dataclass(frozen=True)
 class Sender:
-    """Who a message is from. On WhatsApp, her number in E.164 form, and her profile name as a first guess."""
+    """Who a message is from. On WhatsApp: her number in E.164 form, and her profile name as a first guess at her
+    name. On the web: the demo phone id her browser keeps."""
 
     channel: Channel
     address: str
@@ -69,14 +81,16 @@ def country_of(number: str) -> str | None:
 
 def find_seller(session: Session, sender: Sender) -> Seller:
     """The seller behind a sender, made on her first message. Her profile name is only a first guess at her name."""
-    seller = session.scalar(select(Seller).where(Seller.whatsapp_number == sender.address))
+    if sender.channel == Channel.WHATSAPP:
+        seller = session.scalar(select(Seller).where(Seller.whatsapp_number == sender.address))
+        made = {"whatsapp_number": sender.address, "country": country_of(sender.address)}
+        name = sender.name_guess or "New seller"
+    else:
+        seller = session.scalar(select(Seller).where(Seller.web_chat_id == sender.address))
+        made = {"web_chat_id": sender.address}
+        name = sender.name_guess or f"Web seller {sender.address[-4:].upper()}"
     if seller is None:
-        seller = Seller(
-            name=(sender.name_guess or "New seller")[:120],
-            whatsapp_number=sender.address,
-            country=country_of(sender.address),
-            data_source=DataSource.LIVE,
-        )
+        seller = Seller(name=name[:120], data_source=DataSource.LIVE, **made)
         session.add(seller)
         session.flush()
     return seller
@@ -123,6 +137,37 @@ def describe(text: str, media: list[dict[str, Any]]) -> str:
     return " and ".join([", ".join(parts[:-1]), parts[-1]] if len(parts) > 1 else parts)
 
 
+def received(text: str, media: list[dict[str, Any]]) -> str | None:
+    """What arrived, in words for the seller: "your photo and your message". None when nothing was kept."""
+    photos = sum(1 for item in media if str(item.get("content_type", "")).startswith("image/") and "key" in item)
+    voice = sum(1 for item in media if str(item.get("content_type", "")).startswith("audio/") and "key" in item)
+    parts = []
+    if photos:
+        parts.append("your photo" if photos == 1 else f"your {photos} photos")
+    if voice:
+        parts.append("your voice note" if voice == 1 else f"your {voice} voice notes")
+    if text:
+        parts.append("your message")
+    if not parts:
+        return None
+    return " and ".join([", ".join(parts[:-1]), parts[-1]] if len(parts) > 1 else parts)
+
+
+def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]]) -> list[Reply]:
+    """The chat's answer to one message, from its state. Files that could not be kept are always said first."""
+    replies = [
+        Reply(f"Sorry, I could not keep one of your files: {item['refused']} Photos and voice notes work best.")
+        for item in media
+        if "refused" in item
+    ]
+    what = received(text, media)
+    if first:
+        replies.append(Reply(WELCOME))
+    elif what:
+        replies.append(Reply(f"Thank you, I have {what}. {NUDGE}"))
+    return replies
+
+
 def save_message(
     session: Session, chat: ChatSession, direction: Direction, text: str, media: list[dict[str, Any]]
 ) -> ChatMessage:
@@ -141,6 +186,9 @@ def handle_inbound(
     """Store a seller's message and work out the replies. The caller commits, then delivers the replies."""
     seller = find_seller(session, sender)
     chat = find_chat(session, seller, sender.channel)
+    first = not session.scalar(
+        select(ChatMessage.id).where(ChatMessage.session_id == chat.id, ChatMessage.direction == Direction.INBOUND)
+    )
     media = keep_media(store, files)
     message = save_message(session, chat, Direction.INBOUND, text, media)
     record_event(
@@ -150,11 +198,7 @@ def handle_inbound(
         entity_id=seller.id,
         payload={"channel": sender.channel, "message_id": message.id},
     )
-    replies = [
-        Reply(f"Sorry, I could not keep one of your files: {item['refused']} Photos and voice notes work best.")
-        for item in media
-        if "refused" in item
-    ]
+    replies = turn(chat, first, text, media)
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(

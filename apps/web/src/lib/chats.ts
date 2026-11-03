@@ -1,4 +1,4 @@
-import { apiGet } from "@/lib/api";
+import { apiFetch, apiGet } from "@/lib/api";
 
 export type ChatChannel = "whatsapp" | "web";
 
@@ -35,6 +35,18 @@ export function getChats(init: RequestInit = {}): Promise<ChatSummary[]> {
 /** One seller's messages on every channel, oldest first. */
 export function getConversation(sellerId: string, init: RequestInit = {}): Promise<Conversation> {
   return apiGet<Conversation>(`/api/chats/${encodeURIComponent(sellerId)}`, init);
+}
+
+/** What the web chat answers: who the seller is now, her message's id, and OpenStall's replies. */
+export type WebChatReply = { seller_id: string; message_id: string; replies: string[] };
+
+/** A message from the browser's demo phone: text, photos and voice notes, handled exactly as on WhatsApp. */
+export function sendWebMessage(sender: string, text: string, files: File[]): Promise<WebChatReply> {
+  const form = new FormData();
+  form.set("sender", sender);
+  form.set("text", text);
+  for (const file of files) form.append("files", file);
+  return apiFetch<WebChatReply>("/api/seller-chat/messages", { method: "POST", body: form });
 }
 
 export const CHANNEL_LABELS: Record<ChatChannel, string> = { whatsapp: "WhatsApp", web: "Web chat" };

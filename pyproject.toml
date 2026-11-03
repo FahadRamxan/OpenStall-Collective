@@ -18,8 +18,10 @@ dependencies = [
     "alembic>=1.13,<2",
     # Server-sent events for the live feed (the MCP SDK already depends on it).
     "sse-starlette>=3,<4",
-    # HTTP for the PayPal client (and later Twilio media downloads).
+    # HTTP for the PayPal client and Twilio media downloads.
     "httpx>=0.27,<1",
+    # Form posts: Twilio's webhook, and photos and voice notes sent from /seller-chat.
+    "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]

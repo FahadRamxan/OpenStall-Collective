@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { ChatComposer } from "@/components/chat-composer";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
 import { mediaUrl, place } from "@/lib/catalog";
@@ -13,26 +14,40 @@ import {
   getChats,
   getConversation,
   messageTime,
+  sendWebMessage,
   type ChatMedia,
   type ChatMessage,
   type ChatSummary,
   type Conversation,
 } from "@/lib/chats";
+import { newDemoPhoneId, saveDemoPhone, useDemoPhone } from "@/lib/demo-phone";
 
 type Load<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "failed"; message: string };
 
+/** A message on its way: shown at once, and replaced by the stored one when the conversation reloads. */
+type Pending = { key: number; text: string; files: File[]; messageId: string | null };
+
 /**
- * Sellers' conversations with OpenStall, as chat bubbles: what they sent on WhatsApp, photos and voice notes
- * included, and every reply. It follows the event log, so a new message appears without reloading.
+ * The sellers' side of OpenStall. In your own demo phone you are a seller: write, attach photos and record a voice
+ * note, and OpenStall answers through the same handler as on WhatsApp. Other sellers' WhatsApp chats can be watched.
+ * It follows the event log, so new messages appear without reloading.
  */
 export function SellerChatView() {
   const chosen = useSearchParams().get("seller");
+  const router = useRouter();
+  const phone = useDemoPhone();
   const [chats, setChats] = useState<Load<ChatSummary[]>>({ state: "loading" });
   const [conversation, setConversation] = useState<Load<Conversation> | null>(null);
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const nextKey = useRef(1);
   const { events } = useEventStream();
   // The newest message event: when it changes, someone wrote, so look again.
   const latestMessage = events.find((event) => event.type.startsWith("message."))?.id ?? 0;
-  const sellerId = chosen ?? (chats.state === "loaded" ? chats.value[0]?.seller.id : undefined);
+
+  const mine = !chosen || chosen === phone?.sellerId;
+  const sellerId = chosen ?? phone?.sellerId ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,13 +57,16 @@ export function SellerChatView() {
         if (!controller.signal.aborted) setChats({ state: "failed", message: errorMessage(error) });
       });
     return () => controller.abort();
-  }, [latestMessage]);
+  }, [latestMessage, version]);
 
   useEffect(() => {
     if (!sellerId) return;
     const controller = new AbortController();
     getConversation(sellerId, { signal: controller.signal })
-      .then((value) => setConversation({ state: "loaded", value }))
+      .then((value) => {
+        setConversation({ state: "loaded", value });
+        setPending((list) => list.filter((item) => !value.messages.some((message) => message.id === item.messageId)));
+      })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         const message =
@@ -58,32 +76,129 @@ export function SellerChatView() {
         setConversation({ state: "failed", message });
       });
     return () => controller.abort();
-  }, [sellerId, latestMessage]);
+  }, [sellerId, latestMessage, version]);
 
+  async function send(text: string, files: File[]): Promise<boolean> {
+    const current = phone ?? { id: newDemoPhoneId(), sellerId: null };
+    const key = nextKey.current++;
+    setProblem(null);
+    setPending((list) => [...list, { key, text, files, messageId: null }]);
+    try {
+      const sent = await sendWebMessage(current.id, text, files);
+      setPending((list) => list.map((item) => (item.key === key ? { ...item, messageId: sent.message_id } : item)));
+      if (current.sellerId !== sent.seller_id) saveDemoPhone({ id: current.id, sellerId: sent.seller_id });
+      setVersion((count) => count + 1);
+      return true;
+    } catch (error) {
+      setPending((list) => list.filter((item) => item.key !== key));
+      setProblem(`Not sent: ${errorMessage(error)}`);
+      return false;
+    }
+  }
+
+  function startOver() {
+    saveDemoPhone(null);
+    setConversation(null);
+    setPending([]);
+    setProblem(null);
+    router.push("/seller-chat");
+  }
+
+  // Only the conversation of the seller being looked at: never the last one's while the next one loads.
+  const loaded =
+    conversation?.state === "loaded" && conversation.value.seller.id === sellerId ? conversation.value : null;
   return (
     <div className="grid gap-6 lg:grid-cols-[18rem_1fr]">
-      <section aria-labelledby="sellers-heading" className="min-w-0">
-        <h2 id="sellers-heading" className="text-sm font-semibold tracking-wide text-muted uppercase">
-          Sellers
-        </h2>
-        <SellerPicker chats={chats} selected={sellerId} />
-      </section>
+      <div className="min-w-0 space-y-6">
+        <section aria-labelledby="phone-heading" className="rounded-2xl border border-border bg-surface p-4">
+          <h2 id="phone-heading" className="font-semibold">
+            Your demo phone
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Be a seller: send a photo of something you make, and OpenStall answers as it would on WhatsApp.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {!mine ? (
+              <Link
+                href={phone?.sellerId ? `/seller-chat?seller=${encodeURIComponent(phone.sellerId)}` : "/seller-chat"}
+                className="inline-flex min-h-11 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-foreground hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Open your chat
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={startOver}
+              className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Start as a new seller
+            </button>
+          </div>
+        </section>
+        <section aria-labelledby="sellers-heading" className="min-w-0">
+          <h2 id="sellers-heading" className="text-sm font-semibold tracking-wide text-muted uppercase">
+            Sellers
+          </h2>
+          <SellerPicker chats={chats} selected={sellerId} mySellerId={phone?.sellerId ?? null} />
+        </section>
+      </div>
       <section aria-label="Conversation" className="min-w-0">
-        {!sellerId ? null : conversation === null || conversation.state === "loading" ? (
-          <div aria-busy="true" aria-label="Loading the conversation" className="h-96 animate-pulse rounded-3xl bg-border/60" />
-        ) : conversation.state === "failed" ? (
+        {mine ? (
+          <Phone
+            title={loaded?.seller.name ?? "You"}
+            subtitle="Web chat · your demo phone"
+            messages={sellerId ? (loaded?.messages ?? []) : []}
+            perspective="seller"
+            pending={pending}
+            loading={!!sellerId && !loaded && conversation?.state !== "failed"}
+            empty="Send a photo of something you make, or tell OpenStall about it, to start."
+            footer={
+              <>
+                {problem ? (
+                  <p role="alert" className="border-t border-border bg-danger-soft px-4 py-2 text-sm">
+                    {problem}
+                  </p>
+                ) : null}
+                <ChatComposer onSend={send} busy={pending.some((item) => item.messageId === null)} />
+              </>
+            }
+          />
+        ) : conversation?.state === "failed" ? (
           <p role="alert" className="rounded-2xl border border-border bg-surface p-5 text-muted">
             {conversation.message}
           </p>
+        ) : !loaded ? (
+          <div aria-busy="true" aria-label="Loading the conversation" className="h-96 animate-pulse rounded-3xl bg-border/60" />
         ) : (
-          <Thread conversation={conversation.value} />
+          <Phone
+            title={loaded.seller.name}
+            subtitle={place(loaded.seller.city, loaded.seller.country) ?? "Where she lives is not known yet"}
+            messages={loaded.messages}
+            perspective="watcher"
+            pending={[]}
+            loading={false}
+            empty="No messages yet."
+            footer={
+              <p className="border-t border-border bg-surface px-5 py-3 text-sm text-muted">
+                You are watching this chat. It happens on {CHANNEL_LABELS[loaded.messages[0]?.channel ?? "whatsapp"]}.
+              </p>
+            }
+          />
         )}
       </section>
     </div>
   );
 }
 
-function SellerPicker({ chats, selected }: { chats: Load<ChatSummary[]>; selected: string | undefined }) {
+function SellerPicker({
+  chats,
+  selected,
+  mySellerId,
+}: {
+  chats: Load<ChatSummary[]>;
+  selected: string | null;
+  mySellerId: string | null;
+}) {
   if (chats.state === "loading") {
     return <div aria-busy="true" aria-label="Loading the sellers" className="mt-3 h-24 animate-pulse rounded-xl bg-border/60" />;
   }
@@ -97,8 +212,8 @@ function SellerPicker({ chats, selected }: { chats: Load<ChatSummary[]>; selecte
   if (chats.value.length === 0) {
     return (
       <p className="mt-3 rounded-xl border border-dashed border-border p-4 text-sm leading-6 text-muted">
-        No seller has written yet. When a maker sends a photo or a voice note to our WhatsApp number, her chat appears
-        here.
+        No seller has written yet. When a maker sends a photo or a voice note to our WhatsApp number, or you send one
+        from your demo phone, her chat appears here.
       </p>
     );
   }
@@ -117,7 +232,10 @@ function SellerPicker({ chats, selected }: { chats: Load<ChatSummary[]>; selecte
               }`}
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="truncate font-semibold">{chat.seller.name}</span>
+                <span className="truncate font-semibold">
+                  {chat.seller.name}
+                  {chat.seller.id === mySellerId ? <span className="font-normal text-muted"> (you)</span> : null}
+                </span>
                 <Badge tone={chat.channel === "whatsapp" ? "success" : "accent"}>{CHANNEL_LABELS[chat.channel]}</Badge>
               </span>
               {where ? <span className="mt-0.5 block text-xs text-muted">{where}</span> : null}
@@ -130,14 +248,32 @@ function SellerPicker({ chats, selected }: { chats: Load<ChatSummary[]>; selecte
   );
 }
 
-function Thread({ conversation }: { conversation: Conversation }) {
+/** A phone-style thread. As the seller, your messages are on the right; watching, the seller's are on the left. */
+function Phone({
+  title,
+  subtitle,
+  messages,
+  perspective,
+  pending,
+  loading,
+  empty,
+  footer,
+}: {
+  title: string;
+  subtitle: string;
+  messages: ChatMessage[];
+  perspective: "seller" | "watcher";
+  pending: Pending[];
+  loading: boolean;
+  empty: string;
+  footer: React.ReactNode;
+}) {
   const end = useRef<HTMLLIElement>(null);
-  const { seller, messages } = conversation;
-  const where = place(seller.city, seller.country);
+  const count = messages.length + pending.length;
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
-  }, [messages.length]);
+  }, [count]);
 
   return (
     <div className="mx-auto flex max-w-xl flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
@@ -146,34 +282,53 @@ function Thread({ conversation }: { conversation: Conversation }) {
           aria-hidden="true"
           className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-sm font-semibold text-accent-foreground"
         >
-          {seller.name.slice(0, 1)}
+          {perspective === "seller" ? "O" : title.slice(0, 1)}
         </span>
         <div className="min-w-0">
-          <h2 className="truncate font-semibold">{seller.name}</h2>
-          <p className="truncate text-xs text-muted">{where ?? "Where she lives is not known yet"}</p>
+          <h2 className="truncate font-semibold">{perspective === "seller" ? "OpenStall" : title}</h2>
+          <p className="truncate text-xs text-muted">{perspective === "seller" ? `${title} · ${subtitle}` : subtitle}</p>
         </div>
       </header>
-      <ol aria-label={`Messages with ${seller.name}`} className="flex max-h-[32rem] min-h-64 flex-col gap-3 overflow-y-auto bg-background px-4 py-5">
-        {messages.length === 0 ? <li className="m-auto text-sm text-muted">No messages yet.</li> : null}
+      <ol
+        aria-label={perspective === "seller" ? "Your messages with OpenStall" : `Messages with ${title}`}
+        aria-busy={loading}
+        className="flex max-h-[32rem] min-h-64 flex-col gap-3 overflow-y-auto bg-background px-4 py-5"
+      >
+        {count === 0 && !loading ? <li className="m-auto max-w-xs text-center text-sm text-muted">{empty}</li> : null}
         {messages.map((message) => (
-          <Bubble key={message.id} message={message} sellerName={seller.name} />
+          <Bubble key={message.id} message={message} title={title} perspective={perspective} />
+        ))}
+        {pending.map((item) => (
+          <PendingBubble key={item.key} item={item} />
         ))}
         <li ref={end} aria-hidden="true" />
       </ol>
+      {footer}
     </div>
   );
 }
 
-function Bubble({ message, sellerName }: { message: ChatMessage; sellerName: string }) {
+function Bubble({
+  message,
+  title,
+  perspective,
+}: {
+  message: ChatMessage;
+  title: string;
+  perspective: "seller" | "watcher";
+}) {
   const fromSeller = message.direction === "inbound";
+  // As the seller, your own messages sit on the right, as on your phone.
+  const right = perspective === "seller" ? fromSeller : !fromSeller;
+  const speaker = fromSeller ? (perspective === "seller" ? "You" : title) : "OpenStall";
   return (
-    <li className={`flex flex-col ${fromSeller ? "items-start" : "items-end"}`}>
+    <li className={`flex flex-col ${right ? "items-end" : "items-start"}`}>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 shadow-xs ${
-          fromSeller ? "rounded-tl-sm bg-surface" : "rounded-tr-sm bg-accent-soft"
+          right ? "rounded-tr-sm bg-accent-soft" : "rounded-tl-sm bg-surface"
         }`}
       >
-        <span className="sr-only">{fromSeller ? `${sellerName}: ` : "OpenStall: "}</span>
+        <span className="sr-only">{speaker}: </span>
         {message.media.map((item, index) => (
           <Media key={index} item={item} />
         ))}
@@ -181,7 +336,25 @@ function Bubble({ message, sellerName }: { message: ChatMessage; sellerName: str
       </div>
       <time dateTime={message.created_at} className="mt-1 px-1 text-xs text-muted">
         {messageTime(message.created_at)} · {CHANNEL_LABELS[message.channel]}
+        {perspective === "seller" && fromSeller ? " · Sent" : null}
       </time>
+    </li>
+  );
+}
+
+function PendingBubble({ item }: { item: Pending }) {
+  const photos = item.files.filter((file) => file.type.startsWith("image/")).length;
+  const voice = item.files.length - photos;
+  const attached = [photos ? `${photos} photo${photos > 1 ? "s" : ""}` : "", voice ? "a voice note" : ""]
+    .filter(Boolean)
+    .join(" and ");
+  return (
+    <li className="flex flex-col items-end">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-accent-soft px-4 py-2.5 text-sm leading-6 opacity-70 shadow-xs">
+        {attached ? <p className="text-xs text-muted">With {attached}</p> : null}
+        {item.text ? <p className="break-words whitespace-pre-line">{item.text}</p> : null}
+      </div>
+      <p className="mt-1 px-1 text-xs text-muted">Sending…</p>
     </li>
   );
 }

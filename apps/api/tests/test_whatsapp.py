@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from openstall_api.adapters import AdapterRegistry
+from openstall_api.chat.handler import WELCOME
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
@@ -77,7 +78,7 @@ def test_a_signed_message_is_answered_at_once_with_empty_twiml_and_stored(twilio
     twilio.expire_all()
     seller = twilio.scalars(select(Seller)).one()
     assert (seller.name, seller.whatsapp_number, seller.country) == ("Amina", "+923001234567", "PK")
-    stored = twilio.scalars(select(ChatMessage)).one()
+    stored = twilio.scalars(select(ChatMessage).where(ChatMessage.direction == "inbound")).one()
     assert (stored.direction, stored.channel, stored.text) == (
         "inbound",
         "whatsapp",
@@ -125,11 +126,12 @@ def test_sandbox_mode_without_a_twilio_token_refuses_every_request(use_settings,
     assert post(message(), token=FAKE_TWILIO_TOKEN).status_code == 403
 
 
-def test_a_message_twilio_sends_twice_is_stored_once(twilio):
+def test_a_message_twilio_sends_twice_is_stored_and_answered_once(twilio, fakes):
     post(message())
     post(message())
 
-    assert twilio.scalar(select(func.count()).select_from(ChatMessage)) == 1
+    assert twilio.scalar(select(func.count()).select_from(ChatMessage).where(ChatMessage.direction == "inbound")) == 1
+    assert [sent.text for sent in fakes.messenger.calls] == [WELCOME]
 
 
 def test_her_next_message_joins_the_same_seller_and_chat(twilio):
@@ -138,7 +140,12 @@ def test_her_next_message_joins_the_same_seller_and_chat(twilio):
 
     assert twilio.scalar(select(func.count()).select_from(Seller)) == 1
     [chat] = client.get("/api/chats").json()
-    assert (chat["messages"], chat["last_text"]) == (2, "Mirror work too")
+    messages = client.get(f"/api/chats/{chat['seller']['id']}").json()["messages"]
+    assert [m["text"] for m in messages if m["direction"] == "inbound"] == [
+        "Salaam! I make embroidered cushion covers.",
+        "Mirror work too",
+    ]
+    assert chat["messages"] == 4  # each with its reply
 
 
 def test_photos_and_voice_notes_are_fetched_with_our_twilio_keys_and_kept(twilio, test_media_dir):
@@ -173,12 +180,13 @@ def test_a_file_we_do_not_keep_gets_a_polite_refusal_on_whatsapp(twilio, fakes, 
         twilio_media.get(MEDIA).respond(content=body, headers={"Content-Type": content_type})
         post(form)
 
-    [reply] = fakes.messenger.sent_to("whatsapp:+923001234567")
-    assert reply.text.startswith("Sorry, I could not keep one of your files:")
-    assert reason in reply.text
+    refusal, welcome = fakes.messenger.sent_to("whatsapp:+923001234567")
+    assert refusal.text.startswith("Sorry, I could not keep one of your files:")
+    assert reason in refusal.text
+    assert welcome.text == WELCOME
     seller_id = twilio.scalars(select(Seller.id)).one()
     messages = client.get(f"/api/chats/{seller_id}").json()["messages"]
-    assert [m["direction"] for m in messages] == ["inbound", "outbound"]
+    assert [m["direction"] for m in messages] == ["inbound", "outbound", "outbound"]
     assert reason in messages[0]["media"][0]["refused"]
 
 
@@ -188,8 +196,8 @@ def test_a_file_twilio_cannot_give_us_is_refused_politely(twilio, fakes):
         twilio_media.get(MEDIA).respond(404)
         post(form)
 
-    [reply] = fakes.messenger.sent_to("whatsapp:+923001234567")
-    assert "could not be fetched from WhatsApp" in reply.text
+    refusal = fakes.messenger.sent_to("whatsapp:+923001234567")[0]
+    assert "could not be fetched from WhatsApp" in refusal.text
 
 
 def test_the_twilio_messenger_sends_from_our_sandbox_number():
@@ -228,14 +236,15 @@ def test_a_played_message_with_a_photo_and_a_voice_note_shows_in_the_chat(db):
 
     assert response.status_code == 201
     seller_id = response.json()["seller_id"]
+    assert response.json()["replies"] == [WELCOME]
     [chat] = client.get("/api/chats").json()
     assert (chat["seller"]["name"], chat["channel"], chat["last_text"], chat["messages"]) == (
         "Amina",
         "whatsapp",
-        "Here is my cushion",
-        1,
+        WELCOME,
+        2,
     )
-    [played] = client.get(f"/api/chats/{seller_id}").json()["messages"]
+    played, _ = client.get(f"/api/chats/{seller_id}").json()["messages"]
     assert [item["content_type"] for item in played["media"]] == ["image/png", "audio/wav"]
     assert client.get(played["media"][1]["url"]).content == fixture_voice_note()
 

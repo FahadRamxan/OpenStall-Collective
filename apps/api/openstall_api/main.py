@@ -16,6 +16,7 @@ from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
 from openstall_api.media_api import router as media_router
 from openstall_api.orders_api import router as orders_router
+from openstall_api.seller_chat_api import router as seller_chat_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
 from openstall_api.webhooks_api import router as webhooks_router
@@ -69,6 +70,7 @@ app.include_router(media_router)
 app.include_router(webhooks_router)
 app.include_router(whatsapp_router)
 app.include_router(chat_router)
+app.include_router(seller_chat_router)
 
 # The seed photos (placeholders until the team adds its own), and the photos and voice notes sellers send.
 app.mount("/media/seed", StaticFiles(directory=REPO_ROOT / "assets" / "seed"), name="seed-media")

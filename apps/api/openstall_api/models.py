@@ -122,6 +122,8 @@ class Seller(Base):
     city: Mapped[str | None] = mapped_column(String(80))
     country: Mapped[str | None] = mapped_column(String(2))  # ISO 3166-1 alpha-2, such as PK; decides how she is paid
     whatsapp_number: Mapped[str | None] = mapped_column(String(32), unique=True)
+    # A seller who chats on /seller-chat instead: the random "demo phone" id her browser keeps.
+    web_chat_id: Mapped[str | None] = mapped_column(String(32), unique=True)
     paypal_merchant_id: Mapped[str | None] = mapped_column(String(64))
     paypal_email: Mapped[str | None] = mapped_column(String(254))
     policy_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)

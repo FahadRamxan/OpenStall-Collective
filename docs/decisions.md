@@ -222,3 +222,15 @@ Code: `apps/api/openstall_api/whatsapp.py` (signature, inbound message, media do
 - **`handle_inbound` is the one place a message is stored,** with its replies and a `message.received` event. Prompt 15 makes it the shared handler for WhatsApp and the web.
 - **Fake mode plays sellers** with `POST /api/dev/inbound`: the same path as the webhook once the files are in, with a generated embroidery photo (PNG) and voice note (WAV). Being generated, they are the same bytes every time, so the media store keeps each once.
 - **`/seller-chat` shows each seller's conversation** as chat bubbles, photos and voice notes included, and follows the event log, so a new message appears without reloading.
+
+## November 3: one chat handler for WhatsApp and the web (prompt 15)
+
+Code: `apps/api/openstall_api/chat/handler.py`, `seller_chat_api.py`, migration 0004, and in the web app `src/components/seller-chat-view.tsx`, `chat-composer.tsx` and `src/lib/demo-phone.ts`.
+
+- **One function for both channels.** `handle_inbound` stores the message, works out the replies from the chat's state, stores them and records events. The Twilio webhook sends its replies on WhatsApp; `POST /api/seller-chat/messages` returns them to the page. A test sends the same three messages (words, a photo, a voice note with words) through both and requires identical stored messages, media included, and identical replies. `test_same_listing_from_both_channels` starts here, and prompt 19 extends it to the published listing.
+- **The replies for now:** a welcome on a seller's first message, then "Thank you, I have your photo and your message", plus a polite refusal for any file that could not be kept. Each state of the chat (collecting, asking, awaiting confirmation, live) gets its own turn in prompts 16 to 19.
+- **A web seller is a demo phone.** The browser makes a random id (`demo-` and 12 hex digits), kept in local storage, or in memory where storage is blocked, and the seller it became. Sellers have a `web_chat_id` beside `whatsapp_number`, and a new web seller is called "Web seller" plus the id's last four characters until she says her name. "Start as a new seller" forgets the id.
+- **The page is a phone.** As the seller, your messages are on the right with "Sending…" then "Sent", and OpenStall's on the left. A message that fails stays in the box, with the reason. Watching a WhatsApp seller, her messages are on the left and there is no box.
+- **Voice notes are recorded in the browser** with MediaRecorder, or uploaded where it is missing or the microphone is refused. WebM, MP4 and OGG recordings are all accepted.
+- **Uploads are read in pieces** and refused at 16 MB, at most 5 files a message, with the same refusal text as WhatsApp.
+- **A bug the UI test caught:** clearing a file input empties its live file list, so a photo picked in a real browser was dropped before React read it. The composer now copies the files first. Vitest cannot show this (React applies that update at once in jsdom), so the Playwright test is the guard.
