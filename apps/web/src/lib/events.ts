@@ -27,3 +27,10 @@ export function eventStreamUrl(afterId: number): string {
 export function eventCategory(type: string): string {
   return type.split(".", 1)[0];
 }
+
+/** "14:05:09" in the viewer's own time zone. */
+export function clockTime(iso: string): string {
+  const time = new Date(iso);
+  if (Number.isNaN(time.getTime())) return "";
+  return time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+}

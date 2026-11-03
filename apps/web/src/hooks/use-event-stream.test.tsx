@@ -1,7 +1,7 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MAX_EVENTS, RETRY_MS, useEventStream } from "@/hooks/use-event-stream";
+import { EventStreamProvider, MAX_EVENTS, RETRY_MS, useEventStream } from "@/hooks/use-event-stream";
 import type { FeedEvent } from "@/lib/events";
 
 /** Stands in for the browser's EventSource, which jsdom lacks. Tests drive it by hand. */
@@ -160,6 +160,35 @@ describe("useEventStream", () => {
 
     unmount();
 
+    expect(latestStream().readyState).toBe(FakeEventSource.CLOSED);
+  });
+
+  it("inside an EventStreamProvider, every panel shares the provider's one stream", async () => {
+    mockPastEvents([event(1)]);
+    function Panel({ name }: { name: string }) {
+      const { events, connected } = useEventStream();
+      return (
+        <p>
+          {name}: {events.map((item) => item.id).join(",")} {connected ? "live" : "connecting"}
+        </p>
+      );
+    }
+
+    const { unmount } = render(
+      <EventStreamProvider>
+        <Panel name="searches" />
+        <Panel name="activity" />
+      </EventStreamProvider>,
+    );
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => latestStream().open());
+    act(() => latestStream().send(event(2)));
+
+    expect(screen.getByText("searches: 2,1 live")).toBeInTheDocument();
+    expect(screen.getByText("activity: 2,1 live")).toBeInTheDocument();
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    unmount();
     expect(latestStream().readyState).toBe(FakeEventSource.CLOSED);
   });
 });

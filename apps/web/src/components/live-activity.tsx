@@ -2,7 +2,7 @@
 
 import { Badge, type BadgeTone } from "@/components/badge";
 import { useEventStream } from "@/hooks/use-event-stream";
-import { eventCategory, type FeedEvent } from "@/lib/events";
+import { clockTime, eventCategory, type FeedEvent } from "@/lib/events";
 
 type Category = { label: string; tone: BadgeTone };
 
@@ -85,11 +85,4 @@ function ActivityItem({ event }: { event: FeedEvent }) {
       <Badge tone={category.tone}>{category.label}</Badge>
     </li>
   );
-}
-
-/** "14:05:09" in the viewer's own time zone. */
-function clockTime(iso: string): string {
-  const time = new Date(iso);
-  if (Number.isNaN(time.getTime())) return "";
-  return time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 }

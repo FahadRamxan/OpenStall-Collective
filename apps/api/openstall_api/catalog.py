@@ -1,8 +1,9 @@
 """What the stalls sell, read from the database: listings for the web app and for the agent storefront."""
 
 from decimal import Decimal
+from typing import Any, Self
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -152,6 +153,35 @@ def seller_detail(session: Session, seller_id: str) -> SellerDetail | None:
     )
 
 
+class AgentTrust(BaseModel):
+    """A maker's trust record in brief, as the agent storefront returns it (spec 3.7)."""
+
+    score: float = Field(
+        description="From 0 to 1: 0.4 x on-time rate + 0.3 x (1 - dispute rate) + 0.3 x photo originality."
+    )
+    orders_delivered: int
+    on_time_rate: float
+    dispute_rate: float
+    data_source: str = Field(description='Where the numbers come from: "seeded_demo" marks made-up demo numbers.')
+    summary: str = Field(description="The record in one line.")
+
+    @classmethod
+    def of(cls, passport: Passport) -> "AgentTrust":
+        trust = TrustSummary.of(passport)
+        demo = " (seeded demo numbers)" if trust.data_source is DataSource.SEEDED_DEMO else ""
+        return cls(
+            score=float(trust.score),
+            orders_delivered=trust.orders_delivered,
+            on_time_rate=trust.on_time_rate,
+            dispute_rate=trust.dispute_rate,
+            data_source=trust.data_source.value,
+            summary=(
+                f"Trust score {trust.score} from {trust.orders_delivered} delivered orders: "
+                f"{trust.on_time_rate:.0%} on time, {trust.dispute_rate:.0%} disputed{demo}"
+            ),
+        )
+
+
 class ProductListing(BaseModel):
     """A listing as the agent storefront (MCP) returns it."""
 
@@ -159,21 +189,25 @@ class ProductListing(BaseModel):
     seller_id: str
     seller_name: str
     title: str
+    description: str
     category: str
-    variants: list[str]
-    price_usd: float
-    capacity_per_week: int
-    ship_days: int
+    variants: list[str] = Field(description="The colours or styles she offers.")
+    price_usd: float = Field(description="List price per unit, in USD.")
+    capacity_per_week: int = Field(description="Units she makes in a week.")
+    ship_days: int = Field(description="Days in transit to the buyer. For now these are days to a US city.")
     ship_from_city: str
-    data_source: str
+    data_source: str = Field(description='"seeded_demo" marks a made-up demo listing; "live" a real one.')
+    trust: AgentTrust | None = Field(description="The maker's trust record in brief; null until she has one.")
 
     @classmethod
-    def of(cls, product: Product) -> "ProductListing":
+    def of(cls, product: Product, passport: Passport | None, **extra: Any) -> Self:
+        """The listing, with her trust record when she has a passport. `extra` fills a subclass's own fields."""
         return cls(
             product_id=product.id,
             seller_id=product.seller_id,
             seller_name=product.seller.name,
             title=product.title,
+            description=product.description,
             category=product.category,
             variants=list(product.variants_json),
             price_usd=float(product.price_usd),
@@ -181,4 +215,6 @@ class ProductListing(BaseModel):
             ship_days=product.ship_days,
             ship_from_city=product.ship_from_city,
             data_source=product.data_source.value,
+            trust=AgentTrust.of(passport) if passport else None,
+            **extra,
         )

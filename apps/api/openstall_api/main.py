@@ -17,6 +17,7 @@ from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
 from openstall_api.media_api import router as media_router
 from openstall_api.orders_api import router as orders_router
+from openstall_api.search_api import router as search_router
 from openstall_api.seller_chat_api import router as seller_chat_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
@@ -66,6 +67,7 @@ def health() -> dict[str, str]:
 app.include_router(status_router)
 app.include_router(events_router)
 app.include_router(catalog_router)
+app.include_router(search_router)
 app.include_router(orders_router)
 app.include_router(fake_paypal_router)
 app.include_router(dev_router)

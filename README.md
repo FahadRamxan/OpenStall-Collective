@@ -12,11 +12,11 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Proven on PayPal's real sandbox:** one authorization, several partial captures with tracking on each, a final capture, a void, a payout, and OpenStall's own Approve flow end to end. See [docs/day-one-checks.md](docs/day-one-checks.md).
 - **Built on APIMatic's PayPal SDK,** with APIMatic's PayPal Context Plugin (below).
 - **Sellers chat on WhatsApp or in the browser.** A verified Twilio webhook stores their messages, photos and voice notes; `/seller-chat` is the same chat as a phone in the browser. One handler serves both.
-- **Stalls and the agent storefront.** Five seeded makers with stall pages and trust records (marked as demo data), and an MCP server at `/mcp` with `search_products`.
+- **Stalls and the agent storefront.** Five seeded makers with stall pages and trust records (marked as demo data), and an MCP server at `/mcp`. Its `search_products` searches the live listings, with filters for price, quantity and deadline, and each result has the maker's trust record and how many she can still make by the deadline. Every search is logged, and `/demo` lists them live, with the ones that found nothing in amber.
 - **A live feed** on `/demo` of everything that happens, and a status page at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
-Still being built: search with filters and feeds for agents, seller agents that negotiate, quote requests and the allocator on `/demo`, the MCP order and checkout tools, a buyer agent you can run, receipt photos read into tracking, signed trust passports, the order that heals itself, and the hosted demo.
+Still being built: feeds for agents, seller agents that negotiate, quote requests and the allocator on `/demo`, the MCP order and checkout tools, a buyer agent you can run, receipt photos read into tracking, signed trust passports, the order that heals itself, and the hosted demo.
 
 ## Run it locally
 

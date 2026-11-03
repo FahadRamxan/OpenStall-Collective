@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
+import { AgentSearches } from "@/components/agent-searches";
 import { LiveActivity } from "@/components/live-activity";
+import { EventStreamProvider } from "@/hooks/use-event-stream";
 
 export const metadata: Metadata = { title: "Live demo" };
 
@@ -13,7 +15,11 @@ export default function DemoPage() {
           Watch one order happen live: a buyer agent&apos;s request, each seller agent&apos;s offer and how it is
           checked, the split across sellers, one PayPal approval, and each maker paid the moment she ships.
         </p>
-        <LiveActivity />
+        {/* Every live panel shares one event stream: one connection to the API, however many panels there are. */}
+        <EventStreamProvider>
+          <AgentSearches />
+          <LiveActivity />
+        </EventStreamProvider>
       </div>
     </section>
   );

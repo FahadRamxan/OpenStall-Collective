@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 
 export type BadgeTone = "accent" | "success" | "warning" | "danger" | "neutral";
 
-const TONE_CLASSES: Record<BadgeTone, string> = {
-  accent: "bg-accent-soft text-accent",
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
-  neutral: "bg-border text-muted",
+const TONES: Record<BadgeTone, { background: string; text: string }> = {
+  accent: { background: "bg-accent-soft", text: "text-accent" },
+  success: { background: "bg-success-soft", text: "text-success" },
+  warning: { background: "bg-warning-soft", text: "text-warning" },
+  danger: { background: "bg-danger-soft", text: "text-danger" },
+  neutral: { background: "bg-border", text: "text-muted" },
 };
 
 const SIZE_CLASSES = {
@@ -17,23 +17,28 @@ const SIZE_CLASSES = {
 
 /**
  * A small coloured label. The words carry the meaning; the colour only repeats it. `wrap` lets a long label break
- * over lines instead of running off a phone screen.
+ * over lines instead of running off a phone screen. `outline` draws it as a ring on the surface colour, for a badge
+ * on a background tinted in its own tone, where the soft fill would not show.
  */
 export function Badge({
   tone,
   size = "sm",
   wrap = false,
+  outline = false,
   children,
 }: {
   tone: BadgeTone;
   size?: "sm" | "lg";
   wrap?: boolean;
+  outline?: boolean;
   children: ReactNode;
 }) {
   const sizes = SIZE_CLASSES[size];
   const shape = wrap ? "max-w-full rounded-2xl text-left" : "whitespace-nowrap rounded-full";
+  const { background, text } = TONES[tone];
+  const fill = outline ? "bg-surface ring-1 ring-current ring-inset" : background;
   return (
-    <span className={`inline-flex items-center font-semibold ${shape} ${sizes.badge} ${TONE_CLASSES[tone]}`}>
+    <span className={`inline-flex items-center font-semibold ${shape} ${sizes.badge} ${fill} ${text}`}>
       <span aria-hidden="true" className={`shrink-0 rounded-full bg-current ${sizes.dot}`} />
       {children}
     </span>

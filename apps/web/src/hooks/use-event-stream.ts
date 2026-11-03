@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { errorMessage } from "@/lib/api";
 import { eventStreamUrl, getLatestEvents, type FeedEvent } from "@/lib/events";
@@ -19,19 +19,39 @@ export type EventStreamState = {
   error: string | null;
 };
 
+const SharedStream = createContext<EventStreamState | null>(null);
+
+/**
+ * One event stream for every live panel inside it, such as on /demo. Each panel still calls useEventStream(), and
+ * inside the provider they all share this stream, so a page with many panels holds one connection to the API.
+ */
+export function EventStreamProvider({ children }: { children: ReactNode }) {
+  const state = useStream(true);
+  return createElement(SharedStream.Provider, { value: state }, children);
+}
+
 /**
  * The latest events, newest first, kept up to date from the API's event stream.
  *
  * It loads the recent events first, then follows the stream from the last one it has, so nothing falls in the gap.
  * The browser reconnects a dropped stream by itself and sends the last event id it saw; if it gives up, this opens a
- * new stream after RETRY_MS. An event that arrives twice is shown once.
+ * new stream after RETRY_MS. An event that arrives twice is shown once. Inside an EventStreamProvider it is the
+ * provider's stream; anywhere else it opens its own.
  */
 export function useEventStream(): EventStreamState {
+  const shared = useContext(SharedStream);
+  const own = useStream(shared === null);
+  return shared ?? own;
+}
+
+/** The stream itself. Disabled, it opens nothing and stays empty. */
+function useStream(enabled: boolean): EventStreamState {
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     const seen = new Set<number>();
     let lastId = 0;
@@ -90,7 +110,7 @@ export function useEventStream(): EventStreamState {
       source?.close();
       if (retry) clearTimeout(retry);
     };
-  }, []);
+  }, [enabled]);
 
   return { events, connected, error };
 }
