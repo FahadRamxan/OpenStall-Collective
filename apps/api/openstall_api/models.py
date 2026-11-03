@@ -233,6 +233,10 @@ class QuoteRequest(Base):
     deadline: Mapped[date] = mapped_column(Date)
     ship_to: Mapped[str] = mapped_column(String(120))
     plan_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)  # the allocation plan (prompt 25)
+    # How far the negotiation has got (prompt 24): makers asked, rounds run, and when the last round ended.
+    asked: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    rounds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

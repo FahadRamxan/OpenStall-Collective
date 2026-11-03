@@ -4,6 +4,7 @@ import { AgentSearches } from "@/components/agent-searches";
 import { LiveActivity } from "@/components/live-activity";
 import { OfferRules } from "@/components/offer-rules";
 import { OffersGrid } from "@/components/offers-grid";
+import { RequestCard } from "@/components/request-card";
 import { EventStreamProvider } from "@/hooks/use-event-stream";
 
 export const metadata: Metadata = { title: "Live demo" };
@@ -19,6 +20,7 @@ export default function DemoPage() {
         </p>
         {/* Every live panel shares one event stream: one connection to the API, however many panels there are. */}
         <EventStreamProvider>
+          <RequestCard />
           <OfferRules />
           <AgentSearches />
           <OffersGrid />

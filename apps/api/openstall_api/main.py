@@ -20,6 +20,7 @@ from openstall_api.media_api import SeedPhotos
 from openstall_api.media_api import router as media_router
 from openstall_api.offers_api import router as offers_router
 from openstall_api.orders_api import router as orders_router
+from openstall_api.quotes_api import router as quotes_router
 from openstall_api.passports_api import router as passports_router
 from openstall_api.search_api import router as search_router
 from openstall_api.seller_chat_api import router as seller_chat_router
@@ -74,6 +75,7 @@ app.include_router(catalog_router)
 app.include_router(search_router)
 app.include_router(demo_router)
 app.include_router(offers_router)
+app.include_router(quotes_router)
 app.include_router(orders_router)
 app.include_router(fake_paypal_router)
 app.include_router(dev_router)

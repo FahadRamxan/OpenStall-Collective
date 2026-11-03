@@ -18,10 +18,10 @@ function offerRow(page: Page, seller: string, price: string) {
   return offers(page).getByRole("row").filter({ hasText: seller }).filter({ hasText: price });
 }
 
-async function storyOffers(page: Page): Promise<string> {
-  const response = await page.request.post(`${E2E_API_URL}/api/dev/story-offers`);
+/** The story's quote: every matching maker's agent asked, with fake mode's agents. */
+async function storyOffers(page: Page) {
+  const response = await page.request.post(`${E2E_API_URL}/api/dev/quote`);
   expect(response.status()).toBe(201);
-  return ((await response.json()) as { request_id: string }).request_id;
 }
 
 /** Opens /demo once the offers panel has loaded the earlier offers and the stream is live. */

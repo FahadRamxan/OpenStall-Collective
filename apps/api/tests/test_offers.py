@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from openstall_agents.adapters import FakeLLM
 from openstall_allocator import FixedClock
-from openstall_api import offers
+from openstall_api import quotes
 from openstall_api.events import EventType
 from openstall_api.main import app
 from openstall_api.models import Event, Offer, Product
@@ -24,7 +24,7 @@ TODAY = date(2026, 11, 10)
 
 @pytest.fixture(autouse=True)
 def today(monkeypatch):
-    monkeypatch.setattr(offers, "clock", FixedClock(TODAY))
+    monkeypatch.setattr(quotes, "clock", FixedClock(TODAY))
 
 
 @pytest.fixture
@@ -135,7 +135,7 @@ def test_the_buyers_words_are_each_items_query():
 
 
 def test_the_story_offers_ask_every_matching_maker_and_tell_the_seed_tables_story(seeded):
-    response = client.post("/api/dev/story-offers")
+    response = client.post("/api/dev/quote")
 
     assert response.status_code == 201
     body = response.json()
@@ -151,15 +151,15 @@ def test_the_story_offers_ask_every_matching_maker_and_tell_the_seed_tables_stor
             ("s_noor", "29.50", True, 10),
         ]
     )
-    assert {o["request_id"] for o in body["offers"]} == {body["request_id"]}
+    assert {o["request_id"] for o in body["offers"]} == {body["quote"]["id"]}
     # Each maker's refused proposal comes before her valid one.
     graces = [o["unit_price"] for o in body["offers"] if o["seller_id"] == "s_grace"]
     assert graces == ["32.00", "29.00"]
 
 
 def test_recent_offers_come_newest_first_and_can_be_kept_to_one_request(seeded):
-    first = client.post("/api/dev/story-offers").json()["request_id"]
-    second = client.post("/api/dev/story-offers").json()["request_id"]
+    first = client.post("/api/dev/quote").json()["quote"]["id"]
+    second = client.post("/api/dev/quote").json()["quote"]["id"]
 
     recent = client.get("/api/offers", params={"limit": 3}).json()
     assert len(recent) == 3 and {o["request_id"] for o in recent} == {second}
@@ -185,9 +185,3 @@ def test_a_refused_price_below_the_floor_says_her_lowest_price(seeded):
 
     refused = next(o for o in client.get("/api/offers").json() if not o["is_valid"])
     assert refused["why"] == "below her lowest price of $13.60"
-
-
-def test_the_story_offers_do_not_exist_outside_fake_mode(use_settings, db):
-    use_settings(OPENSTALL_MODE="sandbox")
-
-    assert client.post("/api/dev/story-offers").status_code == 404

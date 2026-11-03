@@ -14,6 +14,7 @@ import { Badge } from "@/components/badge";
 import { useLiveList, type LiveListSource } from "@/hooks/use-live-list";
 import { formatUsd } from "@/lib/catalog";
 import { arrivalWords, getRecentOffers, offerFromEvent, roundWords, type AgentOffer } from "@/lib/offers";
+import { MAX_ROUNDS } from "@/lib/quotes";
 import { formatDay } from "@/lib/orders";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -126,6 +127,10 @@ export function OffersGrid() {
       ) : null}
       {latest.length > 0 ? (
         <div className="mt-4">
+          {/* The round the latest proposal was made in: a quote runs at most MAX_ROUNDS (spec 3.3). */}
+          <p className="mb-2 text-sm font-medium text-muted">
+            Round {Math.max(...latest.map((offer) => offer.round))} of {MAX_ROUNDS}
+          </p>
           <AgGridReact<AgentOffer>
             theme={THEME}
             rowData={latest}

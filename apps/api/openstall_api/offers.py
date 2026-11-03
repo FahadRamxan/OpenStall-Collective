@@ -7,6 +7,7 @@ offer.accepted or offer.rejected, in the caller's transaction.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -15,14 +16,11 @@ from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import LLM
 from openstall_agents.seller_agent import Maker, OfferOutcome, Proposal, make_offer, reason_words
-from openstall_allocator import Clock, RejectionReason, SystemClock, lowest_allowed_price
+from openstall_allocator import Listing, QuoteRequest, RejectionReason, SellerPolicy, lowest_allowed_price
 from openstall_api.events import EventType, record_event
 from openstall_api.models import Offer, Product
 from openstall_api.models import QuoteRequest as QuoteRequestRow
 from openstall_api.offer_rules import PolicyError, committed_units, listing_of, quote_request_of, seller_policy
-
-# Where "today" comes from: UTC, like the offer rules and search. Tests fix it with a FixedClock.
-clock: Clock = SystemClock()
 
 
 class OfferOut(BaseModel):
@@ -75,6 +73,42 @@ def request_text(request: QuoteRequestRow) -> str:
     return "; ".join(query for query in queries if query)
 
 
+@dataclass(frozen=True)
+class AgentInputs:
+    """Everything one maker's agent needs for a round, read from the database before it runs, so the agent never
+    touches the session: quotes.py runs agents side by side, in threads."""
+
+    maker: Maker
+    listing: Listing
+    policy: SellerPolicy
+    request: QuoteRequest
+    committed_units: int
+    request_text: str
+
+
+def prepare(session: Session, request: QuoteRequestRow, product: Product) -> AgentInputs:
+    """Her agent's inputs for this request. A maker whose policy cannot be read raises PolicyError."""
+    seller = product.seller
+    return AgentInputs(
+        maker=Maker(seller_id=seller.id, name=seller.name, product_title=product.title),
+        listing=listing_of(product),
+        policy=seller_policy(seller, product),
+        request=quote_request_of(request),
+        committed_units=committed_units(session, [seller.id])[seller.id],
+        request_text=request_text(request),
+    )
+
+
+def save_outcome(session: Session, request: QuoteRequestRow, product: Product, outcome: OfferOutcome) -> Offer | None:
+    """A round's proposals saved, each with its events; her valid offer's row, if she made one. The caller commits."""
+    valid = None
+    for proposal in outcome.proposals:
+        offer = _save(session, request, product, outcome.quantity, proposal)
+        if offer is not None and offer.is_valid:
+            valid = offer
+    return valid
+
+
 def ask_seller(
     session: Session,
     request: QuoteRequestRow,
@@ -88,26 +122,27 @@ def ask_seller(
 ) -> OfferOutcome:
     """One round of one maker's agent for the request: each proposal saved, and its events recorded. The caller
     commits. A maker whose policy cannot be read raises PolicyError, and nothing is saved."""
-    seller = product.seller
+    agent = prepare(session, request, product)
     outcome = make_offer(
-        Maker(seller_id=seller.id, name=seller.name, product_title=product.title),
-        listing_of(product),
-        seller_policy(seller, product),
-        quote_request_of(request),
+        agent.maker,
+        agent.listing,
+        agent.policy,
+        agent.request,
         round,
         history,
         llm=llm,
         today=today,
-        committed_units=committed_units(session, [seller.id])[seller.id],
-        request_text=request_text(request),
+        committed_units=agent.committed_units,
+        request_text=agent.request_text,
         feedback=feedback,
     )
-    for proposal in outcome.proposals:
-        _save(session, request, product, outcome.quantity, proposal)
+    save_outcome(session, request, product, outcome)
     return outcome
 
 
-def _save(session: Session, request: QuoteRequestRow, product: Product, quantity: int, proposal: Proposal) -> None:
+def _save(
+    session: Session, request: QuoteRequestRow, product: Product, quantity: int, proposal: Proposal
+) -> Offer | None:
     name = product.seller.name
     if proposal.unit_price is None:
         # No price, so no offer row. The feed still shows the try: every proposal is logged (spec 3.3, step 6).
@@ -123,7 +158,7 @@ def _save(session: Session, request: QuoteRequestRow, product: Product, quantity
                 "problem": proposal.problem,
             },
         )
-        return
+        return None
     offer = Offer(
         request_id=request.id,
         seller_id=product.seller_id,
@@ -157,6 +192,7 @@ def _save(session: Session, request: QuoteRequestRow, product: Product, quantity
     else:
         summary = f"Code refused {name}'s {price}: {row['why']}"
         record_event(session, EventType.OFFER_REJECTED, summary, entity_id=offer.id, payload=row)
+    return offer
 
 
 def _why(offer: Offer, reason: RejectionReason | None) -> str:
