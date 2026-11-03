@@ -75,6 +75,9 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Unlocks /demo's Run and Reset controls in sandbox mode; without it they are off there.
+      - key: DEMO_RUN_TOKEN
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: GOOGLE_VISION_API_KEY

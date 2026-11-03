@@ -23,6 +23,7 @@ from openstall_allocator import allocate
 from openstall_api.allocation import explanation_by, plan_facts, plan_out
 from openstall_api.events import jsonable
 from openstall_api.models import (
+    Event,
     Base,
     DataSource,
     Order,
@@ -189,6 +190,17 @@ def reset_all(session: Session) -> None:
     """Empty every table, children first."""
     for table in reversed(Base.metadata.sorted_tables):
         session.execute(delete(table))
+
+
+def reset_demo_world(session: Session, today: date) -> "SeedReport":
+    """The demo world as seeded: every table emptied but the event log, then the five makers (Amina too) and the
+    story's draft order. The events stay, so pages that are open keep following the live feed. The caller commits."""
+    for table in reversed(Base.metadata.sorted_tables):
+        if table.name != Event.__tablename__:
+            session.execute(delete(table))
+    report = seed(session, with_amina=True)
+    seed_demo_order(session, today)
+    return report
 
 
 def seed(

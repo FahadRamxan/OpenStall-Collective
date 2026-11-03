@@ -24,7 +24,7 @@ export const CATEGORIES: Record<string, Category> = {
   delivery: { label: "Delivery", tone: "success" },
   passport: { label: "Passport", tone: "accent" },
   security: { label: "Security", tone: "danger" },
-  demo: { label: "Test", tone: "warning" },
+  demo: { label: "Demo", tone: "warning" },
 };
 
 /** The /demo page's live feed: everything the agents, the sellers and PayPal do, newest first. */

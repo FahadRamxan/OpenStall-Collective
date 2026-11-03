@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { AgentSearches } from "@/components/agent-searches";
 import { AllocationPanel } from "@/components/allocation-panel";
+import { DemoControls } from "@/components/demo-controls";
 import { LiveActivity } from "@/components/live-activity";
 import { OfferRules } from "@/components/offer-rules";
 import { OrderCard } from "@/components/order-card";
@@ -22,6 +23,7 @@ export default function DemoPage() {
         </p>
         {/* Every live panel shares one event stream: one connection to the API, however many panels there are. */}
         <EventStreamProvider>
+          <DemoControls />
           <RequestCard />
           <OfferRules />
           <AgentSearches />

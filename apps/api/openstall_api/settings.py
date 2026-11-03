@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: SecretStr | None = None
     OPENAI_API_KEY: SecretStr | None = None
     LLM_MODEL: str = "claude-sonnet-5-5"
+    # Unlocks /demo's Run and Reset controls in sandbox mode (header X-Demo-Run-Token). Unset: they are off there.
+    DEMO_RUN_TOKEN: SecretStr | None = None
     GOOGLE_VISION_API_KEY: SecretStr | None = None
 
     # Can hold a password (hosted Postgres), so it is never shown, like the keys. Read it with get_secret_value().

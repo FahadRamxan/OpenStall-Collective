@@ -61,6 +61,8 @@ class EventType(StrEnum):
     PASSPORT_UPDATED = "passport.updated"
     SECURITY_REJECTED = "security.rejected"
     DEMO_TEST = "demo.test"  # made with POST /api/dev/events, in fake mode only
+    DEMO_RUN = "demo.run"  # the scripted buyer agent started the story (POST /api/demo/run)
+    DEMO_RESET = "demo.reset"  # the demo world was put back as seeded (POST /api/demo/reset)
 
 
 class EventOut(BaseModel):

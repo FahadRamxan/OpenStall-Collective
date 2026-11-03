@@ -31,6 +31,7 @@ ENVIRONMENT = {
     "ANTHROPIC_API_KEY": "made-up-anthropic-key",
     "OPENAI_API_KEY": "made-up-openai-key",
     "LLM_MODEL": "made-up-model",
+    "DEMO_RUN_TOKEN": "made-up-demo-token",
     "GOOGLE_VISION_API_KEY": "made-up-vision-key",
     "DATABASE_URL": "postgresql://openstall:made-up-password@db.example:5432/openstall",
     "PASSPORT_SIGNING_KEY": "bWFkZS11cCBzaWduaW5nIGtleQ==",
@@ -45,6 +46,7 @@ SECRETS = (
     "OPENAI_API_KEY",
     "GOOGLE_VISION_API_KEY",
     "PASSPORT_SIGNING_KEY",
+    "DEMO_RUN_TOKEN",
 )
 KEYS = ("PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID", *SECRETS)
 # Never printed either. DATABASE_URL is not a key: it always has a value, the local SQLite file by default.
