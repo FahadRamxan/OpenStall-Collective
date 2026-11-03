@@ -18,7 +18,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 2. Wire it into the UI.
 3. Test it through the UI: a Playwright spec in `apps/web/e2e`, in fake mode.
 4. Run `python scripts/check_all.py` (pytest, mypy, lint, Vitest, build, Playwright). Commit only when it ends with "All 6 checks passed". There is no CI; this is the gate.
-5. Update `README.md` (what works today), this file's status table, and the status table in `../prompt.md`.
+5. Update `README.md` ("What works today" and "Build progress"), this file's status table, and the status table in `../prompt.md`.
 6. Commit with the prompt's commit message, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, then `git pull --rebase` and push: `GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never git push origin main` (retry once on a network reset).
 
 ## Commands (Windows, Git Bash)
@@ -42,26 +42,78 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 
 ## Status (2026-11-04)
 
-| Prompt | What | State |
-|---|---|---|
-| 01–06 | Repo, web app, settings and fake mode, database, event log and live feed, seed data and stall pages | Done |
-| 07, 10, 11 | PayPal client, checkout that reserves the whole order, reserve on return and pay or release each share | Done |
-| 08 | Day-one payment test | Done as a standalone sandbox proof (docs/day-one-checks.md) |
-| 09 | Draft orders and the approval page | Done |
-| 12 | Render blueprint | Done; the deploy waits for a Render account |
-| 13 | Verified, idempotent PayPal webhooks | Done; registering the real webhook waits for the hosted demo |
-| 14, 15 | Twilio WhatsApp webhook and media; one chat handler and /seller-chat | Done; a real phone test waits for a Twilio account |
-| 35 | Passport signing | Core logic done; wiring is in prompt 35 |
-| 51 | Fake mode follows the payouts path; a payout rail per maker | Done |
-| 58 | Orders and payments on APIMatic's PayPal SDK | Done, proven on the real sandbox |
-| 20 | Search with filters, the search log, and the "Agent searches" panel on /demo | Done |
-| 21 | get_product and get_trust_card, /catalog.json, /llms.txt, "For AI agents" on stall pages | Done |
-| 22 | The offer rules on real data: each live maker's limits on /demo | Done |
-| 23 | The seller agent: code-checked offers, Claude in sandbox mode, the AG Grid offers table on /demo | Done |
-| 24 | Quote requests: agents side by side, up to 3 rounds, the Request card on /demo | Done |
-| 25 | The allocator on real quotes: the stored plan, the Allocation panel on /demo | Done |
-| 26 | The plan explained in words, every number checked; on /demo and /approve | Done |
-| 27 | MCP request_quote and create_collective_order; the latest order on /demo | Done |
-| 28 | MCP checkout and get_order_status; no tool can move money (tested) | Done |
-| 29 | The scripted buyer agent, and Run and Reset with a stepper on /demo | Done |
-| 16–19, 30–50, 52–57 | Seller onboarding, real AI buyer, pay-on-proof photos, passports, healing, pages, hardening; more of PayPal | Next: see `../prompt.md` |
+Of the 58 build prompts in `../prompt.md`: **25 done, 3 partly done, 30 not started.** Each row was checked against the commits; "done" means built, tested, wired into the UI, tested in a browser and pushed. Update this table, the README's "Build progress" and `../prompt.md`'s status table with every prompt.
+
+| Prompt | What | State | Commit |
+|---|---|---|---|
+| **A** | **Foundation** | | |
+| 01 | Repo and backend CI | Done; CI was removed on request, `scripts/check_all.py` is the gate | 9507795, 3d11519 |
+| 02 | Web app with test tooling | Done | e6e02a9 |
+| 03 | Settings, fake mode, the status page | Done | 55db8fb |
+| 04 | Database models and migrations | Done | 3328b1a |
+| 05 | Event log and the live feed on /demo | Done | 9fc6db3 |
+| 06 | Seed data and stall pages | Done | 35cbd1f |
+| **B** | **PayPal** | | |
+| 07 | PayPal client | Done | 8f3fec3 |
+| 08 | Day-one payment test | Partly done: the sandbox proof ran on Nov 3 and is recorded in `docs/day-one-checks.md`; its script, `scripts/sandbox_proof.py`, is not in the repo yet | 027960f |
+| 09 | Draft orders and the approval page | Done | 7bc0ae8 |
+| 10 | Checkout that reserves the whole order | Done | 8f3fec3 |
+| 11 | Reserve on return; pay or release each share | Done | f30566d |
+| 12 | Deploy to Render | Partly done: the blueprint `render.yaml`; the deploy waits for a Render account | 9d5d70c |
+| 13 | Verified, idempotent PayPal webhooks | Done; registering the real webhook waits for the hosted demo | 37ea2d0 |
+| **C** | **Seller onboarding over WhatsApp** | | |
+| 14 | Twilio WhatsApp webhook and media | Done; a real phone test waits for a Twilio account | 0419bc2 |
+| 15 | One chat handler; /seller-chat | Done | 2fddbb9 |
+| 16 | Voice notes to text | Not started | |
+| 17 | A draft listing from photos and words | Not started | |
+| 18 | Ask for what is missing; the seller's limits | Not started | |
+| 19 | Confirm and publish | Not started | |
+| **D** | **The agent storefront** | | |
+| 20 | Search with filters and the search log | Done | 0a03ef8 |
+| 21 | Product and trust card tools, /catalog.json, /llms.txt | Done | 3593da6 |
+| **E** | **Negotiation and the collective** | | |
+| 22 | The offer rules on /demo | Done (core logic feb467f) | bebf270 |
+| 23 | The seller agent; Claude in sandbox mode | Done | 3309b31 |
+| 24 | Quote requests and negotiation rounds | Done | be677db |
+| 25 | The allocator on /demo | Done (core logic feb467f) | 189c2c1 |
+| 26 | The plan explained in words | Done | 614ae4e |
+| 27 | MCP request_quote and create_collective_order | Done | 1618bb3 |
+| 28 | MCP checkout and get_order_status; no tool moves money | Done | d35fd48 |
+| 29 | The scripted buyer agent; Run and Reset on /demo | Done | 4b6d2f5 |
+| 30 | A real AI agent as the buyer | Not started | |
+| **F** | **After payment** | | |
+| 31 | Tell each seller about the order | Not started | |
+| 32 | Snap the receipt, get paid | Not started (fake mode's `POST /api/dev/parts/{id}/proof` pays a share on simulated proof, from 51) | |
+| 33 | Tracking on the PayPal order | Not started (tracking per capture was proven in the sandbox proof) | |
+| 34 | Delivery and the end of an order | Not started | |
+| **G** | **Trust passports and the materials advance** | | |
+| 35 | Signed trust passports | Partly done: scoring, canonical JSON and Ed25519 signing (`packages/trust`), seeded passports signed; no public key or verify endpoint yet, so trust cards say "pending" | 475e435 |
+| 36 | Passports update after delivery | Not started | |
+| 37 | Materials advance (optional) | Not started | |
+| 38 | The tamper check, shown live | Not started | |
+| **H** | **The order heals itself; guardrails** | | |
+| 39 | The order heals itself | Not started | |
+| 40 | Try to break it: the guardrail panel | Not started | |
+| **I** | **Pages and design** | | |
+| 41 | The home page | Not started (a basic home page exists from 02 and 06) | |
+| 42 | PayPal buttons on the stall page | Not started | |
+| 43 | The complete live demo page | Not started (its panels exist from 20 to 29) | |
+| 44 | The AG Grid dashboard | Not started (`/dashboard` is a placeholder) | |
+| 45 | Design and accessibility pass | Not started | |
+| **J** | **Hardening and submission** | | |
+| 46 | Security and abuse limits | Not started | |
+| 47 | The whole story, tested end to end, twice | Not started | |
+| 48 | Dress rehearsal on the hosted demo | Not started | |
+| 49 | README and testing instructions for judges | Not started | |
+| 50 | Submission kit and release | Not started | |
+| **K** | **More of PayPal** | | |
+| 51 | Fake mode follows the payouts path; a payout rail per maker | Done | cdcf013 |
+| 52 | Hyperwallet rail (simulated) | Not started | |
+| 53 | PayPal products table, doctor report, APIMatic cross-check | Not started | |
+| 54 | Pay-on-proof on the Braintree sandbox (gated) | Not started | |
+| 55 | The PayPal ops agent through PayPal's MCP server | Not started | |
+| 56 | Disputes answered with the proof | Not started | |
+| 57 | Venmo, and Pay Later if proven, at the approval | Not started | |
+| 58 | Orders and payments on APIMatic's PayPal SDK | Done, proven on the real sandbox | 027960f |
+
+Next on the path to the November 5 draft: 31 and 32, then a first pass of 43 and 49, the hosted deploy (12, needs a Render account), and the Devpost draft.
