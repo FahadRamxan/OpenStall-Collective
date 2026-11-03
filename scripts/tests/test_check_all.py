@@ -106,12 +106,21 @@ def test_default_steps_match_the_plan(monkeypatch):
 
     steps = check_all.default_steps()
 
-    assert [step.name for step in steps] == ["pytest", "npm run lint", "npm test", "npm run build", "npm run e2e"]
+    assert [step.name for step in steps] == [
+        "pytest",
+        "mypy",
+        "npm run lint",
+        "npm test",
+        "npm run build",
+        "npm run e2e",
+    ]
     assert steps[0].cwd == check_all.REPO_ROOT
     assert steps[0].command[1:] == ["-m", "pytest", "-q"]
-    assert all(step.cwd == check_all.WEB_DIR for step in steps[1:])
+    assert steps[1].cwd == check_all.REPO_ROOT
+    assert steps[1].command == [steps[0].command[0], "-m", "mypy", "--strict", "packages/paypal/openstall_paypal"]
+    assert all(step.cwd == check_all.WEB_DIR for step in steps[2:])
     # npm is called by its full path (npm.cmd on Windows), never through a shell.
-    assert all(step.command[0] == "/tools/npm.cmd" for step in steps[1:])
+    assert all(step.command[0] == "/tools/npm.cmd" for step in steps[2:])
     # The e2e API runs on the same Python as pytest.
     assert steps[-1].env == {"E2E_PYTHON": steps[0].command[0]}
 

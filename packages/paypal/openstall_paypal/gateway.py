@@ -32,7 +32,15 @@ class PaymentError(Exception):
 
 class PaymentUnavailable(PaymentError):
     """PayPal did not answer, so the request may or may not have taken effect. Read the state back before acting
-    again; never repeat a payment blindly (spec 3.5)."""
+    again; never repeat a payment blindly (spec 3.5).
+
+    `outcome_unknown` is False only when the request provably never reached PayPal (the connection was refused, or
+    getting a token failed first), so nothing happened there. True means it may have landed.
+    """
+
+    def __init__(self, issue: str, message: str, *, outcome_unknown: bool = True) -> None:
+        super().__init__(issue, message)
+        self.outcome_unknown = outcome_unknown
 
 
 @dataclass(frozen=True)

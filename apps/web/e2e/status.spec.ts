@@ -44,6 +44,9 @@ test("shows the API's fake mode, its version and every adapter as fake", async (
   const paypal = page.getByRole("region", { name: "PayPal" });
   await expect(paypal.getByText("Fake", { exact: true })).toBeVisible();
   await expect(paypal).toContainText("Checkout runs on the simulated PayPal page.");
+  // Fake mode says honestly that no SDK is in use.
+  expect(report.payment.sdk).toBeNull();
+  await expect(paypal).toContainText("None. In fake mode the simulated PayPal gateway answers, and no SDK is used.");
   const headers = adaptersTable(page).getByRole("rowheader");
   await expect(headers).toHaveCount(ADAPTERS.length);
   for (const [index, label] of ADAPTERS.entries()) {
@@ -81,6 +84,12 @@ test("in sandbox mode, names the missing keys, and fits a phone screen", async (
     const sandbox: StatusReport = {
       ...report,
       mode: "sandbox",
+      payment: {
+        status: "token ok",
+        path: report.payment.path,
+        message: "PayPal gave us a token at https://api-m.sandbox.paypal.com.",
+        sdk: { label: "APIMatic PayPal Python SDK 2.29", distribution: "paypal", version: "2.29", commit: "143e57f" },
+      },
       adapters: report.adapters.map((adapter) => {
         if (adapter.name === "payment_gateway") return { ...adapter, status: "real", missing_keys: [] };
         if (adapter.name === "llm") return { ...adapter, status: "not built", missing_keys: [] };
@@ -97,6 +106,9 @@ test("in sandbox mode, names the missing keys, and fits a phone screen", async (
   await expect(adapterRow(page, "Messenger")).toContainText("Not set: TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.");
   await expect(adapterRow(page, "LLM").getByText("Not built yet", { exact: true })).toBeVisible();
   await expect(adapterRow(page, "Payment gateway").getByText("Real", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "PayPal" })).toContainText(
+    "APIMatic PayPal Python SDK 2.29 (commit 143e57f).",
+  );
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow, "the page scrolls sideways").toBeLessThanOrEqual(0);

@@ -1,4 +1,4 @@
-"""PayPal sandbox client: orders, payouts, webhooks and tracking (spec 3.5 and 3.6)."""
+"""PayPal: the payment gateways, on APIMatic's PayPal Python SDK and our own client (spec 3.5 and 3.6)."""
 
 from openstall_paypal.client import (
     PayPalAuthError,
@@ -26,6 +26,7 @@ from openstall_paypal.gateway import (
     Share,
 )
 from openstall_paypal.sandbox import MultipartyGateway, PayoutsGateway, SandboxGateway
+from openstall_paypal.sdk import RETRY_POLICY, PayPalSdk, RecordingTransport, SdkInfo, sdk_info
 from openstall_paypal.webhooks import (
     FakeWebhookVerifier,
     PayPalWebhookVerifier,
@@ -35,6 +36,7 @@ from openstall_paypal.webhooks import (
 )
 
 __all__ = [
+    "RETRY_POLICY",
     "WAITING_FOR_BUYER",
     "WHOLE_ORDER",
     "Checkout",
@@ -50,6 +52,7 @@ __all__ = [
     "PayPalError",
     "PayPalNotFound",
     "PayPalOrderStatus",
+    "PayPalSdk",
     "PayPalUnavailable",
     "PayPalValidationError",
     "PayPalWebhookVerifier",
@@ -58,10 +61,13 @@ __all__ = [
     "PaymentGateway",
     "PaymentUnavailable",
     "PayoutsGateway",
+    "RecordingTransport",
     "Reservation",
     "SandboxGateway",
+    "SdkInfo",
     "Share",
     "WebhookVerifier",
     "fake_event",
+    "sdk_info",
     "sign_fake_webhook",
 ]

@@ -1,6 +1,6 @@
 """GET /api/status: the mode, the app version and each adapter's state, and never a secret."""
 
-from importlib.metadata import version
+from importlib.metadata import distribution, version
 
 import pytest
 import respx
@@ -123,6 +123,7 @@ TABLES = [
     "order_parts",
     "orders",
     "passports",
+    "paypal_claims",
     "processed_webhooks",
     "products",
     "quote_requests",
@@ -172,7 +173,20 @@ def test_paypal_is_the_simulated_page_in_fake_mode():
         "status": "fake",
         "path": "payouts",
         "message": "Checkout runs on the simulated PayPal page. Nothing reaches PayPal.",
+        "sdk": None,  # the simulated gateway uses no SDK
     }
+
+
+def test_in_sandbox_mode_paypal_names_the_sdk_the_gateway_calls_it_with(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox")
+
+    sdk = get_status()["payment"]["sdk"]
+
+    installed = distribution("paypal")
+    assert sdk["distribution"] == "paypal"
+    assert sdk["version"] == installed.version
+    assert sdk["label"] == f"APIMatic PayPal Python SDK {installed.version}"
+    assert sdk["commit"] == "143e57f"  # pyproject.toml pins the SDK to this commit
 
 
 def test_paypal_without_its_keys_names_them(use_settings):

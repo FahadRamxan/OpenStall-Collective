@@ -9,14 +9,43 @@ the money. They differ in who the payees are:
   listed as an item. Paying a share captures just her amount and sends it to her with PayPal Payouts. Releasing a
   share leaves her amount uncaptured; the order's last capture or void gives whatever is left back to the buyer.
 
-Every write uses an idempotency key made from our own ids, so repeating a call never reserves or pays twice. Each
-capture carries our part id as its invoice_id, so PayPal's capture webhooks name the share they are about.
+Every Orders and Payments call goes through APIMatic's PayPal Python SDK (sdk.py; the contract sheet is
+paypal-plan.md). Payouts are not in that SDK, so they go through our own PayPalClient, which also verifies webhooks.
+
+Every write uses an idempotency key made from our own ids, sent as PayPal-Request-Id, so repeating a call never
+reserves or pays twice. Each capture carries our part id as its invoice_id, so PayPal's capture webhooks name the
+share they are about.
 """
 
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
-from typing import Any
+from typing import Self, cast
+
+from paypal.core import UnsetType
+from paypal.models import (
+    AmountBreakdown,
+    AmountWithBreakdown,
+    CaptureRequest,
+    ItemRequest,
+    Money,
+    Order,
+    OrderAuthorizeRequest,
+    OrderAuthorizeResponse,
+    OrderRequest,
+    PayeeBase,
+    PaymentSource,
+    PayPalWallet,
+    PayPalWalletExperienceContext,
+    PurchaseUnitRequest,
+)
+from paypal.models.enums import (
+    CheckoutPaymentIntent,
+    ItemCategory,
+    OrderStatus,
+    PayPalExperienceUserAction,
+    PayPalWalletContextShippingPreference,
+)
 
 from openstall_paypal.client import PayPalClient, PayPalError, PayPalUnavailable
 from openstall_paypal.gateway import (
@@ -27,41 +56,61 @@ from openstall_paypal.gateway import (
     Payment,
     PaymentError,
     PaymentUnavailable,
+    PayPalOrderStatus,
     Reservation,
     Share,
 )
+from openstall_paypal.sdk import REPRESENTATION, PayPalSdk
 
 BRAND_NAME = "OpenStall Collective"
 TEXT_LIMIT = 127  # PayPal's limit for descriptions and item names
 
 
-def money(amount: Decimal) -> dict[str, str]:
-    return {"currency_code": "USD", "value": f"{amount:.2f}"}
+def money(amount: Decimal) -> Money:
+    """US dollars as PayPal writes them: a string with two decimals, made from a Decimal, never a float."""
+    return Money(currency_code="USD", value=f"{amount:.2f}")
 
 
-def approval_link(order: dict[str, Any]) -> str:
+def order_id_of(order: Order) -> str:
+    return order.id if not isinstance(order.id, UnsetType) else "(no id)"
+
+
+def approval_link(order: Order) -> str:
     """Where the buyer approves the order: rel "payer-action" for orders made with an experience context, "approve"
     on older responses."""
-    links = {link.get("rel"): link.get("href") for link in order.get("links", [])}
+    links = {} if isinstance(order.links, UnsetType) else {link.rel: link.href for link in order.links}
     href = links.get("payer-action") or links.get("approve")
     if not href:
-        raise PaymentError("NO_APPROVAL_LINK", f"PayPal created order {order.get('id')} without an approval link")
+        raise PaymentError("NO_APPROVAL_LINK", f"PayPal created order {order_id_of(order)} without an approval link")
     return href
 
 
-def holds_of(order: dict[str, Any]) -> dict[str, str]:
+def holds_of(order: Order | OrderAuthorizeResponse) -> dict[str, str]:
     """The authorization on each purchase unit, by reference_id. Empty until the order is authorized."""
     holds: dict[str, str] = {}
-    for unit in order.get("purchase_units", []):
-        authorizations = (unit.get("payments") or {}).get("authorizations") or []
-        if authorizations:
-            holds[unit.get("reference_id", "default")] = authorizations[0]["id"]
+    if isinstance(order.purchase_units, UnsetType):
+        return holds
+    for unit in order.purchase_units:
+        if isinstance(unit.payments, UnsetType) or isinstance(unit.payments.authorizations, UnsetType):
+            continue
+        authorizations = unit.payments.authorizations
+        if authorizations and not isinstance(authorizations[0].id, UnsetType):
+            reference = unit.reference_id if not isinstance(unit.reference_id, UnsetType) else "default"
+            holds[reference] = authorizations[0].id
     return holds
+
+
+def order_status(order: Order) -> PayPalOrderStatus:
+    """The order's status as PayPal's wire value. A value newer than the SDK arrives as a plain string and is kept."""
+    status = order.status
+    if isinstance(status, UnsetType):
+        raise PaymentUnavailable("PAYPAL_UNREADABLE", f"PayPal sent order {order_id_of(order)} without a status")
+    return cast(PayPalOrderStatus, status.value if isinstance(status, OrderStatus) else status)
 
 
 @contextmanager
 def paypal_errors() -> Iterator[None]:
-    """PayPal client errors as the gateway's errors, keeping PayPal's issue code."""
+    """Our PayPalClient's errors (payouts, webhook checks) as the gateway's errors, keeping PayPal's issue code."""
     try:
         yield
     except PayPalUnavailable as error:
@@ -71,72 +120,103 @@ def paypal_errors() -> Iterator[None]:
 
 
 class SandboxGateway:
-    """What both paths share: the order is made with intent AUTHORIZE, read back, and authorized on return."""
+    """What both paths share: the order is made with intent AUTHORIZE, read back, and authorized on return.
+
+    `sdk` makes the Orders and Payments calls; `client` (our own PayPalClient) sends payouts, verifies webhooks and
+    gives the status page its token check.
+    """
 
     path = ""
 
-    def __init__(self, client: PayPalClient) -> None:
+    def __init__(self, client: PayPalClient, sdk: PayPalSdk) -> None:
         self.client = client
+        self.sdk = sdk
 
-    def purchase_units(self, request: CheckoutRequest) -> list[dict[str, Any]]:
+    @classmethod
+    def connect(cls, base_url: str, client_id: str, secret: str) -> Self:
+        """Both clients for one PayPal REST app. Made once per process: each keeps its token and connections."""
+        return cls(PayPalClient(base_url, client_id, secret), PayPalSdk(base_url, client_id, secret))
+
+    def close(self) -> None:
+        self.sdk.close()
+        self.client.close()
+
+    def purchase_units(self, request: CheckoutRequest) -> list[PurchaseUnitRequest]:
         raise NotImplementedError
 
-    def order_body(self, request: CheckoutRequest) -> dict[str, Any]:
-        return {
-            "intent": "AUTHORIZE",
-            "purchase_units": self.purchase_units(request),
-            "payment_source": {
-                "paypal": {
-                    "experience_context": {
-                        "brand_name": BRAND_NAME,
-                        "shipping_preference": "NO_SHIPPING",  # the agent's request already says where it goes
-                        "user_action": "PAY_NOW",
-                        "return_url": request.return_url,
-                        "cancel_url": request.cancel_url,
-                    }
-                }
-            },
-        }
+    def order_body(self, request: CheckoutRequest) -> OrderRequest:
+        return OrderRequest(
+            intent=CheckoutPaymentIntent.AUTHORIZE,
+            purchase_units=self.purchase_units(request),
+            payment_source=PaymentSource(
+                paypal=PayPalWallet(
+                    experience_context=PayPalWalletExperienceContext(
+                        brand_name=BRAND_NAME,
+                        # The agent's request already says where it goes.
+                        shipping_preference=PayPalWalletContextShippingPreference.NO_SHIPPING,
+                        user_action=PayPalExperienceUserAction.PAY_NOW,
+                        return_url=request.return_url,
+                        cancel_url=request.cancel_url,
+                    )
+                )
+            ),
+        )
 
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
-        with paypal_errors():
-            order = self.client.post(
-                "/v2/checkout/orders", self.order_body(request), idempotency_key=f"openstall-checkout-{request.order_id}"
+        body = self.order_body(request)  # first, so a seller with no PayPal account stops it before PayPal is asked
+        order = self.sdk.call(
+            lambda: self.sdk.client.orders.create_order(
+                body, pay_pal_request_id=f"openstall-checkout-{request.order_id}", prefer=REPRESENTATION
             )
-        return Checkout(order["id"], approval_link(order))
+        )
+        if isinstance(order.id, UnsetType):  # it may have been created: read it back rather than guess
+            raise PaymentUnavailable("PAYPAL_UNREADABLE", f"PayPal sent no order id for order {request.order_id}")
+        return Checkout(order.id, approval_link(order))
 
     def get_order(self, paypal_order_id: str) -> OrderState:
-        with paypal_errors():
-            order = self.client.get(f"/v2/checkout/orders/{paypal_order_id}")
-        return OrderState(order["status"], holds_of(order))
+        order = self.sdk.call(lambda: self.sdk.client.orders.get_order(paypal_order_id))
+        return OrderState(order_status(order), holds_of(order))
 
     def reserve(self, paypal_order_id: str) -> Reservation:
-        with paypal_errors():
-            order = self.client.post(
-                f"/v2/checkout/orders/{paypal_order_id}/authorize",
-                {},
-                idempotency_key=f"openstall-reserve-{paypal_order_id}",
+        answer = self.sdk.call(
+            lambda: self.sdk.client.orders.authorize_order(
+                paypal_order_id,
+                pay_pal_request_id=f"openstall-reserve-{paypal_order_id}",
+                prefer=REPRESENTATION,
+                body=OrderAuthorizeRequest(),
             )
-        holds = holds_of(order)
+        )
+        holds = holds_of(answer)
         if not holds:
             raise PaymentError("NO_AUTHORIZATION", f"PayPal authorized order {paypal_order_id} but sent no authorization")
         return Reservation(paypal_order_id, holds)
 
-    def capture(self, share: Share, body: dict[str, Any]) -> dict[str, Any]:
-        with paypal_errors():
-            return self.client.post(
-                f"/v2/payments/authorizations/{share.hold_id}/capture",
-                body,
-                idempotency_key=f"openstall-capture-{share.part_id}",
+    def capture(self, share: Share, body: CaptureRequest) -> str:
+        """Capture from the share's authorization; PayPal's capture id."""
+        capture = self.sdk.call(
+            lambda: self.sdk.client.payments.capture_authorized_payment(
+                share.hold_id,
+                pay_pal_request_id=f"openstall-capture-{share.part_id}",
+                prefer=REPRESENTATION,
+                body=body,
             )
+        )
+        if isinstance(capture.id, UnsetType):  # it may have been captured: never assume it was not
+            raise PaymentUnavailable("PAYPAL_UNREADABLE", f"PayPal sent no capture id for share {share.part_id}")
+        return capture.id
 
     def void(self, share: Share) -> None:
-        with paypal_errors():
-            self.client.post(
-                f"/v2/payments/authorizations/{share.hold_id}/void",
-                None,
-                idempotency_key=f"openstall-release-{share.part_id}",
+        try:
+            self.sdk.call(
+                lambda: self.sdk.client.payments.void_payment(
+                    share.hold_id, pay_pal_request_id=f"openstall-release-{share.part_id}", prefer=REPRESENTATION
+                )
             )
+        except PaymentUnavailable:
+            # 204 No Content is a successful void too; the SDK cannot decode its empty body, and we read none of it.
+            if self.sdk.wire.last().status == 204:
+                return
+            raise
 
 
 class MultipartyGateway(SandboxGateway):
@@ -144,29 +224,28 @@ class MultipartyGateway(SandboxGateway):
 
     path = "multiparty"
 
-    def purchase_units(self, request: CheckoutRequest) -> list[dict[str, Any]]:
+    def purchase_units(self, request: CheckoutRequest) -> list[PurchaseUnitRequest]:
         units = []
         for part in request.parts:
             if part.payee_merchant_id:
-                payee = {"merchant_id": part.payee_merchant_id}
+                payee = PayeeBase(merchant_id=part.payee_merchant_id)
             elif part.payee_email:
-                payee = {"email_address": part.payee_email}
+                payee = PayeeBase(email_address=part.payee_email)
             else:
                 raise PaymentError("PAYEE_MISSING", f"no PayPal account is linked for {part.description}")
             units.append(
-                {
-                    "reference_id": part.reference_id,
-                    "custom_id": request.order_id,
-                    "description": part.description[:TEXT_LIMIT],
-                    "amount": money(part.amount_usd),
-                    "payee": payee,
-                }
+                PurchaseUnitRequest(
+                    reference_id=part.reference_id,
+                    custom_id=request.order_id,
+                    description=part.description[:TEXT_LIMIT],
+                    amount=AmountWithBreakdown(currency_code="USD", value=f"{part.amount_usd:.2f}"),
+                    payee=payee,
+                )
             )
         return units
 
     def pay_share(self, share: Share) -> Payment:
-        capture = self.capture(share, {"invoice_id": share.part_id, "final_capture": True})
-        return Payment(capture_id=capture["id"])
+        return Payment(capture_id=self.capture(share, CaptureRequest(invoice_id=share.part_id, final_capture=True)))
 
     def release_share(self, share: Share) -> None:
         self.void(share)
@@ -177,32 +256,34 @@ class PayoutsGateway(SandboxGateway):
 
     path = "payouts"
 
-    def purchase_units(self, request: CheckoutRequest) -> list[dict[str, Any]]:
+    def purchase_units(self, request: CheckoutRequest) -> list[PurchaseUnitRequest]:
         total = request.total_usd
         return [
-            {
-                "reference_id": WHOLE_ORDER,
-                "custom_id": request.order_id,
-                "description": f"{BRAND_NAME} order {request.order_id}"[:TEXT_LIMIT],
-                "amount": {**money(total), "breakdown": {"item_total": money(total)}},
+            PurchaseUnitRequest(
+                reference_id=WHOLE_ORDER,
+                custom_id=request.order_id,
+                description=f"{BRAND_NAME} order {request.order_id}"[:TEXT_LIMIT],
+                amount=AmountWithBreakdown(
+                    currency_code="USD", value=f"{total:.2f}", breakdown=AmountBreakdown(item_total=money(total))
+                ),
                 # One line per maker, so the buyer sees at PayPal who makes what.
-                "items": [
-                    {
-                        "name": part.description[:TEXT_LIMIT],
-                        "sku": part.reference_id,
-                        "quantity": "1",
-                        "unit_amount": money(part.amount_usd),
-                        "category": "PHYSICAL_GOODS",
-                    }
+                items=[
+                    ItemRequest(
+                        name=part.description[:TEXT_LIMIT],
+                        sku=part.reference_id,
+                        quantity="1",
+                        unit_amount=money(part.amount_usd),
+                        category=ItemCategory.PHYSICAL_GOODS,
+                    )
                     for part in request.parts
                 ],
-            }
+            )
         ]
 
     def pay_share(self, share: Share) -> Payment:
         receiver = self.receiver(share)  # before capturing, so a seller with no account is never half paid
-        capture = self.capture(
-            share, {"amount": money(share.amount_usd), "invoice_id": share.part_id, "final_capture": share.last}
+        capture_id = self.capture(
+            share, CaptureRequest(amount=money(share.amount_usd), invoice_id=share.part_id, final_capture=share.last)
         )
         with paypal_errors():
             payout = self.client.post(
@@ -224,7 +305,7 @@ class PayoutsGateway(SandboxGateway):
                 },
                 idempotency_key=f"openstall-payout-{share.part_id}",
             )
-        return Payment(capture_id=capture["id"], payout_batch_id=payout["batch_header"]["payout_batch_id"])
+        return Payment(capture_id=capture_id, payout_batch_id=payout["batch_header"]["payout_batch_id"])
 
     def release_share(self, share: Share) -> None:
         # Her amount is never captured. Only the last open share closes the hold, giving back whatever is left.

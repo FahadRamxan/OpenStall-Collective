@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from openstall_api import __version__
+from openstall_api.adapters import get_registry
 from openstall_api.catalog_api import router as catalog_router
 from openstall_api.chat_api import router as chat_router
 from openstall_api.db import REPO_ROOT, migrate
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI):
     # The MCP app's own lifespan does not run inside FastAPI, so start its session manager here.
     async with storefront.session_manager.run():
         yield
+    # Close the PayPal clients' connection pools on shutdown.
+    get_registry().close()
 
 
 app = FastAPI(title="OpenStall Collective API", version=__version__, lifespan=lifespan)

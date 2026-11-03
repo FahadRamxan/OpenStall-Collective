@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 from openstall_allocator import usd
 from openstall_api.adapters import AdapterRegistry, AdapterUnavailable, get_registry
 from openstall_api.catalog import photo_path
+from openstall_api.claims import ClaimHeld
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
@@ -193,7 +194,7 @@ def payment_errors() -> Iterator[None]:
         yield
     except OrderNotFound as error:
         raise HTTPException(status_code=404, detail=str(error)) from None
-    except WrongStatus as error:
+    except (WrongStatus, ClaimHeld) as error:
         raise HTTPException(status_code=409, detail=str(error)) from None
     except AdapterUnavailable as error:
         raise HTTPException(status_code=503, detail=str(error)) from None

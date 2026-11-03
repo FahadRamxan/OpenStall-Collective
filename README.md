@@ -62,7 +62,7 @@ There is no CI to catch a broken push, so run every check on your machine first:
 python scripts/check_all.py
 ```
 
-It runs `pytest`, then, in `apps/web`, `npm run lint`, `npm test`, `npm run build` and `npm run e2e`. It stops at the first failure and ends with a summary of which checks passed, failed or did not run. Push only when it says all checks passed.
+It runs `pytest`, then `mypy --strict` on the PayPal package, then, in `apps/web`, `npm run lint`, `npm test`, `npm run build` and `npm run e2e`. It stops at the first failure and ends with a summary of which checks passed, failed or did not run. Push only when it says all checks passed.
 
 - It works from any folder and with any Python 3.11 or newer: pytest and the UI tests' API run on the repo's `.venv` when it exists.
 - It needs the setup above: the Python packages, `npm install` in `apps/web`, and Playwright's browser (`npx playwright install chromium` in `apps/web`, once).
@@ -87,6 +87,22 @@ cd apps/web && E2E_BASE_URL=https://openstall-collective.onrender.com npm run e2
 
 ```bash
 python scripts/try_mcp.py "cushion covers" --url https://openstall-collective-api.onrender.com/mcp
+```
+
+## Built with APIMatic's PayPal Context Plugin
+
+OpenStall's PayPal Orders and Payments calls (creating the checkout, reading the order, reserving it, then capturing or voiding each maker's share) go through [APIMatic's PayPal Python SDK](https://github.com/context-plugins/paypal-python-sdk), and the integration was written with [APIMatic's PayPal Context Plugin](https://github.com/context-plugins/plugin-marketplace) driving the coding agent:
+
+- **The plugin's skills ran the build.** `python-integrate-paypal` set the order of work and its gates, `python-getting-started` was the lookup layer, and the companion skills (client initialization, authentication, calling endpoints, models, error handling, configuration and resilience, testing) were loaded before any code was written.
+- **A contract sheet came first.** [paypal-plan.md](paypal-plan.md) holds every SDK fact the code relies on, each looked up in the SDK's own map and source rather than recalled: signatures, wire names, error unions, enum members, the retry policy and the duplicate-claims table. No project file was touched until it had no open lookups.
+- **The SDK is pinned** in `pyproject.toml` to commit `143e57f2a372` (by its full hash) of its repository (version 2.29), the code the sheet was checked against. `pip install -e ".[dev]"` installs it, and `/status` names the SDK the gateway uses.
+- **Tests fake PayPal at the SDK's own seam:** a fake transport passed as `custom_http_client`, so they check the request the SDK really builds, and every failure kind the plugin lists (refusals, bad credentials, never-sent and may-have-landed transport failures, unreadable answers, the retry policy). See `packages/paypal/tests/test_sandbox_gateways.py`.
+- **What the SDK does not cover stays on our own client:** PayPal Payouts and webhook verification.
+
+The design choices are in [docs/decisions.md](docs/decisions.md) (November 3: the APIMatic PayPal SDK). To use the plugin yourself with Claude Code, install it once:
+
+```bash
+npx context-plugins install paypal --targets claude
 ```
 
 ## Repository layout

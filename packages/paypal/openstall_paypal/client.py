@@ -73,6 +73,10 @@ class PayPalClient:
         self._token_expires = 0.0
         self._lock = threading.Lock()
 
+    def close(self) -> None:
+        """Close the connection pool."""
+        self._http.close()
+
     def token(self, *, refresh: bool = False) -> str:
         """An OAuth access token, cached until shortly before it expires."""
         with self._lock:

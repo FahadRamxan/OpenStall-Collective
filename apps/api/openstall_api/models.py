@@ -1,4 +1,4 @@
-"""The tables from spec section 4, plus chat_messages and processed_webhooks (see docs/decisions.md).
+"""The tables from spec section 4, plus chat_messages, processed_webhooks and paypal_claims (see docs/decisions.md).
 
 IDs are readable prefixed strings such as s_amina or ord_3f9a1c7e2b40. Events are the exception: their id is an
 increasing integer, so the live feed can ask for "everything after event 41".
@@ -104,6 +104,12 @@ class PartStatus(StrEnum):
     CAPTURED = "captured"  # paid on proof: her tracking was confirmed
     DELIVERED = "delivered"
     RELEASED = "released"  # she dropped out and her authorization was voided
+
+
+class ClaimState(StrEnum):
+    PENDING = "pending"  # a request holds it and is calling PayPal (or its process stopped while doing so)
+    DONE = "done"  # PayPal answered and the result is recorded
+    UNKNOWN = "unknown"  # the holder is finished without PayPal's answer saved: it may have landed
 
 
 class Base(DeclarativeBase):
@@ -327,3 +333,23 @@ class ProcessedWebhook(Base):
     reference: Mapped[str | None] = mapped_column(String(64), index=True)  # our id PayPal echoes, such as a share's
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PayPalClaim(Base):
+    """A PayPal write a caller can ask for twice (a checkout, a reserve, a share's capture or void), claimed here
+    before the SDK call, so a concurrent second request is refused by this table's primary key (claims.py).
+
+    `request_id` is the PayPal-Request-Id the call carries, kept beside the claim: an unknown claim is taken over at
+    once only by a request carrying the same one. `holder` is the token of whoever holds it now, so a takeover of a
+    stale or finished claim can only succeed once.
+    """
+
+    __tablename__ = "paypal_claims"
+
+    key: Mapped[str] = mapped_column(String(96), primary_key=True)  # for example "capture:op_3f9a1c7e2b40"
+    request_id: Mapped[str] = mapped_column(String(128))
+    state: Mapped[ClaimState] = mapped_column(enum_type(ClaimState, "claim_state"))
+    holder: Mapped[str] = mapped_column(String(32))
+    result: Mapped[str | None] = mapped_column(String(64))  # PayPal's id for what the call made, once done
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

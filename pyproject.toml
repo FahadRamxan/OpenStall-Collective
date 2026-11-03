@@ -20,6 +20,11 @@ dependencies = [
     "sse-starlette>=3,<4",
     # HTTP for the PayPal client and Twilio media downloads.
     "httpx>=0.27,<1",
+    # APIMatic's PayPal Python SDK, for PayPal Orders and Payments (packages/paypal/openstall_paypal/sdk.py). It is
+    # not on PyPI, so it installs from its repository, pinned to the commit paypal-plan.md was checked against.
+    "paypal @ git+https://github.com/context-plugins/paypal-python-sdk.git@143e57f2a3729d7df3727386b8c9ddf023d9a5df",
+    # The SDK's HTTP library: our error boundary tells its connection failures apart.
+    "httpx2>=2.13.1,<3",
     # Form posts: Twilio's webhook, and photos and voice notes sent from /seller-chat.
     "python-multipart>=0.0.18",
 ]
@@ -35,6 +40,8 @@ dev = [
     "respx>=0.21,<1",
     # Reads render.yaml in its test.
     "pyyaml>=6,<7",
+    # Type checks the PayPal package against the SDK, which ships py.typed: mypy --strict packages/paypal.
+    "mypy>=1.13",
 ]
 
 [build-system]
@@ -42,6 +49,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 # One installable project; each app and package keeps its own folder from the spec layout.
+# The PayPal SDK is a direct (git) reference, which hatchling only accepts when this is on.
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = [
     "apps/api/openstall_api",

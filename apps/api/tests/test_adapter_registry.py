@@ -23,6 +23,7 @@ from openstall_paypal import (
     MultipartyGateway,
     PaymentGateway,
     PayoutsGateway,
+    PayPalSdk,
 )
 
 ALL_ADAPTERS = ["llm", "speech_to_text", "embedder", "messenger", "payment_gateway", "image_search"]
@@ -134,6 +135,19 @@ def test_sandbox_mode_uses_the_paypal_gateway_for_the_chosen_payment_path(use_se
 
     assert type(registry.payment_gateway) is gateway
     assert registry.payment_gateway.client.base_url == "https://api-m.sandbox.paypal.com"
+    # Orders and Payments go through APIMatic's PayPal SDK, told the same base URL rather than left to its default.
+    assert isinstance(registry.payment_gateway.sdk, PayPalSdk)
+    assert registry.payment_gateway.sdk.base_url == "https://api-m.sandbox.paypal.com"
+
+
+def test_closing_the_registry_closes_the_paypal_clients(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY))
+    gateway = registry.payment_gateway
+
+    registry.close()
+
+    assert gateway.client._http.is_closed
+    assert registry.payment_gateway is not gateway  # a fresh one is made on next use
 
 
 def test_sandbox_mode_uses_the_real_adapter_once_it_is_built(use_settings):

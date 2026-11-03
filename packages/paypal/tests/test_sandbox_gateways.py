@@ -1,13 +1,24 @@
-"""The sandbox gateways send PayPal exactly what each payment path needs. PayPal is mocked with respx."""
+"""The sandbox gateways send PayPal exactly what each payment path needs.
+
+Orders and Payments go through APIMatic's PayPal SDK, so PayPal is faked at the SDK's own seam: a transport passed
+as custom_http_client, which answers each request and keeps it, so the tests check the request the SDK really
+built. Payouts still go through our own PayPalClient, mocked with respx as before.
+"""
 
 import json
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
+from urllib.parse import urlsplit
 
-import httpx
+import httpx2
 import pytest
 import respx
+from paypal.core import HttpRequest, HttpResponse, JsonBody, RetryOptions, TransportError
 
 from openstall_paypal import (
+    RETRY_POLICY,
     WHOLE_ORDER,
     CheckoutPart,
     CheckoutRequest,
@@ -17,10 +28,13 @@ from openstall_paypal import (
     PaymentUnavailable,
     PayoutsGateway,
     PayPalClient,
+    PayPalSdk,
+    SandboxGateway,
     Share,
 )
 
 BASE = "https://api-m.sandbox.paypal.com"
+TOKEN_PATH = "/v1/oauth2/token"
 ORDER = CheckoutRequest(
     order_id="ord_demo",
     parts=(
@@ -38,9 +52,11 @@ CREATED = {
         {"rel": "payer-action", "href": "https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T"},
     ],
 }
+# The real policy, with the waits between retries shortened so the tests do not sleep.
+FAST_RETRIES: RetryOptions = RETRY_POLICY.model_copy(update={"initial_delay": 0.001, "max_jitter": 0.0})
 
 
-def authorized(*units: tuple[str, str]) -> dict:
+def authorized(*units: tuple[str, str]) -> dict[str, Any]:
     return {
         "id": "5O190127TN364715T",
         "status": "COMPLETED",
@@ -51,10 +67,110 @@ def authorized(*units: tuple[str, str]) -> dict:
     }
 
 
+# The fake PayPal behind the SDK: the transport protocol (send and close), routed by method and path.
+
+
+@dataclass
+class StubResponse:
+    """A canned response head, with its body held until the SDK reads it."""
+
+    status_code: int = 200
+    headers: Mapping[str, str] = field(default_factory=dict)
+    chunks: list[bytes] = field(default_factory=list)
+    url: str = BASE
+    closed: bool = False
+
+    def iter_bytes(self, chunk_size: int | None) -> Iterator[bytes]:
+        yield from self.chunks
+        self.close()
+
+    def read(self) -> bytes:
+        self.close()
+        return b"".join(self.chunks)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+@dataclass
+class Route:
+    """The answers for one method and path, in order (the last one repeats), and the requests it got."""
+
+    answers: list[StubResponse | Exception]
+    calls: list[HttpRequest] = field(default_factory=list)
+
+    @property
+    def called(self) -> bool:
+        return bool(self.calls)
+
+    @property
+    def last(self) -> HttpRequest:
+        return self.calls[-1]
+
+
+def answer(status: int = 200, body: Any = None, *, raw: bytes | None = None) -> StubResponse:
+    content = raw if raw is not None else (b"" if body is None else json.dumps(body).encode())
+    return StubResponse(
+        status_code=status, headers={"content-type": "application/json"}, chunks=[content] if content else []
+    )
+
+
+class FakePayPal:
+    """Answers the token request by itself (once, as the SDK caches the token), and each route as it was told."""
+
+    def __init__(self) -> None:
+        self.routes: dict[tuple[str, str], Route] = {}
+        self.requests: list[HttpRequest] = []
+        self.closed = False
+        self.on("POST", TOKEN_PATH, answer(200, {"access_token": "TOKEN", "token_type": "Bearer", "expires_in": 32400}))
+
+    def on(self, method: str, path: str, *answers: StubResponse | Exception) -> Route:
+        route = Route(list(answers))
+        self.routes[(method, path)] = route
+        return route
+
+    def send(self, request: HttpRequest) -> HttpResponse:
+        self.requests.append(request)
+        route = self.routes.get((request.method, urlsplit(request.url).path))
+        if route is None:
+            return answer(404, {"name": "RESOURCE_NOT_FOUND", "message": "no fake route", "debug_id": "x"})
+        route.calls.append(request)
+        reply = route.answers.pop(0) if len(route.answers) > 1 else route.answers[0]
+        if isinstance(reply, Exception):
+            raise TransportError(reply)  # as the SDK's own Httpx2Client reports a request with no response
+        return StubResponse(reply.status_code, reply.headers, list(reply.chunks), request.url)
+
+    def close(self) -> None:
+        self.closed = True
+
+    def token_requests(self) -> int:
+        return len(self.routes[("POST", TOKEN_PATH)].calls)
+
+
+def sent(route: Route) -> tuple[Any, str | None]:
+    """The body the SDK sent (as JSON) and its PayPal-Request-Id."""
+    request = route.last
+    body = request.body.value if isinstance(request.body, JsonBody) else None
+    return body, request.headers.get("paypal-request-id")
+
+
 @pytest.fixture
-def paypal():
+def fake() -> FakePayPal:
+    return FakePayPal()
+
+
+@pytest.fixture
+def sdk(fake: FakePayPal) -> Iterator[PayPalSdk]:
+    sdk = PayPalSdk(BASE, "made-up-client-id", "made-up-secret", transport=fake, retry_options=FAST_RETRIES)
+    yield sdk
+    sdk.close()
+
+
+@pytest.fixture
+def paypal() -> Iterator[respx.MockRouter]:
+    """Our own PayPalClient's side (payouts), mocked with respx."""
     with respx.mock(base_url=BASE, assert_all_called=False) as router:
-        router.post("/v1/oauth2/token").respond(json={"access_token": "TOKEN", "expires_in": 32400})
+        router.post(TOKEN_PATH).respond(json={"access_token": "TOKEN", "expires_in": 32400})
         yield router
 
 
@@ -63,21 +179,24 @@ def client() -> PayPalClient:
     return PayPalClient(BASE, "made-up-client-id", "made-up-secret")
 
 
-def sent(route: respx.Route) -> tuple[dict, str | None]:
+def payout_sent(route: respx.Route) -> tuple[Any, str | None]:
     request = route.calls.last.request
     return (json.loads(request.content) if request.content else None), request.headers.get("PayPal-Request-Id")
 
 
-@pytest.mark.parametrize("gateway", [MultipartyGateway, PayoutsGateway])
-def test_both_paths_follow_the_payment_gateway_interface(gateway, client):
-    assert isinstance(gateway(client), PaymentGateway)
+# What each path sends.
 
 
 @pytest.mark.parametrize("gateway", [MultipartyGateway, PayoutsGateway])
-def test_both_paths_only_reserve_on_approval_and_send_the_buyer_back_to_us(paypal, client, gateway):
-    route = paypal.post("/v2/checkout/orders").respond(201, json=CREATED)
+def test_both_paths_follow_the_payment_gateway_interface(gateway: type[SandboxGateway], client: PayPalClient, sdk: PayPalSdk) -> None:
+    assert isinstance(gateway(client, sdk), PaymentGateway)
 
-    checkout = gateway(client).create_checkout(ORDER)
+
+@pytest.mark.parametrize("gateway", [MultipartyGateway, PayoutsGateway])
+def test_both_paths_only_reserve_on_approval_and_send_the_buyer_back_to_us(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk, gateway: type[SandboxGateway]) -> None:
+    route = fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
+
+    checkout = gateway(client, sdk).create_checkout(ORDER)
 
     body, key = sent(route)
     assert body["intent"] == "AUTHORIZE"
@@ -86,14 +205,16 @@ def test_both_paths_only_reserve_on_approval_and_send_the_buyer_back_to_us(paypa
     assert context["return_url"] == "https://openstall.example/approve/ord_demo/return"
     assert context["cancel_url"] == "https://openstall.example/approve/ord_demo?cancelled=1"
     assert context["shipping_preference"] == "NO_SHIPPING"
+    assert context["user_action"] == "PAY_NOW"
+    assert context["brand_name"] == "OpenStall Collective"
     assert checkout.paypal_order_id == "5O190127TN364715T"
     assert checkout.approval_url == "https://www.sandbox.paypal.com/checkoutnow?token=5O190127TN364715T"
 
 
-def test_multiparty_makes_one_purchase_unit_per_seller_with_her_as_payee(paypal, client):
-    route = paypal.post("/v2/checkout/orders").respond(201, json=CREATED)
+def test_multiparty_makes_one_purchase_unit_per_seller_with_her_as_payee(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
 
-    MultipartyGateway(client).create_checkout(ORDER)
+    MultipartyGateway(client, sdk).create_checkout(ORDER)
 
     body, _ = sent(route)
     assert body["purchase_units"] == [
@@ -114,23 +235,24 @@ def test_multiparty_makes_one_purchase_unit_per_seller_with_her_as_payee(paypal,
     ]
 
 
-def test_multiparty_refuses_a_seller_with_no_paypal_account_before_calling_paypal(paypal, client):
-    route = paypal.post("/v2/checkout/orders").respond(201, json=CREATED)
+def test_multiparty_refuses_a_seller_with_no_paypal_account_before_calling_paypal(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
     order = CheckoutRequest(
         "ord_x", (CheckoutPart("op_001", Decimal("203.00"), "7 × Cushion cover, Grace"),), "https://a.b/r", "https://a.b/c"
     )
 
     with pytest.raises(PaymentError, match="Grace") as error:
-        MultipartyGateway(client).create_checkout(order)
+        MultipartyGateway(client, sdk).create_checkout(order)
 
     assert error.value.issue == "PAYEE_MISSING"
     assert not route.called
+    assert fake.requests == []  # not even a token
 
 
-def test_payouts_makes_one_purchase_unit_for_the_whole_total_listing_each_seller(paypal, client):
-    route = paypal.post("/v2/checkout/orders").respond(201, json=CREATED)
+def test_payouts_makes_one_purchase_unit_for_the_whole_total_listing_each_seller(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
 
-    PayoutsGateway(client).create_checkout(ORDER)
+    PayoutsGateway(client, sdk).create_checkout(ORDER)
 
     body, _ = sent(route)
     [unit] = body["purchase_units"]
@@ -146,94 +268,139 @@ def test_payouts_makes_one_purchase_unit_for_the_whole_total_listing_each_seller
         ("op_001", "12 × Cushion cover, Amina", "216.00"),
         ("op_002", "11 × Cushion cover, Priya", "176.00"),
     ]
+    assert {(item["quantity"], item["category"]) for item in unit["items"]} == {("1", "PHYSICAL_GOODS")}
 
 
-def test_an_older_answer_with_an_approve_link_still_works(paypal, client):
-    paypal.post("/v2/checkout/orders").respond(
-        201, json={"id": "ORDER-2", "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/x"}]}
+def test_every_write_asks_for_the_full_answer_and_carries_our_token(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    create = fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
+    authorize = fake.on(
+        "POST", "/v2/checkout/orders/5O190127TN364715T/authorize", answer(201, authorized(("op_001", "AUTH-1")))
+    )
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(201, {"id": "CAPTURE-1"}))
+    void = fake.on("POST", "/v2/payments/authorizations/AUTH-2/void", answer(200, {"id": "AUTH-2", "status": "VOIDED"}))
+    gateway = MultipartyGateway(client, sdk)
+
+    gateway.create_checkout(ORDER)
+    gateway.reserve("5O190127TN364715T")
+    gateway.pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+    gateway.release_share(Share("op_2", "AUTH-2", Decimal("1.00")))
+
+    for route in (create, authorize, capture, void):
+        assert route.last.headers["prefer"] == "return=representation"  # the SDK's default is return=minimal
+        assert route.last.headers["authorization"] == "Bearer TOKEN"
+    assert fake.token_requests() == 1  # the SDK keeps its token
+
+
+def test_an_older_answer_with_an_approve_link_still_works(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on(
+        "POST",
+        "/v2/checkout/orders",
+        answer(201, {"id": "ORDER-2", "links": [{"rel": "approve", "href": "https://www.sandbox.paypal.com/x"}]}),
     )
 
-    assert PayoutsGateway(client).create_checkout(ORDER).approval_url == "https://www.sandbox.paypal.com/x"
+    assert PayoutsGateway(client, sdk).create_checkout(ORDER).approval_url == "https://www.sandbox.paypal.com/x"
 
 
-def test_an_order_without_an_approval_link_is_an_error(paypal, client):
-    paypal.post("/v2/checkout/orders").respond(201, json={"id": "ORDER-3", "links": []})
+def test_an_order_without_an_approval_link_is_an_error(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/checkout/orders", answer(201, {"id": "ORDER-3", "links": []}))
 
     with pytest.raises(PaymentError) as error:
-        PayoutsGateway(client).create_checkout(ORDER)
+        PayoutsGateway(client, sdk).create_checkout(ORDER)
 
     assert error.value.issue == "NO_APPROVAL_LINK"
 
 
-def test_multiparty_reserves_one_authorization_per_share(paypal, client):
-    route = paypal.post("/v2/checkout/orders/5O190127TN364715T/authorize").respond(
-        201, json=authorized(("op_001", "AUTH-AMINA"), ("op_002", "AUTH-PRIYA"))
+def test_multiparty_reserves_one_authorization_per_share(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on(
+        "POST",
+        "/v2/checkout/orders/5O190127TN364715T/authorize",
+        answer(201, authorized(("op_001", "AUTH-AMINA"), ("op_002", "AUTH-PRIYA"))),
     )
 
-    reservation = MultipartyGateway(client).reserve("5O190127TN364715T")
+    reservation = MultipartyGateway(client, sdk).reserve("5O190127TN364715T")
 
     assert reservation.holds == {"op_001": "AUTH-AMINA", "op_002": "AUTH-PRIYA"}
     assert sent(route) == ({}, "openstall-reserve-5O190127TN364715T")
 
 
-def test_on_the_payouts_path_one_authorization_holds_every_share(paypal, client):
-    paypal.post("/v2/checkout/orders/5O190127TN364715T/authorize").respond(
-        201, json=authorized((WHOLE_ORDER, "AUTH-ALL"))
+def test_on_the_payouts_path_one_authorization_holds_every_share(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on(
+        "POST", "/v2/checkout/orders/5O190127TN364715T/authorize", answer(201, authorized((WHOLE_ORDER, "AUTH-ALL")))
     )
 
-    reservation = PayoutsGateway(client).reserve("5O190127TN364715T")
+    reservation = PayoutsGateway(client, sdk).reserve("5O190127TN364715T")
 
     assert reservation.hold_for("op_001") == reservation.hold_for("op_002") == "AUTH-ALL"
 
 
-def test_reading_an_order_back_shows_its_status_and_any_holds(paypal, client):
-    paypal.get("/v2/checkout/orders/5O190127TN364715T").respond(
-        json=authorized(("op_001", "AUTH-AMINA"))
-    )
+def test_an_authorization_without_holds_is_an_error(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/checkout/orders/ORDER-4/authorize", answer(201, {"id": "ORDER-4", "status": "COMPLETED"}))
 
-    state = MultipartyGateway(client).get_order("5O190127TN364715T")
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).reserve("ORDER-4")
+
+    assert error.value.issue == "NO_AUTHORIZATION"
+
+
+def test_reading_an_order_back_shows_its_status_and_any_holds(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("GET", "/v2/checkout/orders/5O190127TN364715T", answer(200, authorized(("op_001", "AUTH-AMINA"))))
+
+    state = MultipartyGateway(client, sdk).get_order("5O190127TN364715T")
 
     assert state.status == "COMPLETED"
     assert state.holds == {"op_001": "AUTH-AMINA"}
+    assert route.last.body is None and "paypal-request-id" not in route.last.headers  # a read, with no key
 
 
-def test_multiparty_pays_a_share_by_capturing_her_whole_authorization(paypal, client):
-    route = paypal.post("/v2/payments/authorizations/AUTH-AMINA/capture").respond(
-        201, json={"id": "CAPTURE-1", "status": "COMPLETED"}
+def test_an_order_status_newer_than_the_sdk_is_kept_as_paypal_wrote_it(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("GET", "/v2/checkout/orders/ORDER-5", answer(200, {"id": "ORDER-5", "status": "SOMETHING_NEW"}))
+
+    assert str(MultipartyGateway(client, sdk).get_order("ORDER-5").status) == "SOMETHING_NEW"
+
+
+def test_multiparty_pays_a_share_by_capturing_her_whole_authorization(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on(
+        "POST", "/v2/payments/authorizations/AUTH-AMINA/capture", answer(201, {"id": "CAPTURE-1", "status": "COMPLETED"})
     )
 
-    payment = MultipartyGateway(client).pay_share(Share("op_amina", "AUTH-AMINA", Decimal("216.00")))
+    payment = MultipartyGateway(client, sdk).pay_share(Share("op_amina", "AUTH-AMINA", Decimal("216.00")))
 
     assert payment.capture_id == "CAPTURE-1"
     assert sent(route) == ({"invoice_id": "op_amina", "final_capture": True}, "openstall-capture-op_amina")
 
 
-def test_multiparty_releases_a_share_by_voiding_her_authorization(paypal, client):
-    route = paypal.post("/v2/payments/authorizations/AUTH-LUCIA/void").respond(204)
+def test_multiparty_releases_a_share_by_voiding_her_authorization(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/payments/authorizations/AUTH-LUCIA/void", answer(204))
 
-    MultipartyGateway(client).release_share(Share("op_lucia", "AUTH-LUCIA", Decimal("220.00"), last=False))
+    MultipartyGateway(client, sdk).release_share(Share("op_lucia", "AUTH-LUCIA", Decimal("220.00"), last=False))
 
     assert sent(route) == (None, "openstall-release-op_lucia")
 
 
+def test_a_void_answered_with_the_authorization_is_fine_too(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-1/void", answer(200, {"id": "AUTH-1", "status": "VOIDED"}))
+
+    MultipartyGateway(client, sdk).release_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+
 @pytest.mark.parametrize("last", [False, True])
-def test_payouts_captures_only_her_amount_then_pays_her(paypal, client, last):
-    capture = paypal.post("/v2/payments/authorizations/AUTH-ALL/capture").respond(
-        201, json={"id": "CAPTURE-7", "status": "COMPLETED"}
+def test_payouts_captures_only_her_amount_then_pays_her(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk, last: bool) -> None:
+    capture = fake.on(
+        "POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "CAPTURE-7", "status": "COMPLETED"})
     )
     payout = paypal.post("/v1/payments/payouts").respond(
         201, json={"batch_header": {"payout_batch_id": "BATCH-7", "batch_status": "PENDING"}}
     )
     share = Share("op_grace", "AUTH-ALL", Decimal("203.00"), payee_email="grace@example.com", note="7 covers", last=last)
 
-    payment = PayoutsGateway(client).pay_share(share)
+    payment = PayoutsGateway(client, sdk).pay_share(share)
 
     assert payment.capture_id == "CAPTURE-7" and payment.payout_batch_id == "BATCH-7"
     assert sent(capture) == (
         {"amount": {"currency_code": "USD", "value": "203.00"}, "invoice_id": "op_grace", "final_capture": last},
         "openstall-capture-op_grace",
     )
-    body, key = sent(payout)
+    body, key = payout_sent(payout)
     assert key == "openstall-payout-op_grace"
     assert body["sender_batch_header"]["sender_batch_id"] == "openstall-op_grace"
     assert body["items"] == [
@@ -247,29 +414,29 @@ def test_payouts_captures_only_her_amount_then_pays_her(paypal, client, last):
     ]
 
 
-def test_payouts_pays_by_merchant_id_when_there_is_no_email(paypal, client):
-    paypal.post("/v2/payments/authorizations/AUTH-ALL/capture").respond(201, json={"id": "C"})
+def test_payouts_pays_by_merchant_id_when_there_is_no_email(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "C"}))
     payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
 
-    PayoutsGateway(client).pay_share(Share("op_1", "AUTH-ALL", Decimal("1.00"), payee_merchant_id="MERCHANT9"))
+    PayoutsGateway(client, sdk).pay_share(Share("op_1", "AUTH-ALL", Decimal("1.00"), payee_merchant_id="MERCHANT9"))
 
-    body, _ = sent(payout)
+    body, _ = payout_sent(payout)
     assert body["items"][0]["recipient_type"] == "PAYPAL_ID" and body["items"][0]["receiver"] == "MERCHANT9"
 
 
-def test_payouts_never_captures_for_a_seller_it_cannot_pay(paypal, client):
-    capture = paypal.post("/v2/payments/authorizations/AUTH-ALL/capture").respond(201, json={"id": "C"})
+def test_payouts_never_captures_for_a_seller_it_cannot_pay(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "C"}))
 
     with pytest.raises(PaymentError) as error:
-        PayoutsGateway(client).pay_share(Share("op_noor", "AUTH-ALL", Decimal("186.00")))
+        PayoutsGateway(client, sdk).pay_share(Share("op_noor", "AUTH-ALL", Decimal("186.00")))
 
     assert error.value.issue == "PAYEE_MISSING"
     assert not capture.called
 
 
-def test_payouts_releases_a_share_by_leaving_it_uncaptured_and_the_last_one_frees_the_rest(paypal, client):
-    void = paypal.post("/v2/payments/authorizations/AUTH-ALL/void").respond(204)
-    gateway = PayoutsGateway(client)
+def test_payouts_releases_a_share_by_leaving_it_uncaptured_and_the_last_one_frees_the_rest(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    void = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/void", answer(204))
+    gateway = PayoutsGateway(client, sdk)
 
     gateway.release_share(Share("op_lucia", "AUTH-ALL", Decimal("220.00"), last=False))
     assert not void.called
@@ -278,23 +445,278 @@ def test_payouts_releases_a_share_by_leaving_it_uncaptured_and_the_last_one_free
     assert sent(void) == (None, "openstall-release-op_grace")
 
 
-def test_paypal_refusals_keep_their_issue_code(paypal, client):
-    paypal.post("/v2/payments/authorizations/AUTH-1/capture").respond(
-        422,
-        json={"name": "UNPROCESSABLE_ENTITY", "details": [{"issue": "AUTHORIZATION_VOIDED"}], "message": "Voided"},
+def test_a_failed_payout_after_the_capture_keeps_paypals_issue(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "C"}))
+    paypal.post("/v1/payments/payouts").respond(
+        422, json={"name": "UNPROCESSABLE_ENTITY", "details": [{"issue": "RECEIVER_UNREGISTERED"}]}
     )
 
     with pytest.raises(PaymentError) as error:
-        MultipartyGateway(client).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+        PayoutsGateway(client, sdk).pay_share(Share("op_1", "AUTH-ALL", Decimal("1.00"), payee_email="a@b.c"))
+
+    assert error.value.issue == "RECEIVER_UNREGISTERED"
+
+
+# PayPal's refusals: PaymentError with PayPal's issue code.
+
+
+def test_paypal_refusals_keep_their_issue_code(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    # No debug_id, so this is not the SDK's Error shape: the issue is still read from the body PayPal sent.
+    fake.on(
+        "POST",
+        "/v2/payments/authorizations/AUTH-1/capture",
+        answer(422, {"name": "UNPROCESSABLE_ENTITY", "details": [{"issue": "AUTHORIZATION_VOIDED"}], "message": "Voided"}),
+    )
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
 
     assert error.value.issue == "AUTHORIZATION_VOIDED"
     assert not isinstance(error.value, PaymentUnavailable)
 
 
-def test_no_answer_from_paypal_is_unavailable_so_the_caller_reads_the_state_back(paypal, client):
-    route = paypal.post("/v2/checkout/orders/ORDER-9/authorize").mock(side_effect=httpx.ReadTimeout("slow"))
+def test_a_refusal_in_the_sdks_error_shape_keeps_its_issue_and_message(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on(
+        "POST",
+        "/v2/checkout/orders/ORDER-6/authorize",
+        answer(
+            422,
+            {
+                "name": "UNPROCESSABLE_ENTITY",
+                "message": "The requested action could not be performed.",
+                "debug_id": "f00d",
+                "details": [{"issue": "ORDER_NOT_APPROVED", "description": "Payer has not yet approved the Order."}],
+            },
+        ),
+    )
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).reserve("ORDER-6")
+
+    assert error.value.issue == "ORDER_NOT_APPROVED"
+    assert error.value.message == "The requested action could not be performed."
+    assert not isinstance(error.value, PaymentUnavailable)
+
+
+def test_a_refusal_without_details_uses_paypals_name(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on(
+        "GET",
+        "/v2/checkout/orders/ORDER-7",
+        answer(404, {"name": "RESOURCE_NOT_FOUND", "message": "Not found", "debug_id": "f00d"}),
+    )
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).get_order("ORDER-7")
+
+    assert error.value.issue == "RESOURCE_NOT_FOUND"
+
+
+def test_a_status_the_sdk_does_not_map_is_still_a_refusal_with_its_issue(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(418, {"name": "TEAPOT"}))
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert error.value.issue == "TEAPOT"
+    assert not isinstance(error.value, PaymentUnavailable)
+
+
+def test_bad_credentials_are_a_refusal_of_our_keys_and_nothing_is_sent(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", TOKEN_PATH, answer(401, {"error": "invalid_client", "error_description": "Client Authentication failed"}))
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(201, {"id": "C"}))
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert error.value.issue == "invalid_client"
+    assert error.value.message == "Client Authentication failed"
+    assert not isinstance(error.value, PaymentUnavailable)
+    assert not capture.called
+
+
+# PayPal's own 401 bodies. An expired or revoked token gets an OAuth-style body, and AUTHENTICATION_FAILURE often
+# comes without a debug_id; neither fits the SDK's Error model (name, message and debug_id all required).
+EXPIRED_TOKEN = {"error": "invalid_token", "error_description": "Access Token not found in cache"}
+AUTHENTICATION_FAILURE = {
+    "name": "AUTHENTICATION_FAILURE",
+    "message": "Authentication failed due to invalid authentication credentials or a missing Authorization header.",
+    "links": [{"href": "https://developer.paypal.com/docs/api/overview/#error", "rel": "information_link"}],
+}
+IN_THE_SDKS_SHAPE = {"name": "AUTHENTICATION_FAILURE", "message": "expired", "debug_id": "x"}
+
+
+@pytest.mark.parametrize(
+    "body", [EXPIRED_TOKEN, AUTHENTICATION_FAILURE, IN_THE_SDKS_SHAPE], ids=["invalid_token", "no debug_id", "Error"]
+)
+def test_a_401_gets_a_fresh_token_and_one_more_try_with_the_same_request_id(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk, body: dict[str, Any]) -> None:
+    capture = fake.on(
+        "POST",
+        "/v2/payments/authorizations/AUTH-1/capture",
+        answer(401, body),
+        answer(201, {"id": "CAPTURE-2"}),
+    )
+
+    payment = MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert payment.capture_id == "CAPTURE-2"
+    assert fake.token_requests() == 2
+    assert [request.headers["paypal-request-id"] for request in capture.calls] == ["openstall-capture-op_1"] * 2
+
+
+@pytest.mark.parametrize(
+    ("body", "issue"),
+    [(EXPIRED_TOKEN, "invalid_token"), (AUTHENTICATION_FAILURE, "AUTHENTICATION_FAILURE"), (IN_THE_SDKS_SHAPE, "AUTHENTICATION_FAILURE")],
+    ids=["invalid_token", "no debug_id", "Error"],
+)
+def test_a_second_401_is_a_refusal(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk, body: dict[str, Any], issue: str) -> None:
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(401, body))
+
+    with pytest.raises(PaymentError) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert error.value.issue == issue
+    assert not isinstance(error.value, PaymentUnavailable)
+    assert len(capture.calls) == 2
+    assert fake.token_requests() == 2
+
+
+def test_a_401_on_a_read_is_tried_once_more_too(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on(
+        "GET", "/v2/checkout/orders/ORDER-8", answer(401, EXPIRED_TOKEN), answer(200, {"id": "ORDER-8", "status": "APPROVED"})
+    )
+
+    assert MultipartyGateway(client, sdk).get_order("ORDER-8").status == "APPROVED"
+    assert len(route.calls) == 2
+
+
+# No answer: PaymentUnavailable, so the caller reads the state back. Never sent and may-have-landed differ.
+
+
+def test_no_answer_from_paypal_is_unavailable_so_the_caller_reads_the_state_back(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/checkout/orders/ORDER-9/authorize", httpx2.ReadTimeout("slow"))
+
+    with pytest.raises(PaymentUnavailable) as error:
+        MultipartyGateway(client, sdk).reserve("ORDER-9")
+
+    assert len(route.calls) == 1  # a write is never sent again blindly
+    assert error.value.outcome_unknown
+
+
+def test_a_request_that_never_left_is_not_the_same_failure_as_one_that_may_have_landed(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", httpx2.ConnectError("refused"))
+    fake.on("POST", "/v2/payments/authorizations/AUTH-2/capture", httpx2.ReadTimeout("no reply"))
+    gateway = MultipartyGateway(client, sdk)
+
+    with pytest.raises(PaymentUnavailable) as never_sent:
+        gateway.pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+    with pytest.raises(PaymentUnavailable) as may_have_landed:
+        gateway.pay_share(Share("op_2", "AUTH-2", Decimal("1.00")))
+
+    assert (never_sent.value.issue, never_sent.value.outcome_unknown) == ("PAYPAL_UNAVAILABLE", False)
+    assert (may_have_landed.value.issue, may_have_landed.value.outcome_unknown) == ("PAYPAL_UNAVAILABLE", True)
+
+
+def test_when_the_token_cannot_be_fetched_the_operation_was_never_sent(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", TOKEN_PATH, httpx2.ReadTimeout("slow"))
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(201, {"id": "C"}))
+
+    with pytest.raises(PaymentUnavailable) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert not error.value.outcome_unknown
+    assert not capture.called
+
+
+def test_a_paypal_server_error_is_unavailable_and_keeps_its_issue(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on(
+        "POST",
+        "/v2/payments/authorizations/AUTH-1/capture",
+        answer(500, {"name": "INTERNAL_SERVER_ERROR", "message": "oops", "debug_id": "x"}),
+    )
+
+    with pytest.raises(PaymentUnavailable) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert error.value.issue == "INTERNAL_SERVER_ERROR"
+    assert error.value.outcome_unknown
+    assert len(route.calls) == 1
+
+
+def test_an_answer_that_cannot_be_read_may_have_succeeded(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(201, {"id": ["not", "a", "string"]}))
+    fake.on("POST", "/v2/payments/authorizations/AUTH-2/capture", answer(201, raw=b"<html>gateway</html>"))
+    gateway = MultipartyGateway(client, sdk)
+
+    for share in (Share("op_1", "AUTH-1", Decimal("1.00")), Share("op_2", "AUTH-2", Decimal("1.00"))):
+        with pytest.raises(PaymentUnavailable) as error:
+            gateway.pay_share(share)
+        assert (error.value.issue, error.value.outcome_unknown) == ("PAYPAL_UNREADABLE", True)
+
+
+def test_a_capture_answered_without_an_id_is_not_taken_as_paid_or_as_failed(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", answer(201, {}))
+
+    with pytest.raises(PaymentUnavailable) as error:
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert error.value.outcome_unknown
+
+
+def test_an_order_created_without_an_id_is_read_back_not_guessed(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/checkout/orders", answer(201, {"status": "PAYER_ACTION_REQUIRED"}))
 
     with pytest.raises(PaymentUnavailable):
-        MultipartyGateway(client).reserve("ORDER-9")
+        MultipartyGateway(client, sdk).create_checkout(ORDER)
 
-    assert route.call_count == 1
+
+# The retry policy: the SDK resends reads only.
+
+
+def test_the_retry_policy_resends_reads_and_never_writes() -> None:
+    assert RETRY_POLICY.http_methods_to_retry == frozenset({"GET"})
+    assert RETRY_POLICY.max_retries == 2
+
+
+def test_a_read_is_tried_again_after_a_server_error_or_no_answer(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on(
+        "GET",
+        "/v2/checkout/orders/ORDER-8",
+        answer(503, {"name": "SERVICE_UNAVAILABLE", "message": "busy", "debug_id": "x"}),
+        httpx2.ConnectError("refused"),
+        answer(200, {"id": "ORDER-8", "status": "APPROVED"}),
+    )
+
+    assert MultipartyGateway(client, sdk).get_order("ORDER-8").status == "APPROVED"
+    assert len(route.calls) == 3
+
+
+def test_a_read_gives_up_after_its_retries(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("GET", "/v2/checkout/orders/ORDER-8", httpx2.ReadTimeout("slow"))
+
+    with pytest.raises(PaymentUnavailable):
+        MultipartyGateway(client, sdk).get_order("ORDER-8")
+
+    assert len(route.calls) == 1 + RETRY_POLICY.max_retries
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [answer(503, {"name": "SERVICE_UNAVAILABLE", "message": "busy", "debug_id": "x"}), httpx2.ConnectError("refused")],
+    ids=["server error", "no connection"],
+)
+def test_a_write_is_never_sent_twice_by_the_sdk(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk, failure: StubResponse | Exception) -> None:
+    route = fake.on("POST", "/v2/payments/authorizations/AUTH-1/capture", failure, answer(201, {"id": "C"}))
+
+    with pytest.raises(PaymentUnavailable):
+        MultipartyGateway(client, sdk).pay_share(Share("op_1", "AUTH-1", Decimal("1.00")))
+
+    assert len(route.calls) == 1
+
+
+def test_the_gateway_closes_both_clients(fake: FakePayPal, sdk: PayPalSdk) -> None:
+    client = PayPalClient(BASE, "id", "secret")
+
+    MultipartyGateway(client, sdk).close()
+
+    assert fake.closed  # the SDK client closes its transport
+    assert client._http.is_closed

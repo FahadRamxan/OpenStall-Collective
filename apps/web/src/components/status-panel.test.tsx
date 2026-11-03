@@ -28,6 +28,14 @@ const PAYPAL_FAKE: StatusReport["payment"] = {
   status: "fake",
   path: "payouts",
   message: "Checkout runs on the simulated PayPal page. Nothing reaches PayPal.",
+  sdk: null,
+};
+
+const PAYPAL_SDK: NonNullable<StatusReport["payment"]["sdk"]> = {
+  label: "APIMatic PayPal Python SDK 2.29",
+  distribution: "paypal",
+  version: "2.29",
+  commit: "143e57f",
 };
 
 const FAKE_REPORT: StatusReport = {
@@ -48,6 +56,7 @@ const SANDBOX_REPORT: StatusReport = {
     status: "token ok",
     path: "multiparty",
     message: "PayPal gave us a token at https://api-m.sandbox.paypal.com.",
+    sdk: PAYPAL_SDK,
   },
   adapters: [
     adapter({ label: "LLM", status: "not built", keys: ["ANTHROPIC_API_KEY"] }),
@@ -197,6 +206,38 @@ describe("StatusPanel", () => {
     expect(within(paypal).getByText("Fake")).toBeInTheDocument();
     expect(paypal).toHaveTextContent("Checkout runs on the simulated PayPal page.");
     expect(paypal).toHaveTextContent("Payouts. PayPal holds the buyer's approval for OpenStall");
+    // Honest about fake mode: no SDK is in use there.
+    expect(paypal).toHaveTextContent("None. In fake mode the simulated PayPal gateway answers, and no SDK is used.");
+    expect(paypal).not.toHaveTextContent("APIMatic");
+  });
+
+  it("names the APIMatic PayPal SDK the sandbox gateway uses, with its commit", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(SANDBOX_REPORT)));
+
+    render(<StatusPanel />);
+
+    const paypal = await screen.findByRole("region", { name: "PayPal" });
+    expect(paypal).toHaveTextContent("APIMatic PayPal Python SDK 2.29 (commit 143e57f).");
+    expect(paypal).toHaveTextContent("Orders and payments go through it; payouts and webhook checks use our own client.");
+    expect(within(paypal).getByText("143e57f").tagName).toBe("CODE");
+  });
+
+  it("does not claim the SDK is in use before PayPal gives the app a token", async () => {
+    const noKeys: StatusReport = {
+      ...SANDBOX_REPORT,
+      payment: {
+        ...SANDBOX_REPORT.payment,
+        status: "missing key",
+        message: "Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to reach the PayPal sandbox.",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(noKeys)));
+
+    render(<StatusPanel />);
+
+    const paypal = await screen.findByRole("region", { name: "PayPal" });
+    expect(paypal).toHaveTextContent("Orders and payments will go through it once PayPal gives the app a token.");
+    expect(paypal).not.toHaveTextContent("Orders and payments go through it;");
   });
 
   it("shows when PayPal gave the API a sandbox token, and when it refused", async () => {
@@ -210,7 +251,12 @@ describe("StatusPanel", () => {
 
     const refused: StatusReport = {
       ...SANDBOX_REPORT,
-      payment: { status: "failed", path: "payouts", message: "PayPal gave no token: Client Authentication failed" },
+      payment: {
+        status: "failed",
+        path: "payouts",
+        message: "PayPal gave no token: Client Authentication failed",
+        sdk: { ...PAYPAL_SDK, commit: null },
+      },
     };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(refused)));
     render(<StatusPanel />);

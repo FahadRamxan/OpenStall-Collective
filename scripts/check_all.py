@@ -1,4 +1,5 @@
-"""Run every check before a push: pytest, then lint, npm test, npm run build and npm run e2e in apps/web.
+"""Run every check before a push: pytest, mypy on the PayPal package, then lint, npm test, npm run build and npm run
+e2e in apps/web.
 
 Stops at the first failure and prints a summary. The project has no CI, so this is the only gate.
 
@@ -56,6 +57,8 @@ def default_steps() -> list[Step]:
     e2e_env = {"E2E_PYTHON": os.environ.get("E2E_PYTHON", python)}
     return [
         Step("pytest", [python, "-m", "pytest", "-q"], REPO_ROOT),
+        # The PayPal package against APIMatic's PayPal SDK, which ships py.typed and is checked under --strict.
+        Step("mypy", [python, "-m", "mypy", "--strict", "packages/paypal/openstall_paypal"], REPO_ROOT),
         Step("npm run lint", [npm_path, "run", "lint"], WEB_DIR),
         Step("npm test", [npm_path, "test"], WEB_DIR),
         Step("npm run build", [npm_path, "run", "build"], WEB_DIR),

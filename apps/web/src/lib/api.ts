@@ -92,14 +92,26 @@ export type DatabaseStatus = "ok" | "not migrated" | "error";
 /** The database as GET /api/status reports it. The message never holds the database's address or password. */
 export type DatabaseState = { status: DatabaseStatus; tables: Record<string, number>; message: string | null };
 
+/** The SDK the sandbox gateway calls PayPal's Orders and Payments APIs with, read from its installed package. */
+export type PaymentSdk = {
+  /** For people, for example "APIMatic PayPal Python SDK 2.29". */
+  label: string;
+  distribution: string;
+  version: string;
+  /** The SDK repository commit it was installed from, shortened; null if it was not installed from git. */
+  commit: string | null;
+};
+
 /**
  * The PayPal connection. "token ok": PayPal gave the API a sandbox token. `path` is how makers are paid: by PayPal
- * Payouts from the platform, or as payees on the PayPal order themselves.
+ * Payouts from the platform, or as payees on the PayPal order themselves. `sdk` is null in fake mode, where the
+ * simulated gateway answers and no SDK is used.
  */
 export type PaymentState = {
   status: "fake" | "missing key" | "token ok" | "failed";
   path: "multiparty" | "payouts";
   message: string;
+  sdk: PaymentSdk | null;
 };
 
 export type StatusReport = {

@@ -208,6 +208,27 @@ function PaymentSection({ payment }: { payment: PaymentState }) {
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
         <dt className="text-muted">Payment path</dt>
         <dd>{PAYMENT_PATHS[payment.path] ?? payment.path}</dd>
+        <dt className="text-muted">SDK</dt>
+        <dd>
+          {payment.sdk ? (
+            <>
+              {payment.sdk.label}
+              {payment.sdk.commit && (
+                <>
+                  {" "}
+                  (commit <code className="font-mono text-xs">{payment.sdk.commit}</code>)
+                </>
+              )}
+              {payment.status === "token ok"
+                ? ". Orders and payments go through it; payouts and webhook checks use our own client."
+                : ". Orders and payments will go through it once PayPal gives the app a token."}
+            </>
+          ) : payment.status === "fake" ? (
+            "None. In fake mode the simulated PayPal gateway answers, and no SDK is used."
+          ) : (
+            "Not reported."
+          )}
+        </dd>
       </dl>
     </section>
   );

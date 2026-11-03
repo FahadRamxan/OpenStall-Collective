@@ -1,11 +1,18 @@
 """Payments for orders (spec 3.5, pay-on-proof): send the human to PayPal to approve the whole order, reserve it when
 they come back, then pay or release each seller's share. Every PayPal call goes through the payment gateway.
+
+Each PayPal write that a caller can ask for twice (the checkout, the reserve, a share's capture and its void) is
+claimed in our database first (claims.py), so two requests at once cannot both reach PayPal. On Postgres the second
+waits on the order's row lock and then finds the stored result; on SQLite it is refused with ClaimHeld. A repeat
+after the first finished returns the stored result, or, if PayPal did not answer the first, goes ahead with the
+same PayPal-Request-Id, as before.
 """
 
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, selectinload
 
+from openstall_api.claims import paypal_claim
 from openstall_api.events import EventType, record_event
 from openstall_api.models import Order, OrderPart, OrderStatus, PartStatus
 from openstall_api.orders import move_order, move_part
@@ -14,6 +21,7 @@ from openstall_paypal import (
     Checkout,
     CheckoutPart,
     CheckoutRequest,
+    PaymentError,
     PaymentGateway,
     PaymentUnavailable,
     Reservation,
@@ -101,7 +109,14 @@ def start_checkout(session: Session, order_id: str, gateway: PaymentGateway, web
     if order.status not in CHECKOUT_FROM:
         raise WrongStatus(f"Order {order.id} is {STATUS_WORDS[order.status]}, so it cannot go to PayPal again.")
     request = checkout_request(order, web_base_url)
-    checkout = gateway.create_checkout(request)
+    with paypal_claim(
+        session,
+        f"checkout:{order.id}",
+        f"openstall-checkout-{order.id}",
+        busy=f"Order {order.id} is being sent to PayPal by another request. Try again in a moment.",
+    ) as claim:
+        checkout = gateway.create_checkout(request)
+        claim.result = checkout.paypal_order_id
     repeated = order.paypal_order_id == checkout.paypal_order_id
     if order.status == OrderStatus.DRAFT:
         move_order(order, OrderStatus.AWAITING_APPROVAL)
@@ -144,13 +159,23 @@ def reserve_order(session: Session, order_id: str, gateway: PaymentGateway) -> O
             "it again."
         )
     else:
-        try:
-            reservation = gateway.reserve(paypal_order_id)
-        except PaymentUnavailable:
-            state = gateway.get_order(paypal_order_id)
-            if not state.holds:
-                raise
-            reservation = Reservation(paypal_order_id, state.holds)
+        with paypal_claim(
+            session,
+            f"reserve:{order.id}",
+            f"openstall-reserve-{paypal_order_id}",
+            busy=f"Order {order.id} is being reserved at PayPal by another request. Try again in a moment.",
+        ) as claim:
+            try:
+                reservation = gateway.reserve(paypal_order_id)
+            except PaymentUnavailable as no_answer:
+                try:
+                    state = gateway.get_order(paypal_order_id)
+                except PaymentError:
+                    raise no_answer  # the reserve's own outcome decides its claim, not this read's
+                if not state.holds:
+                    raise
+                reservation = Reservation(paypal_order_id, state.holds)
+            claim.result = paypal_order_id
     for part in order.parts:
         hold = reservation.hold_for(part.reference_id)
         if hold is None:
@@ -210,7 +235,14 @@ def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderP
         raise WrongStatus(f"{name}'s share is {part.status.value}, so it cannot be paid.")
     if not part.tracking_number:
         raise WrongStatus(f"{name}'s share is paid when her tracking is confirmed, and there is none yet.")
-    payment = gateway.pay_share(share_of(part))
+    with paypal_claim(
+        session,
+        f"capture:{part.id}",
+        f"openstall-capture-{part.id}",
+        busy=f"{name}'s share is being paid by another request. Try again in a moment.",
+    ) as claim:
+        payment = gateway.pay_share(share_of(part))
+        claim.result = payment.capture_id
     part.capture_id = payment.capture_id
     move_part(part, PartStatus.CAPTURED)
     record_event(
@@ -238,7 +270,15 @@ def release_share(session: Session, part_id: str, gateway: PaymentGateway) -> Or
     if part.status in PAID:
         raise WrongStatus(f"{name}'s share was already paid, so it cannot be released.")
     if part.status == PartStatus.AUTHORIZED:
-        gateway.release_share(share_of(part))
+        with paypal_claim(
+            session,
+            f"release:{part.id}",
+            f"openstall-release-{part.id}",
+            busy=f"{name}'s share is being released by another request. Try again in a moment.",
+        ) as claim:
+            share = share_of(part)
+            gateway.release_share(share)
+            claim.result = share.hold_id
     move_part(part, PartStatus.RELEASED)
     record_event(
         session,

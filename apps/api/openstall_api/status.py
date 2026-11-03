@@ -15,7 +15,7 @@ from openstall_api.adapters import AdapterRegistry, AdapterStatus, get_registry
 from openstall_api.db import get_engine
 from openstall_api.models import Base
 from openstall_api.settings import Mode, PaymentPath
-from openstall_paypal import SandboxGateway
+from openstall_paypal import SandboxGateway, sdk_info
 
 router = APIRouter(prefix="/api", tags=["status"])
 
@@ -36,12 +36,30 @@ class DatabaseState(BaseModel):
     message: str | None = None  # what is wrong, never the URL, which can hold a password
 
 
+class SdkState(BaseModel):
+    """The SDK the sandbox gateway calls PayPal's Orders and Payments APIs with, from its installed metadata."""
+
+    label: str  # for example "APIMatic PayPal Python SDK 2.29"
+    distribution: str
+    version: str
+    commit: str | None  # the SDK repository commit it was installed from
+
+
 class PaymentState(BaseModel):
     """The PayPal connection. In sandbox mode it asks PayPal for a token; the client keeps it until it expires."""
 
     status: Literal["fake", "missing key", "token ok", "failed"]
     path: PaymentPath
     message: str
+    # In sandbox mode, the SDK the gateway uses. None in fake mode: the simulated gateway calls no SDK and no PayPal.
+    sdk: SdkState | None = None
+
+
+def sdk_state() -> SdkState | None:
+    info = sdk_info()
+    if info is None:
+        return None
+    return SdkState(label=info.label, distribution=info.distribution, version=info.version, commit=info.commit)
 
 
 class StatusReport(BaseModel):
@@ -60,18 +78,24 @@ def payment_state(registry: AdapterRegistry) -> PaymentState:
         return PaymentState(
             status="fake", path=path, message="Checkout runs on the simulated PayPal page. Nothing reaches PayPal."
         )
+    sdk = sdk_state()
     missing = registry.missing_keys("payment_gateway")
     if missing:
         return PaymentState(
-            status="missing key", path=path, message=f"Set {' and '.join(missing)} to reach the PayPal sandbox."
+            status="missing key",
+            path=path,
+            message=f"Set {' and '.join(missing)} to reach the PayPal sandbox.",
+            sdk=sdk,
         )
     try:
         gateway = registry.payment_gateway
         if isinstance(gateway, SandboxGateway):
             gateway.client.token()
     except Exception as error:  # the status page must load whatever PayPal says
-        return PaymentState(status="failed", path=path, message=f"PayPal gave no token: {error}")
-    return PaymentState(status="token ok", path=path, message=f"PayPal gave us a token at {settings.PAYPAL_API_BASE}.")
+        return PaymentState(status="failed", path=path, message=f"PayPal gave no token: {error}", sdk=sdk)
+    return PaymentState(
+        status="token ok", path=path, message=f"PayPal gave us a token at {settings.PAYPAL_API_BASE}.", sdk=sdk
+    )
 
 
 def database_state() -> DatabaseState:

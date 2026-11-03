@@ -24,7 +24,7 @@ from openstall_api.db import reset_engine
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
 from openstall_api.whatsapp import TwilioMessenger
-from openstall_paypal import FakeGateway, MultipartyGateway, PaymentGateway, PayoutsGateway, PayPalClient
+from openstall_paypal import FakeGateway, MultipartyGateway, PaymentGateway, PayoutsGateway
 
 # fake: a stand-in, in fake mode. real: the real service, in sandbox mode. missing key: sandbox mode, but a key the
 # real service needs is not set. not built: sandbox mode with the keys set, but the real adapter does not exist yet.
@@ -49,12 +49,16 @@ class AdapterSpec:
 
 
 def make_paypal_gateway(settings: Settings) -> PaymentGateway:
-    """The sandbox gateway for the chosen payment path. The registry checks the keys are set before calling it."""
+    """The sandbox gateway for the chosen payment path. The registry checks the keys are set before calling it.
+
+    It holds two clients for the same PayPal REST app: APIMatic's PayPal SDK for Orders and Payments, and our own
+    PayPalClient for Payouts and webhook checks, which that SDK does not cover. Both are told the base URL.
+    """
     assert settings.PAYPAL_CLIENT_ID and settings.PAYPAL_CLIENT_SECRET
-    client = PayPalClient(
+    gateway = MultipartyGateway if settings.PAYMENT_PATH == "multiparty" else PayoutsGateway
+    return gateway.connect(
         settings.PAYPAL_API_BASE, settings.PAYPAL_CLIENT_ID, settings.PAYPAL_CLIENT_SECRET.get_secret_value()
     )
-    return MultipartyGateway(client) if settings.PAYMENT_PATH == "multiparty" else PayoutsGateway(client)
 
 
 def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
@@ -202,6 +206,15 @@ class AdapterRegistry:
     def image_search(self) -> ImageSearch:
         return cast(ImageSearch, self.get("image_search"))
 
+    def close(self) -> None:
+        """Close every adapter made so far that holds connections (the PayPal clients), and forget them all."""
+        with self._lock:
+            made, self._made = self._made, {}
+        for adapter in made.values():
+            close = getattr(adapter, "close", None)
+            if callable(close):
+                close()
+
     def _spec(self, name: str) -> AdapterSpec:
         try:
             return self._specs[name]
@@ -245,9 +258,11 @@ def get_registry() -> AdapterRegistry:
 
 def reset_app_state() -> None:
     """Forget the settings, the registry and the database engine, so the next call reads settings again and makes
-    fresh adapters and a fresh connection pool."""
+    fresh adapters and a fresh connection pool. The old registry's clients are closed."""
     global _registry
     with _registry_lock:
-        _registry = None
+        registry, _registry = _registry, None
+    if registry is not None:
+        registry.close()
     get_settings.cache_clear()
     reset_engine()
