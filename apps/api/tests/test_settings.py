@@ -32,6 +32,7 @@ ENVIRONMENT = {
     "DATABASE_URL": "postgresql://openstall:made-up-password@db.example:5432/openstall",
     "PASSPORT_SIGNING_KEY": "bWFkZS11cCBzaWduaW5nIGtleQ==",
     "AUTO_MIGRATE": "false",
+    "MEDIA_DIR": "/var/data/media",
 }
 
 SECRETS = (

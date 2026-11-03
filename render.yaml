@@ -1,0 +1,92 @@
+# Render blueprint for the hosted demo: the API, the web app and a Postgres database.
+# Create it in the Render dashboard: New > Blueprint, pick this repo. Every push to main then deploys both services.
+#
+# Plans: the demo must stay up until judging ends on December 15. A free Render Postgres is deleted 30 days after it
+# is created, and free web services sleep after 15 idle minutes and take about a minute to wake, which a judge would
+# see. So both services run on Starter and the database on basic-256mb (docs/decisions.md, prompt 12).
+#
+# Secrets are marked "sync: false": Render asks for their values when the blueprint is created (leave the ones you
+# do not have yet empty), and they never live in git. The URLs below assume Render gives the services these names; if it adds a suffix, change the three URL
+# variables in the dashboard to the real addresses and redeploy.
+
+databases:
+  - name: openstall-db
+    plan: basic-256mb
+    databaseName: openstall
+    user: openstall
+    postgresMajorVersion: "16"
+    ipAllowList: [] # only the services in this blueprint can connect
+
+services:
+  - type: web
+    name: openstall-collective-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -e ".[postgres]"
+    # Migrate, seed the demo world only on a fresh database, then serve. One process: fake mode keeps the simulated
+    # PayPal's orders in memory.
+    startCommand: >-
+      alembic upgrade head &&
+      python scripts/seed_demo.py --if-empty --demo-order &&
+      uvicorn openstall_api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    # Seller photos and voice notes (MEDIA_DIR). A disk keeps them across deploys.
+    disk:
+      name: openstall-media
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14.5"
+      # fake until the PayPal sandbox keys are set; then change it to sandbox in the dashboard.
+      - key: OPENSTALL_MODE
+        value: fake
+      - key: PUBLIC_BASE_URL
+        value: https://openstall-collective-api.onrender.com
+      - key: WEB_BASE_URL
+        value: https://openstall-collective.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: openstall-db
+          property: connectionString
+      - key: AUTO_MIGRATE
+        value: "false" # the start command migrates
+      - key: MEDIA_DIR
+        value: /var/data/media
+      - key: PAYMENT_PATH
+        value: payouts
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_VISION_API_KEY
+        sync: false
+      - key: PASSPORT_SIGNING_KEY
+        sync: false
+
+  - type: web
+    name: openstall-collective
+    runtime: node
+    plan: starter
+    rootDir: apps/web
+    buildCommand: npm ci && npm run build
+    startCommand: npm start -- --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Baked into the build: the address of the API above.
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://openstall-collective-api.onrender.com
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"

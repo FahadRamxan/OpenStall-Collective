@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("shows the headline", async ({ page }) => {
+test("shows the headline", { tag: "@smoke" }, async ({ page }) => {
   await expect(page).toHaveTitle("OpenStall Collective");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(HEADLINE);
 });
@@ -44,7 +44,7 @@ test("the header links reach every page and mark the current one", async ({ page
   }
 });
 
-test("the footer shows the browser can reach the API", async ({ page }) => {
+test("the footer shows the browser can reach the API", { tag: "@smoke" }, async ({ page }) => {
   // Proves NEXT_PUBLIC_API_BASE_URL and the API's CORS setting (WEB_BASE_URL) fit together.
   await expect(page.getByRole("contentinfo").getByRole("status")).toHaveText("API online");
 });

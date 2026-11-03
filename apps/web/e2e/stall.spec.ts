@@ -10,27 +10,31 @@ const STALLS = [
 ];
 
 for (const stall of STALLS) {
-  test(`${stall.name}'s stall shows who she is, her listing, a real photo and her trust record`, async ({ page }) => {
-    await page.goto(`/stall/${stall.id}`);
+  test(
+    `${stall.name}'s stall shows who she is, her listing, a real photo and her trust record`,
+    { tag: "@smoke" },
+    async ({ page }) => {
+      await page.goto(`/stall/${stall.id}`);
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(stall.name);
-    await expect(page).toHaveTitle(`${stall.name}'s stall · OpenStall Collective`);
-    await expect(page.getByText("Seeded demo seller")).toBeVisible();
-    await expect(page.getByText(`${stall.place} · Speaks ${stall.language}`)).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(stall.name);
+      await expect(page).toHaveTitle(`${stall.name}'s stall · OpenStall Collective`);
+      await expect(page.getByText("Seeded demo seller")).toBeVisible();
+      await expect(page.getByText(`${stall.place} · Speaks ${stall.language}`)).toBeVisible();
 
-    const listing = page.getByRole("article");
-    await expect(listing.getByText(stall.price, { exact: true })).toBeVisible();
-    const photo = listing.getByRole("img", { name: /photo 1/ });
-    await expect(photo).toBeVisible();
-    await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+      const listing = page.getByRole("article");
+      await expect(listing.getByText(stall.price, { exact: true })).toBeVisible();
+      const photo = listing.getByRole("img", { name: /photo 1/ });
+      await expect(photo).toBeVisible();
+      await expect.poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
-    const trust = page.getByRole("region", { name: `${stall.name}'s trust record` });
-    await expect(trust).toContainText("orders delivered");
-    await expect(trust).toContainText("These are seeded demo numbers, not real sales.");
-  });
+      const trust = page.getByRole("region", { name: `${stall.name}'s trust record` });
+      await expect(trust).toContainText("orders delivered");
+      await expect(trust).toContainText("These are seeded demo numbers, not real sales.");
+    },
+  );
 }
 
-test("the home page lists all five makers, and a card opens its stall", async ({ page }) => {
+test("the home page lists all five makers, and a card opens its stall", { tag: "@smoke" }, async ({ page }) => {
   await page.goto("/");
 
   const makers = page.getByRole("region", { name: "Meet the makers" });

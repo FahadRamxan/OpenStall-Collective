@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # Apply database migrations when the API starts. On by default for local runs; the host sets it explicitly.
     AUTO_MIGRATE: bool = True
 
+    # Seller photos and voice notes. A relative path is taken from the repo root; on Render, a persistent disk.
+    MEDIA_DIR: str = "data/media"
+
     # Trust passports: Ed25519 private key, base64.
     PASSPORT_SIGNING_KEY: SecretStr | None = None
 

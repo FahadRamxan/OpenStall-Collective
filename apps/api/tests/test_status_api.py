@@ -207,3 +207,11 @@ def test_paypal_refusing_the_keys_is_reported_in_its_own_words(use_settings):
 
     assert payment["status"] == "failed"
     assert payment["message"] == "PayPal gave no token: Client Authentication failed"
+
+
+def test_on_render_the_status_names_the_deployed_commit(monkeypatch):
+    assert get_status()["commit"] is None
+
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "8f3fec3a1b2c4d5e6f708192a3b4c5d6e7f80912")
+
+    assert get_status()["commit"] == "8f3fec3a1b2c4d5e6f708192a3b4c5d6e7f80912"

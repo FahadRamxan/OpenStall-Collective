@@ -22,7 +22,7 @@ function modeBadge(page: Page, label: string) {
   return page.getByRole("region", { name: "Mode" }).getByText(label, { exact: true });
 }
 
-test("the footer links to the status page", async ({ page }) => {
+test("the footer links to the status page", { tag: "@smoke" }, async ({ page }) => {
   await page.goto("/");
   await page.getByRole("contentinfo").getByRole("link", { name: "System status" }).click();
 

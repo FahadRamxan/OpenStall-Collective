@@ -35,12 +35,14 @@ const FAKE_REPORT: StatusReport = {
   version: "0.1.0",
   database: DATABASE_OK,
   payment: PAYPAL_FAKE,
+  commit: null,
   adapters: ADAPTER_LABELS.map((label) => adapter({ label })),
 };
 
 const SANDBOX_REPORT: StatusReport = {
   mode: "sandbox",
   version: "0.2.0",
+  commit: "8f3fec3a1b2c4d5e6f708192a3b4c5d6e7f80912",
   database: DATABASE_OK,
   payment: {
     status: "token ok",
@@ -167,6 +169,23 @@ describe("StatusPanel", () => {
     render(<StatusPanel />);
 
     expect(row(await adaptersTable(), "Embedder")).toHaveTextContent("Real service: Embedder service. No key needed.");
+  });
+
+  it("names the deployed commit, linked to the code on GitHub, and nothing when running locally", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(SANDBOX_REPORT)));
+    const { unmount } = render(<StatusPanel />);
+
+    const commit = await screen.findByRole("link", { name: "8f3fec3" });
+    expect(commit).toHaveAttribute(
+      "href",
+      "https://github.com/FahadRamxan/OpenStall-Collective/commit/8f3fec3a1b2c4d5e6f708192a3b4c5d6e7f80912",
+    );
+    unmount();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(FAKE_REPORT)));
+    render(<StatusPanel />);
+    await screen.findByRole("region", { name: "Mode" });
+    expect(screen.queryByText("Deployed commit")).not.toBeInTheDocument();
   });
 
   it("shows PayPal as fake in fake mode, with the payment path", async () => {

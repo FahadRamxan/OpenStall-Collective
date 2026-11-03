@@ -68,6 +68,27 @@ It runs `pytest`, then, in `apps/web`, `npm run lint`, `npm test`, `npm run buil
 - It needs the setup above: the Python packages, `npm install` in `apps/web`, and Playwright's browser (`npx playwright install chromium` in `apps/web`, once).
 - The UI tests make their own production build, so a full run takes a few minutes.
 
+## The hosted demo
+
+[render.yaml](render.yaml) runs the API, the web app and a Postgres database on Render, and every push to `main` deploys them.
+
+- Web app: https://openstall-collective.onrender.com
+- API: https://openstall-collective-api.onrender.com (its health check is `/health`)
+
+These addresses work once the blueprint is created. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false`; leave the ones you do not have yet empty. The API starts in fake mode. Once the PayPal sandbox keys are set, change `OPENSTALL_MODE` to `sandbox` in the dashboard. If Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` to match.
+
+Both services run on Starter and the database on basic-256mb. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](docs/decisions.md)).
+
+To check a deploy, open `/status`, which names the deployed commit. Then run the smoke tests and an MCP search against it:
+
+```bash
+cd apps/web && E2E_BASE_URL=https://openstall-collective.onrender.com npm run e2e:smoke
+```
+
+```bash
+python scripts/try_mcp.py "cushion covers" --url https://openstall-collective-api.onrender.com/mcp
+```
+
 ## Repository layout
 
 ```

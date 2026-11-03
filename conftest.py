@@ -49,8 +49,16 @@ def test_database_url(tmp_path: Path) -> str:
     return f"sqlite:///{(tmp_path / 'openstall-test.db').as_posix()}"
 
 
+@pytest.fixture
+def test_media_dir(tmp_path: Path) -> Path:
+    """A media folder of this test's own, so no test writes into data/media."""
+    return tmp_path / "media"
+
+
 @pytest.fixture(autouse=True)
-def fake_mode(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, test_database_url: str):
+def fake_mode(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, test_database_url: str, test_media_dir: Path
+):
     """Fake mode for every test, with fresh fakes and its own database: nothing one test does reaches the next.
 
     Live tests get sandbox mode and the developer's .env instead (but still their own database).
@@ -61,6 +69,7 @@ def fake_mode(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, t
     else:
         monkeypatch.setenv("OPENSTALL_MODE", "fake")
     monkeypatch.setenv("DATABASE_URL", test_database_url)
+    monkeypatch.setenv("MEDIA_DIR", str(test_media_dir))
     reset_app_state()
     yield
     reset_app_state()
@@ -117,15 +126,16 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def use_settings(monkeypatch: pytest.MonkeyPatch, test_database_url: str):
+def use_settings(monkeypatch: pytest.MonkeyPatch, test_database_url: str, test_media_dir: Path):
     """Switch the app to settings from only the given environment variables, for example
     use_settings(OPENSTALL_MODE="sandbox", ANTHROPIC_API_KEY="made-up"). Anything not given takes its default,
-    except DATABASE_URL, which stays on the test's own database unless given."""
+    except DATABASE_URL and MEDIA_DIR, which stay on the test's own database and folder unless given."""
 
     def switch(**env: str) -> Settings:
         for name in Settings.model_fields:
             monkeypatch.delenv(name, raising=False)
         env.setdefault("DATABASE_URL", test_database_url)
+        env.setdefault("MEDIA_DIR", str(test_media_dir))
         for name, value in env.items():
             monkeypatch.setenv(name, value)
         reset_app_state()

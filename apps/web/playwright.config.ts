@@ -14,6 +14,8 @@ const apiURL = `http://127.0.0.1:${apiPort}`;
 /** The e2e API, for tests that call it directly (for example to record a test event). */
 export const E2E_API_URL = apiURL;
 const webURL = `http://127.0.0.1:${webPort}`;
+/** Set E2E_BASE_URL to run the tests against a hosted demo instead of local servers: npm run e2e:smoke. */
+const hostedURL = process.env.E2E_BASE_URL?.replace(/\/+$/, "");
 
 // A throwaway SQLite database in an ignored folder, emptied each time the e2e API starts.
 const dataDir = path.join(__dirname, ".e2e-data");
@@ -43,12 +45,12 @@ export default defineConfig({
   // "never": a local failure must not start a report server that keeps `npm run e2e` waiting.
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: webURL,
+    baseURL: hostedURL || webURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: [
+  webServer: hostedURL ? [] : [
     {
       name: "API",
       command: `node "${resetDataScript}" "${dataDir}" && "${python()}" scripts/seed_demo.py --reset --demo-order && "${python()}" -m uvicorn openstall_api.main:app --host 127.0.0.1 --port ${apiPort} --log-level warning`,

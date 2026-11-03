@@ -3,6 +3,7 @@
 It reports which keys are missing by name, and never a key's value or the database URL.
 """
 
+import os
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Response
@@ -46,6 +47,7 @@ class PaymentState(BaseModel):
 class StatusReport(BaseModel):
     mode: Mode
     version: str
+    commit: str | None  # the git commit this build came from, on Render; None when running locally
     database: DatabaseState
     payment: PaymentState
     adapters: list[AdapterState]
@@ -103,6 +105,7 @@ def read_status(registry: Annotated[AdapterRegistry, Depends(get_registry)], res
     return StatusReport(
         mode=registry.settings.OPENSTALL_MODE,
         version=__version__,
+        commit=os.environ.get("RENDER_GIT_COMMIT") or None,
         database=database_state(),
         payment=payment_state(registry),
         adapters=[

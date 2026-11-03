@@ -360,6 +360,15 @@ def test_database_urls_are_normalised(raw, expected):
     assert database_url(raw).render_as_string(hide_password=True) == expected
 
 
+def test_the_hosts_postgres_driver_is_the_one_sqlalchemy_uses():
+    pytest.importorskip("psycopg")  # installed with pip install -e ".[postgres]", as render.yaml does
+    from sqlalchemy import create_engine
+
+    engine = create_engine(database_url("postgres://u:p@db.example:5432/openstall"))
+
+    assert (engine.dialect.name, engine.dialect.driver) == ("postgresql", "psycopg")
+
+
 def test_a_relative_sqlite_path_is_taken_from_the_repo_root_and_its_folder_is_made(tmp_path, monkeypatch):
     import openstall_api.db as db_module
 

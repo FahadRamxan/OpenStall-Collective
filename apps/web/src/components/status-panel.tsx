@@ -13,6 +13,8 @@ import {
   type StatusReport,
 } from "@/lib/api";
 
+const REPO_URL = "https://github.com/FahadRamxan/OpenStall-Collective";
+
 /** How long to wait for /api/status, so a hung API or a slow cold start cannot leave the page loading. */
 export const STATUS_TIMEOUT_MS = 10_000;
 
@@ -123,6 +125,19 @@ function Report({ report }: { report: StatusReport }) {
           <dd className="font-mono break-all">{apiBaseUrl()}</dd>
           <dt className="text-muted">Version</dt>
           <dd className="font-mono">{report.version}</dd>
+          {report.commit ? (
+            <>
+              <dt className="text-muted">Deployed commit</dt>
+              <dd>
+                <a
+                  href={`${REPO_URL}/commit/${report.commit}`}
+                  className="font-mono text-accent underline underline-offset-4"
+                >
+                  {report.commit.slice(0, 7)}
+                </a>
+              </dd>
+            </>
+          ) : null}
         </dl>
       </section>
 

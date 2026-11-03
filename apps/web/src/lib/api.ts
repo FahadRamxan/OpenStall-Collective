@@ -105,6 +105,8 @@ export type PaymentState = {
 export type StatusReport = {
   mode: Mode;
   version: string;
+  /** The git commit the hosted build came from (Render sets it); null when the API runs locally. */
+  commit: string | null;
   database: DatabaseState;
   payment: PaymentState;
   adapters: AdapterState[];
