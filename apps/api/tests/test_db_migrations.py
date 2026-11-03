@@ -62,3 +62,19 @@ def test_the_app_leaves_the_database_alone_when_auto_migrate_is_off(use_settings
 
     assert migrate_if_enabled() is False
     assert table_names() == set()
+
+
+def test_webhooks_received_before_migration_0003_keep_working_after_it():
+    from sqlalchemy import text
+
+    command.upgrade(alembic_config(), "0002")
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("INSERT INTO processed_webhooks (id, provider, event_id, received_at) VALUES ('wh_1', 'paypal', 'WH-1', '2026-11-02')")
+        )
+
+    command.upgrade(alembic_config(), "head")
+
+    with get_engine().connect() as connection:
+        row = connection.execute(text("SELECT event_id, payload_json, event_type FROM processed_webhooks")).one()
+    assert (row.event_id, row.payload_json, row.event_type) == ("WH-1", "{}", None)

@@ -24,6 +24,8 @@ function share(name: string, quantity: number, price: string, amount: string, se
     amount_usd: amount,
     delivery_date: "2026-12-10",
     status: "pending" as const,
+    confirmed_by_paypal: true,
+    attention: null,
     trust_score: "0.95",
     trust_data_source: "seeded_demo" as const,
   };

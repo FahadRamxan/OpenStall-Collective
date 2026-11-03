@@ -8,11 +8,12 @@ from decimal import Decimal
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from openstall_api.adapters import AdapterRegistry, get_registry
 from openstall_api.events_api import fake_mode_only
+from openstall_api.webhooks import deliver_fake_webhooks
 from openstall_paypal import FakeGateway, FakeOrderView, PaymentError, PayPalOrderStatus
 
 router = APIRouter(prefix="/api/dev/fake-paypal", tags=["dev"], dependencies=[Depends(fake_mode_only)])
@@ -77,9 +78,11 @@ def view_order(token: str, gateway: GatewayDep) -> FakePayPalOrder:
 
 
 @router.post("/{token}/approve")
-def approve_order(token: str, gateway: GatewayDep) -> Redirect:
-    """The buyer approves. Like PayPal, send them to the return URL with the token and a payer id."""
+def approve_order(token: str, gateway: GatewayDep, background: BackgroundTasks) -> Redirect:
+    """The buyer approves. Like PayPal, send them to the return URL with the token and a payer id, and send the
+    CHECKOUT.ORDER.APPROVED webhook."""
     view = _view(gateway, token, approve=True)
+    background.add_task(deliver_fake_webhooks)
     separator = "&" if "?" in view.request.return_url else "?"
     query = urlencode({"token": token, "PayerID": FAKE_PAYER_ID})
     return Redirect(redirect_url=f"{view.request.return_url}{separator}{query}")

@@ -85,11 +85,16 @@ def test_reserving_records_the_order_and_each_makers_share(approved, demo_order)
     ]
 
 
+def without_confirmations(order: dict) -> dict:
+    """The order without PayPal's confirmations, which its webhooks add just after the first reserve call."""
+    return {**order, "parts": [{**part, "confirmed_by_paypal": None} for part in order["parts"]]}
+
+
 def test_paypal_is_read_first_and_the_order_is_reserved_only_once(approved, demo_order, fakes):
     first = reserve().json()
     second = reserve().json()
 
-    assert second == first
+    assert without_confirmations(second) == without_confirmations(first)
     assert calls(fakes) == ["get_order", "reserve"]
     assert len(events(demo_order, EventType.ORDER_AUTHORIZED)) == 1
 

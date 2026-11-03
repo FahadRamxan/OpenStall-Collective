@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, selectinload
 
@@ -17,6 +17,7 @@ from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.orders import server_total
 from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, start_checkout
+from openstall_api.webhooks import PayPalConfirmation, confirmations, deliver_fake_webhooks
 from openstall_paypal import PaymentError, PaymentUnavailable
 from openstall_trust import trust_score
 
@@ -44,6 +45,8 @@ class PartOut(BaseModel):
     amount_usd: Decimal
     delivery_date: date | None
     status: PartStatus
+    confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
+    attention: str | None  # PayPal reported a problem with it, such as a denied payment
     trust_score: Decimal | None
     trust_data_source: DataSource | None
 
@@ -71,7 +74,7 @@ class OrderOut(BaseModel):
     parts: list[PartOut]
 
 
-def _part(session: Session, part: OrderPart) -> PartOut:
+def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation) -> PartOut:
     passport = session.get(Passport, part.seller_id)
     metrics = passport.metrics_json if passport else None
     product = part.product
@@ -88,6 +91,8 @@ def _part(session: Session, part: OrderPart) -> PartOut:
         amount_usd=part.amount_usd,
         delivery_date=part.delivery_date,
         status=part.status,
+        confirmed_by_paypal=paypal.confirmed,
+        attention=paypal.attention,
         trust_score=(
             trust_score(metrics["on_time_rate"], metrics["dispute_rate"], metrics["photo_originality"])
             if metrics
@@ -98,6 +103,7 @@ def _part(session: Session, part: OrderPart) -> PartOut:
 
 
 def order_out(session: Session, order: Order) -> OrderOut:
+    paypal = confirmations(session, order.parts)
     request = order.request
     items = request.items_json if request else []
     summary = next((item.get("query") for item in items if isinstance(item, dict) and item.get("query")), None)
@@ -121,7 +127,7 @@ def order_out(session: Session, order: Order) -> OrderOut:
             if request
             else None
         ),
-        parts=[_part(session, part) for part in order.parts],
+        parts=[_part(session, part, paypal[part.id]) for part in order.parts],
     )
 
 
@@ -213,9 +219,10 @@ def checkout(order_id: str, session: SessionDep, registry: RegistryDep) -> Check
 
 
 @router.post("/orders/{order_id}/reserve")
-def reserve(order_id: str, session: SessionDep, registry: RegistryDep) -> OrderOut:
+def reserve(order_id: str, session: SessionDep, registry: RegistryDep, background: BackgroundTasks) -> OrderOut:
     """The human is back from PayPal: reserve the whole order, once. Safe to call again; it changes nothing then."""
     with payment_errors():
         reserve_order(session, order_id, registry.payment_gateway)
     session.commit()
+    background.add_task(deliver_fake_webhooks)  # fake mode: PayPal's confirmations follow, as they would for real
     return order_out(session, _load(session, order_id))

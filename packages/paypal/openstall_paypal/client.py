@@ -99,8 +99,19 @@ class PayPalClient:
     def post(self, path: str, body: dict[str, Any] | None, *, idempotency_key: str) -> dict[str, Any]:
         return self._send("POST", path, body, idempotency_key)
 
+    def post_raw(self, path: str, content: bytes) -> dict[str, Any]:
+        """POST a JSON body exactly as given. For checks that change nothing, so no idempotency key."""
+        return self._send("POST", path, None, None, content=content)
+
     def _send(
-        self, method: str, path: str, body: dict[str, Any] | None, idempotency_key: str | None, *, renewed: bool = False
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any] | None,
+        idempotency_key: str | None,
+        *,
+        content: bytes | None = None,
+        renewed: bool = False,
     ) -> dict[str, Any]:
         headers = {
             "Authorization": f"Bearer {self.token(refresh=renewed)}",
@@ -109,12 +120,17 @@ class PayPalClient:
         }
         if idempotency_key is not None:
             headers["PayPal-Request-Id"] = idempotency_key
+        if content is not None:
+            headers["Content-Type"] = "application/json"
         try:
-            response = self._http.request(method, f"{self.base_url}{path}", json=body, headers=headers)
+            if content is not None:
+                response = self._http.request(method, f"{self.base_url}{path}", content=content, headers=headers)
+            else:
+                response = self._http.request(method, f"{self.base_url}{path}", json=body, headers=headers)
         except httpx.TransportError as error:
             raise PayPalUnavailable(f"PayPal could not be reached ({type(error).__name__})") from error
         if response.status_code == 401 and not renewed:
-            return self._send(method, path, body, idempotency_key, renewed=True)
+            return self._send(method, path, body, idempotency_key, content=content, renewed=True)
         if response.status_code >= 400:
             raise _error(response)
         return response.json() if response.content else {}

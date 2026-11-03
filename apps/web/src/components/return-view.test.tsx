@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ReturnView } from "@/components/return-view";
+import { RECEIPT_POLL_MS, ReturnView } from "@/components/return-view";
 import type { Order } from "@/lib/orders";
 
 const params = { orderId: "ord_demo" };
@@ -19,6 +19,8 @@ function share(name: string, quantity: number, price: string, amount: string, se
     amount_usd: amount,
     delivery_date: "2026-12-10",
     status: "authorized" as const,
+    confirmed_by_paypal: true,
+    attention: null,
     trust_score: "0.95",
     trust_data_source: "seeded_demo" as const,
   };
@@ -61,7 +63,11 @@ describe("ReturnView", () => {
     expect(shares[0]).toHaveTextContent("Amina · Lahore, Pakistan");
     expect(shares[0]).toHaveTextContent("12 × $18.00 · ships by December 10, 2026");
     expect(shares[0]).toHaveTextContent("$216.00");
-    for (const row of shares) expect(row).toHaveTextContent("Reserved, paid when she ships");
+    for (const row of shares) {
+      expect(row).toHaveTextContent("Reserved, paid when she ships");
+      expect(row).toHaveTextContent("Confirmed by PayPal");
+    }
+    expect(screen.getByText("PayPal confirmed every share.")).toBeInTheDocument();
     expect(screen.getByText("PayPal order")).toHaveTextContent("FAKE-1234");
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("http://api.test/api/orders/ord_demo/reserve");
@@ -94,6 +100,41 @@ describe("ReturnView", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "PayPal is holding $392.00" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("looks again until PayPal confirms each share", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const waiting: Order = {
+      ...RESERVED,
+      parts: RESERVED.parts.map((part) => ({ ...part, confirmed_by_paypal: false })),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => Promise.resolve(Response.json(waiting)))
+      .mockImplementation(() => Promise.resolve(Response.json(RESERVED)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReturnView />);
+
+    expect(await screen.findByText("Waiting for PayPal to confirm each share…")).toBeInTheDocument();
+    expect(screen.getAllByText("Waiting for PayPal…")).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(RECEIPT_POLL_MS);
+
+    expect(await screen.findByText("PayPal confirmed every share.")).toBeInTheDocument();
+    expect(screen.getAllByText("Confirmed by PayPal")).toHaveLength(2);
+    expect(fetchMock.mock.calls[1][0]).toBe("http://api.test/api/orders/ord_demo");
+    vi.useRealTimers();
+  });
+
+  it("shows when PayPal reports a problem with a share", async () => {
+    const denied: Order = {
+      ...RESERVED,
+      parts: [{ ...RESERVED.parts[0], confirmed_by_paypal: false, attention: "PayPal denied this payment" }],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(denied)));
+
+    render(<ReturnView />);
+
+    expect(await screen.findByText("PayPal denied this payment")).toBeInTheDocument();
   });
 
   it("says there is no order when the API does not know the id", async () => {

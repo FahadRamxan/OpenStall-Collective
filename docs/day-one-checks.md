@@ -23,6 +23,18 @@ Why:
 
 Date decided:
 
+## PayPal webhooks
+
+Once the hosted API is up (prompt 12) and the sandbox REST app exists:
+
+1. In the PayPal developer dashboard, open the sandbox app, then **Add Webhook**.
+2. Webhook URL: `https://openstall-collective-api.onrender.com/api/webhooks/paypal` (the hosted `PUBLIC_BASE_URL` plus `/api/webhooks/paypal`).
+3. Events: `CHECKOUT.ORDER.APPROVED`, `PAYMENT.AUTHORIZATION.CREATED`, `PAYMENT.AUTHORIZATION.VOIDED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.CAPTURE.REFUNDED`, and for the payouts path `PAYMENT.PAYOUTSBATCH.SUCCESS`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED` and `PAYMENT.PAYOUTS-ITEM.FAILED`.
+4. Copy the webhook's **Webhook ID** into `PAYPAL_WEBHOOK_ID`, in `.env` and in the Render dashboard. It is not a secret, but without it every event is refused.
+5. Check it: approve an order on the hosted demo as the sandbox buyer and watch the receipt's rows turn to "Confirmed by PayPal". Then resend one event from the dashboard's webhook events page: the API answers `{"status": "repeat"}` and nothing changes twice.
+
+In fake mode the fake gateway sends the same events to the same endpoint, signed with a fixed fake key, so none of this is needed offline.
+
 ## Sandbox accounts
 
 Sandbox emails and merchant IDs only.

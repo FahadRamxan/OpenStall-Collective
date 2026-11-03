@@ -7,13 +7,30 @@ import { useEffect, useState } from "react";
 import { Badge, type BadgeTone } from "@/components/badge";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, place } from "@/lib/catalog";
-import { PART_STATUS_LABELS, formatDay, reserveOrder, type Order, type PartStatus } from "@/lib/orders";
+import {
+  PART_STATUS_LABELS,
+  formatDay,
+  getOrder,
+  reserveOrder,
+  type Order,
+  type OrderPart,
+  type PartStatus,
+} from "@/lib/orders";
+
+/** How often the receipt asks whether PayPal's confirmations have arrived, and for how long. */
+export const RECEIPT_POLL_MS = 2_000;
+const MAX_POLLS = 30;
 
 type Load =
   | { state: "reserving" }
   | { state: "reserved"; order: Order }
   | { state: "missing" }
   | { state: "failed"; message: string; canRetry: boolean };
+
+/** Shares PayPal has not confirmed yet, and nothing has gone wrong with: their webhooks are still on the way. */
+function awaitingPayPal(order: Order): boolean {
+  return order.parts.some((part) => part.status !== "pending" && !part.confirmed_by_paypal && !part.attention);
+}
 
 const PART_TONES: Record<PartStatus, BadgeTone> = {
   pending: "neutral",
@@ -31,6 +48,7 @@ export function ReturnView() {
   const { orderId } = useParams<{ orderId: string }>();
   const [load, setLoad] = useState<Load>({ state: "reserving" });
   const [attempt, setAttempt] = useState(0);
+  const [polls, setPolls] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,6 +66,22 @@ export function ReturnView() {
       });
     return () => controller.abort();
   }, [orderId, attempt]);
+
+  // PayPal confirms each share with a webhook a moment later: look again until every one has arrived.
+  useEffect(() => {
+    if (load.state !== "reserved" || !awaitingPayPal(load.order) || polls >= MAX_POLLS) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      getOrder(orderId, { signal: controller.signal })
+        .then((order) => setLoad({ state: "reserved", order }))
+        .catch(() => {}) // a missed look is made up by the next one
+        .finally(() => setPolls((count) => count + 1));
+    }, RECEIPT_POLL_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [load, polls, orderId]);
 
   const backToOrder = (
     <Link
@@ -129,6 +163,13 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
         Nothing has been taken yet. Each maker is paid when she ships, and a share she cannot deliver goes back to
         you.
       </p>
+      <p role="status" className="mt-3 text-sm font-medium">
+        {awaitingPayPal(order) ? (
+          <span className="text-muted">Waiting for PayPal to confirm each share…</span>
+        ) : (
+          <span className="text-success">PayPal confirmed every share.</span>
+        )}
+      </p>
 
       <section aria-labelledby="receipt-heading" className="mt-8">
         <h2 id="receipt-heading" className="text-xl font-semibold tracking-tight">
@@ -155,6 +196,7 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-end">
                   <p className="font-semibold tabular-nums">{formatUsd(part.amount_usd)}</p>
                   <Badge tone={PART_TONES[part.status]}>{PART_STATUS_LABELS[part.status]}</Badge>
+                  <PayPalNote part={part} />
                 </div>
               </li>
             );
@@ -181,5 +223,24 @@ function Receipt({ order, backToOrder }: { order: Order; backToOrder: React.Reac
         {backToOrder}
       </div>
     </div>
+  );
+}
+
+/** Whether PayPal itself confirmed where the share stands, from its verified webhooks. */
+function PayPalNote({ part }: { part: OrderPart }) {
+  if (part.attention) {
+    return <p className="text-xs font-semibold text-danger">{part.attention}</p>;
+  }
+  if (part.status === "pending") return null;
+  if (!part.confirmed_by_paypal) {
+    return <p className="text-xs text-muted">Waiting for PayPal…</p>;
+  }
+  return (
+    <p className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5">
+        <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Confirmed by PayPal
+    </p>
   );
 }

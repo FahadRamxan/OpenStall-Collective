@@ -309,11 +309,19 @@ class Event(Base):
 
 
 class ProcessedWebhook(Base):
-    """A webhook event already handled, so a repeat is ignored (spec section 7)."""
+    """A verified webhook event, handled once: a repeat is ignored (spec section 7).
+
+    It is kept, so what PayPal confirmed can be shown whatever order its events arrived in: an authorization that was
+    confirmed before our side saved it still counts once it is saved.
+    """
 
     __tablename__ = "processed_webhooks"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: new_id("wh"))
     provider: Mapped[str] = mapped_column(String(32))
     event_id: Mapped[str] = mapped_column(String(128), unique=True)
+    event_type: Mapped[str | None] = mapped_column(String(64))
+    resource_id: Mapped[str | None] = mapped_column(String(64), index=True)  # PayPal's authorization, capture ...
+    reference: Mapped[str | None] = mapped_column(String(64), index=True)  # our id PayPal echoes, such as a share's
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

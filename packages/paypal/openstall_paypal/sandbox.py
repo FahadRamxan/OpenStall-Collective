@@ -9,7 +9,8 @@ the money. They differ in who the payees are:
   listed as an item. Paying a share captures just her amount and sends it to her with PayPal Payouts. Releasing a
   share leaves her amount uncaptured; the order's last capture or void gives whatever is left back to the buyer.
 
-Every write uses an idempotency key made from our own ids, so repeating a call never reserves or pays twice.
+Every write uses an idempotency key made from our own ids, so repeating a call never reserves or pays twice. Each
+capture carries our part id as its invoice_id, so PayPal's capture webhooks name the share they are about.
 """
 
 from collections.abc import Iterator
@@ -164,7 +165,7 @@ class MultipartyGateway(SandboxGateway):
         return units
 
     def pay_share(self, share: Share) -> Payment:
-        capture = self.capture(share, {"final_capture": True})
+        capture = self.capture(share, {"invoice_id": share.part_id, "final_capture": True})
         return Payment(capture_id=capture["id"])
 
     def release_share(self, share: Share) -> None:
@@ -200,7 +201,9 @@ class PayoutsGateway(SandboxGateway):
 
     def pay_share(self, share: Share) -> Payment:
         receiver = self.receiver(share)  # before capturing, so a seller with no account is never half paid
-        capture = self.capture(share, {"amount": money(share.amount_usd), "final_capture": share.last})
+        capture = self.capture(
+            share, {"amount": money(share.amount_usd), "invoice_id": share.part_id, "final_capture": share.last}
+        )
         with paypal_errors():
             payout = self.client.post(
                 "/v1/payments/payouts",

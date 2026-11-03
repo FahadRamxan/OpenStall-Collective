@@ -205,7 +205,7 @@ def test_multiparty_pays_a_share_by_capturing_her_whole_authorization(paypal, cl
     payment = MultipartyGateway(client).pay_share(Share("op_amina", "AUTH-AMINA", Decimal("216.00")))
 
     assert payment.capture_id == "CAPTURE-1"
-    assert sent(route) == ({"final_capture": True}, "openstall-capture-op_amina")
+    assert sent(route) == ({"invoice_id": "op_amina", "final_capture": True}, "openstall-capture-op_amina")
 
 
 def test_multiparty_releases_a_share_by_voiding_her_authorization(paypal, client):
@@ -230,7 +230,7 @@ def test_payouts_captures_only_her_amount_then_pays_her(paypal, client, last):
 
     assert payment.capture_id == "CAPTURE-7" and payment.payout_batch_id == "BATCH-7"
     assert sent(capture) == (
-        {"amount": {"currency_code": "USD", "value": "203.00"}, "final_capture": last},
+        {"amount": {"currency_code": "USD", "value": "203.00"}, "invoice_id": "op_grace", "final_capture": last},
         "openstall-capture-op_grace",
     )
     body, key = sent(payout)

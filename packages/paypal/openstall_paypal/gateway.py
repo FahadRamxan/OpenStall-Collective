@@ -10,7 +10,7 @@ import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 # PayPal's names for the state of an order. An order made with an experience context starts as
 # PAYER_ACTION_REQUIRED rather than CREATED; both mean the buyer has not approved it yet.
@@ -151,19 +151,37 @@ class FakeOrderView:
     request: CheckoutRequest
 
 
+def _money(amount: Decimal) -> dict[str, str]:
+    return {"currency_code": "USD", "value": f"{amount:.2f}"}
+
+
 class FakeGateway:
     """PayPal without the network, following the same rules. Records every gateway call in `calls`.
 
     PayPal order ids come from our order id, so they are the same on every run, and a repeated checkout returns the
     first PayPal order, as PayPal does for a repeated PayPal-Request-Id. Each share gets its own authorization.
+    Like PayPal, it sends a webhook event for each approval, authorization, capture and void: they wait in `outbox`
+    until the app delivers them to its own webhook endpoint.
     """
 
     def __init__(self, web_base_url: str = "http://localhost:3000") -> None:
         self.web_base_url = web_base_url.rstrip("/")
         self.calls: list[tuple[str, object]] = []
+        self.outbox: list[dict[str, Any]] = []
         self._orders: dict[str, _FakeOrder] = {}
         self._holds: dict[str, Literal["CREATED", "CAPTURED", "VOIDED"]] = {}
+        self._hold_orders: dict[str, str] = {}  # authorization id -> PayPal order id
         self._payments: dict[str, Payment] = {}
+
+    def take_outbox(self) -> list[dict[str, Any]]:
+        """The webhook events waiting to be sent, oldest first; the outbox is then empty."""
+        events, self.outbox = self.outbox, []
+        return events
+
+    def _send_event(self, event_type: str, resource_type: str, resource: dict[str, Any], summary: str) -> None:
+        from openstall_paypal.webhooks import fake_event  # webhooks imports the sandbox module, which imports this
+
+        self.outbox.append(fake_event(event_type, resource_type, resource, summary))
 
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
         self.calls.append(("create_checkout", request))
@@ -182,6 +200,12 @@ class FakeGateway:
         order = self._order(paypal_order_id)
         if order.status in WAITING_FOR_BUYER:
             order.status = "APPROVED"
+            self._send_event(
+                "CHECKOUT.ORDER.APPROVED",
+                "checkout-order",
+                {"id": paypal_order_id, "status": "APPROVED", "intent": "AUTHORIZE"},
+                f"An order for ${order.request.total_usd:.2f} was approved",
+            )
         return FakeOrderView(paypal_order_id, order.status, order.request)
 
     # PaymentGateway.
@@ -202,7 +226,21 @@ class FakeGateway:
             hold = f"{paypal_order_id}-AUTH-{number}"
             order.holds[part.reference_id] = hold
             self._holds[hold] = "CREATED"
+            self._hold_orders[hold] = paypal_order_id
         order.status = "COMPLETED"
+        for part in order.request.parts:
+            self._send_event(
+                "PAYMENT.AUTHORIZATION.CREATED",
+                "authorization",
+                {
+                    "id": order.holds[part.reference_id],
+                    "status": "CREATED",
+                    "amount": _money(part.amount_usd),
+                    "custom_id": order.request.order_id,
+                    "supplementary_data": {"related_ids": {"order_id": paypal_order_id}},
+                },
+                f"A payment of ${part.amount_usd:.2f} was authorized",
+            )
         return Reservation(paypal_order_id, dict(order.holds))
 
     def pay_share(self, share: Share) -> Payment:
@@ -217,6 +255,24 @@ class FakeGateway:
         self._holds[share.hold_id] = "CAPTURED"
         payment = Payment(capture_id=f"{share.hold_id}-CAP")
         self._payments[share.part_id] = payment
+        self._send_event(
+            "PAYMENT.CAPTURE.COMPLETED",
+            "capture",
+            {
+                "id": payment.capture_id,
+                "status": "COMPLETED",
+                "amount": _money(share.amount_usd),
+                "invoice_id": share.part_id,
+                "final_capture": True,
+                "supplementary_data": {
+                    "related_ids": {
+                        "order_id": self._hold_orders.get(share.hold_id),
+                        "authorization_id": share.hold_id,
+                    }
+                },
+            },
+            f"A payment of ${share.amount_usd:.2f} was captured",
+        )
         return payment
 
     def release_share(self, share: Share) -> None:
@@ -225,7 +281,15 @@ class FakeGateway:
             raise PaymentError(
                 "AUTHORIZATION_ALREADY_CAPTURED", f"authorization {share.hold_id} was captured, so it cannot be voided"
             )
+        if self._holds[share.hold_id] == "VOIDED":
+            return
         self._holds[share.hold_id] = "VOIDED"
+        self._send_event(
+            "PAYMENT.AUTHORIZATION.VOIDED",
+            "authorization",
+            {"id": share.hold_id, "status": "VOIDED", "amount": _money(share.amount_usd)},
+            f"A payment of ${share.amount_usd:.2f} was voided",
+        )
 
     def _order(self, paypal_order_id: str) -> _FakeOrder:
         try:

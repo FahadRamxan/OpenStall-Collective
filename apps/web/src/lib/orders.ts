@@ -23,6 +23,10 @@ export type OrderPart = {
   amount_usd: string;
   delivery_date: string | null;
   status: PartStatus;
+  /** A verified PayPal webhook confirmed this share's status. */
+  confirmed_by_paypal: boolean;
+  /** PayPal reported a problem with this share, such as a denied payment. */
+  attention: string | null;
   trust_score: string | null;
   trust_data_source: "seeded_demo" | "live" | null;
 };

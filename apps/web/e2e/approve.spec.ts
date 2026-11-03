@@ -66,7 +66,9 @@ test("Approve, then approving at the simulated PayPal page, reserves every maker
     await expect(receipt.nth(index)).toContainText(share.name);
     await expect(receipt.nth(index)).toContainText(share.amount);
     await expect(receipt.nth(index)).toContainText("Reserved, paid when she ships");
+    await expect(receipt.nth(index)).toContainText("Confirmed by PayPal");
   }
+  await expect(page.getByText("PayPal confirmed every share.")).toBeVisible();
   await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-1280.png"), fullPage: true });
 
   // Reloading the receipt reserves nothing twice, and the order now points to its receipt instead of PayPal.
@@ -76,6 +78,10 @@ test("Approve, then approving at the simulated PayPal page, reserves every maker
   await expect(page.getByRole("button", { name: "Approve and pay with PayPal" })).toHaveCount(0);
   await page.getByRole("link", { name: "See the receipt" }).click();
   await expect(page).toHaveURL(`/approve/${orderId}/return`);
+
+  // PayPal's verified webhooks show in the live feed too.
+  await page.goto("/demo");
+  await expect(page.getByText(`PayPal confirmed the buyer approved order ${orderId}`)).toBeVisible();
 });
 
 test("the receipt fits a phone screen", async ({ page, request }) => {
