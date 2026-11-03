@@ -1,10 +1,22 @@
 # OpenStall Collective
 
-OpenStall Collective lets small sellers who only use WhatsApp sell to AI shopping agents. A seller sends photos and a voice note, and AI turns them into listings that any agent can read and buy from. Each seller has an agent that negotiates within limits the seller sets. When an order is too big for one seller, the system splits it across several sellers, and one PayPal checkout pays them all.
+OpenStall Collective lets small sellers who only use WhatsApp sell to AI shopping agents. A seller sends photos and a voice note, and AI turns them into listings that any agent can read and buy from. Each seller has an agent that negotiates within limits the seller sets. When an order is too big for one seller, the system splits it across several sellers. The buyer approves one PayPal checkout that only reserves the money, and each seller is paid when she photographs her shipping receipt.
 
-Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox; no real money moves.
+Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox, or in test mode on a simulated PayPal; no real money moves.
 
-> **Status:** being built prompt by prompt. Working so far: the MCP storefront with `search_products` over a seeded catalog, settings and fake mode, the database and its migrations, the event log with a live feed on `/demo`, the system status page, and the offer-rules, allocator and trust-passport cores.
+## What works today
+
+Being built step by step; each step is tested, wired into the web app, tested in a browser, then pushed.
+
+- **Pay-on-proof with PayPal.** `/approve/{order}` shows each maker's share. Approving creates one PayPal order (intent AUTHORIZE) for the whole total, and the receipt shows PayPal holding the money. Each share is captured on its own when she ships, or released if she cannot deliver, and she is paid on the payout rail her country allows: PayPal Payouts; Venmo for a US maker (simulated in the sandbox, where PayPal does not run Venmo payouts); Pakistan not connected yet. Verified, idempotent PayPal webhooks confirm each step.
+- **Proven on PayPal's real sandbox:** one authorization, several partial captures with tracking on each, a final capture, a void, a payout, and OpenStall's own Approve flow end to end. See [docs/day-one-checks.md](docs/day-one-checks.md).
+- **Built on APIMatic's PayPal SDK,** with APIMatic's PayPal Context Plugin (below).
+- **Sellers chat on WhatsApp or in the browser.** A verified Twilio webhook stores their messages, photos and voice notes; `/seller-chat` is the same chat as a phone in the browser. One handler serves both.
+- **Stalls and the agent storefront.** Five seeded makers with stall pages and trust records (marked as demo data), and an MCP server at `/mcp` with `search_products`.
+- **A live feed** on `/demo` of everything that happens, and a status page at `/status`: the mode, the database, PayPal's token and the SDK in use.
+- **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
+
+Still being built: search with filters and feeds for agents, seller agents that negotiate, quote requests and the allocator on `/demo`, the MCP order and checkout tools, a buyer agent you can run, receipt photos read into tracking, signed trust passports, the order that heals itself, and the hosted demo.
 
 ## Run it locally
 
@@ -26,7 +38,7 @@ Load the demo world, the five seeded makers from the spec, with `python scripts/
 
 The API is then at http://localhost:8000, and the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP).
 
-It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real adapters arrive in later build steps; until one exists, the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.
+It starts in **fake mode** (`OPENSTALL_MODE=fake`): PayPal, Twilio and the AI models are replaced by stand-ins that give the same answers every time, so it runs without any keys. To use the real PayPal sandbox, Twilio sandbox and AI models, set `OPENSTALL_MODE=sandbox` in `.env` and fill in the keys you have. The real PayPal (sandbox) and Twilio (WhatsApp) adapters exist; the AI model adapters arrive with the seller agent, and until one exists the status page lists it as "Not built yet". The web app's status page (http://localhost:3000/status) and `GET /api/status` show the mode and which services are ready, and name any missing key without showing key values.
 
 Point any MCP client at the storefront, or, with the API running, use the included one in a second terminal:
 
@@ -113,6 +125,8 @@ apps/web/        Next.js: stall, seller-chat, demo, approve, dashboard
 packages/        agents, allocator, paypal, trust
 scripts/         demo and helper scripts
 docs/            day-one checks and decisions
+paypal-plan.md   the APIMatic contract sheet for the PayPal SDK
+CLAUDE.md        how this repo is built, for coding agents
 ```
 
 ## Demo data
