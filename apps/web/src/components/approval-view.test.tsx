@@ -80,6 +80,29 @@ describe("ApprovalView", () => {
     expect(request).toHaveTextContent("To Chicago by December 10, 2026");
   });
 
+  it("opens with why this split when the order has a plan in words, and without it otherwise", async () => {
+    const explained: Order = {
+      ...ORDER,
+      request: {
+        ...ORDER.request!,
+        explanation: "The 40 units are split across 2 makers, cheapest valid offer first.",
+        explanation_by: "Written from the plan by OpenStall's code.",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(explained)));
+    const view = render(<ApprovalView />);
+
+    const why = await screen.findByRole("region", { name: "Why this split" });
+    expect(why).toHaveTextContent("The 40 units are split across 2 makers, cheapest valid offer first.");
+    expect(why).toHaveTextContent("Written from the plan by OpenStall's code.");
+    view.unmount();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(ORDER)));
+    render(<ApprovalView />);
+    await screen.findByRole("region", { name: "What your AI agent asked for" });
+    expect(screen.queryByRole("region", { name: "Why this split" })).not.toBeInTheDocument();
+  });
+
   it("lists each maker's share with her amount, delivery date and trust, then the total", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(ORDER)));
 

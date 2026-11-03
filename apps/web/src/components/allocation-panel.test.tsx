@@ -55,6 +55,11 @@ const STORY: Plan = {
     line("Lucía", 10, "22.00", "220.00"),
     line("Grace", 7, "29.00", "203.00"),
   ],
+  explanation:
+    "Priya, Amina, Lucía and Grace made the cheapest valid offers, so the 40 units go to them in that order: " +
+    "11, 12, 10 and 7. Together that is $815.00, all delivered by December 10, 2026.",
+  explanation_source: "model",
+  explanation_by: "Written by the stand-in model of test mode; every number checked against the plan.",
 };
 
 const SHORT: Plan = {
@@ -125,6 +130,27 @@ describe("AllocationPanel", () => {
     expect(rows.find((row) => row.startsWith("Priya"))).toContain("$176.00");
     expect(rows.find((row) => row.startsWith("Total"))).toContain("$815.00");
     expect(fetch).toHaveBeenNthCalledWith(2, "http://api.test/api/quotes/q_story/plan", expect.anything());
+  });
+
+  it("explains the plan in words and says who wrote them", async () => {
+    mockApi([QUOTE], STORY);
+
+    render(<AllocationPanel />);
+
+    const words = await screen.findByLabelText("The plan in words");
+    expect(words).toHaveTextContent("so the 40 units go to them in that order: 11, 12, 10 and 7");
+    expect(
+      screen.getByText("Written by the stand-in model of test mode; every number checked against the plan."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no words for a plan without an explanation", async () => {
+    mockApi([QUOTE], { ...STORY, explanation: null, explanation_source: null, explanation_by: null });
+
+    render(<AllocationPanel />);
+
+    expect(await screen.findByText("All 40 from 4 makers, $815.00")).toBeInTheDocument();
+    expect(screen.queryByLabelText("The plan in words")).not.toBeInTheDocument();
   });
 
   it("says how many are possible, and why, when the plan is short", async () => {

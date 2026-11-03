@@ -128,3 +128,67 @@ def test_a_quote_without_a_plan_yet_and_an_unknown_quote_say_so(seeded):
     assert unplanned.status_code == 404
     assert unplanned.json()["detail"] == "Quote request " + repr(request.id) + " has no plan yet: its rounds are not done."
     assert client.get("/api/quotes/q_nobody/plan").status_code == 404
+
+
+def test_the_plan_is_stored_with_its_explanation_from_fake_modes_model(seeded, fakes):
+    request = story_quote(seeded, fakes.llm)
+
+    plan = client.get(f"/api/quotes/{request.id}/plan").json()
+
+    assert plan["explanation"] == (
+        "Priya, Amina, Lucía and Grace made the cheapest valid offers, so the 40 units go to them in that order: "
+        "11, 12, 10 and 7. Together that is $815.00, all delivered by December 10, 2026."
+    )
+    assert plan["explanation_source"] == "model"
+    assert plan["explanation_by"] == (
+        "Written by the stand-in model of test mode; every number checked against the plan."
+    )
+
+
+def test_the_model_is_asked_once_per_plan(seeded, fakes):
+    request = story_quote(seeded, fakes.llm)
+    asked = len([call for call in fakes.llm.calls if call.kind == "text"])
+
+    plan_quote(seeded, request, fakes.llm)
+    seeded.commit()
+
+    assert asked == 1
+    assert len([call for call in fakes.llm.calls if call.kind == "text"]) == 1
+    assert len(planned_events(seeded)) == 1
+
+
+def test_words_with_a_made_up_number_give_way_to_the_template(seeded, fakes):
+    fakes.llm.responder = None
+    request, products = create_quote_request(
+        seeded, [DEMO_REQUEST], 40, Decimal("30.00"), TODAY + timedelta(days=30), "Chicago", TODAY
+    )
+    seeded.commit()
+    from openstall_agents.fake_answers import fake_answer
+
+    def answer(call):
+        if call.kind == "text":
+            return "Grace gives a special price of $24.50, so the 40 cost $815.00."
+        return fake_answer(call)
+
+    fakes.llm.responder = answer
+    run_quote(seeded, request, products, fakes.llm, TODAY)
+
+    plan = client.get(f"/api/quotes/{request.id}/plan").json()
+    assert plan["explanation_source"] == "template"
+    assert plan["explanation"].startswith("The 40 units are split across 4 makers, cheapest valid offer first:")
+    assert plan["explanation_by"] == "Written from the plan by OpenStall's code."
+    payload = planned_events(seeded)[-1].payload_json
+    assert payload["explanation_problem"] == "numbers not in the plan or the request: 24.50"
+
+
+def test_the_seeded_story_order_says_why_its_split_on_the_approval_page(seeded):
+    seed_demo_order(seeded, TODAY)
+    seeded.commit()
+
+    request = client.get(f"/api/orders/{DEMO_ORDER_ID}").json()["request"]
+
+    assert request["explanation"] == (
+        "The 40 units are split across 4 makers, cheapest valid offer first: Priya 11 at $16.00, Amina 12 at $18.00, "
+        "Lucía 10 at $22.00 and Grace 7 at $29.00. The total is $815.00, and every share is due by December 10, 2026."
+    )
+    assert request["explanation_by"] == "Written from the plan by OpenStall's code."

@@ -27,6 +27,12 @@ export type Plan = {
   /** Why the plan is short, in words; null for a complete plan. */
   reason: string | null;
   lines: PlanLine[];
+  /** The plan in 2 or 3 plain sentences; every number in it is in the plan or the request. */
+  explanation: string | null;
+  /** "model": the model's words, checked; "template": written from the plan. */
+  explanation_source: "model" | "template" | null;
+  /** Who wrote the explanation, in words for people. */
+  explanation_by: string | null;
 };
 
 /** The quote's plan, or null while it has none (the quote is still running). */

@@ -70,6 +70,9 @@ class RequestOut(BaseModel):
     max_unit_price: Decimal
     deadline: date
     ship_to: str
+    # The plan in words, from the request's plan (prompt 26): shown at the top of /approve/{id}. None without a plan.
+    explanation: str | None = None
+    explanation_by: str | None = None
 
 
 class OrderOut(BaseModel):
@@ -163,6 +166,8 @@ def order_out(session: Session, order: Order) -> OrderOut:
                 max_unit_price=request.max_unit_price,
                 deadline=request.deadline,
                 ship_to=request.ship_to,
+                explanation=(request.plan_json or {}).get("explanation"),
+                explanation_by=(request.plan_json or {}).get("explanation_by"),
             )
             if request
             else None

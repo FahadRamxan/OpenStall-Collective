@@ -17,6 +17,11 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from openstall_agents.explain import template
+from openstall_allocator import Offer as CoreOffer
+from openstall_allocator import allocate
+from openstall_api.allocation import explanation_by, plan_facts, plan_out
+from openstall_api.events import jsonable
 from openstall_api.models import (
     Base,
     DataSource,
@@ -301,8 +306,28 @@ def story_request(session: Session, today: date, *, request_id: str | None = Non
 def story_order(session: Session, today: date, *, order_id: str | None = None, request_id: str | None = None) -> Order:
     """A draft of the story's order with its own request, due 30 days from `today`. Without ids it gets new ones, so
     UI tests can each pay for an order of their own."""
-    request_id = story_request(session, today, request_id=request_id).id
+    request = story_request(session, today, request_id=request_id)
+    request_id = request.id
     deadline = today + timedelta(days=30)
     session.flush()
     parts = [DraftPart(maker.id, maker.product_id, quantity, price, deadline) for maker, quantity, price in DEMO_SPLIT]
+    store_story_plan(request)
     return create_draft_order(session, parts, order_id=order_id, request_id=request_id)
+
+
+def store_story_plan(request: QuoteRequest) -> None:
+    """The story's split (DEMO_SPLIT) as the request's plan, made by the allocator core and explained by the template,
+    so the approval page says why the split even before any agent has run."""
+    offers = [
+        CoreOffer(seller_id=maker.id, unit_price=Decimal(price), quantity=quantity, delivery_date=request.deadline)
+        for maker, quantity, price in DEMO_SPLIT
+    ]
+    plan = plan_out(
+        request.id,
+        allocate(offers, request.quantity, request.deadline),
+        {maker.id: maker.name for maker, _, _ in DEMO_SPLIT},
+    )
+    plan.explanation = template(plan_facts(plan, request))
+    plan.explanation_source = "template"
+    plan.explanation_by = explanation_by("template")
+    request.plan_json = jsonable(plan.model_dump())

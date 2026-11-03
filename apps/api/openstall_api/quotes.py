@@ -192,7 +192,8 @@ def run_quote(
             "requested": request.quantity,
         },
     )
-    plan_quote(session, request)
+    session.commit()  # nothing stays locked while the model explains the plan
+    plan_quote(session, request, llm)
     session.commit()
     return result
 

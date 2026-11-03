@@ -165,6 +165,13 @@ def test_an_order_shows_each_makers_share_her_trust_and_the_buyers_request(demo_
         "max_unit_price": "30.00",
         "deadline": "2026-12-10",
         "ship_to": "Chicago",
+        # The story's plan in words (prompt 26), written by the template when the order is seeded.
+        "explanation": (
+            "The 40 units are split across 4 makers, cheapest valid offer first: Priya 11 at $16.00, Amina 12 at "
+            "$18.00, Lucía 10 at $22.00 and Grace 7 at $29.00. The total is $815.00, and every share is due by "
+            "December 10, 2026."
+        ),
+        "explanation_by": "Written from the plan by OpenStall's code.",
     }
     shares = [(p["seller"]["name"], p["quantity"], p["unit_price_usd"], p["amount_usd"]) for p in order["parts"]]
     assert shares == [

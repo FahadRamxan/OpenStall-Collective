@@ -58,6 +58,10 @@ export type BuyerRequest = {
   max_unit_price: string;
   deadline: string;
   ship_to: string;
+  /** The plan in words, from the request's plan; null when the order has none. */
+  explanation?: string | null;
+  /** Who wrote the explanation, in words for people. */
+  explanation_by?: string | null;
 };
 
 export type Order = {

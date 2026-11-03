@@ -130,6 +130,18 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
       </div>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Approve this order</h1>
 
+      {order.request?.explanation ? (
+        <section aria-labelledby="why-heading" className="mt-6 border-l-2 border-accent pl-4">
+          <h2 id="why-heading" className="text-sm font-semibold text-muted">
+            Why this split
+          </h2>
+          <p className="mt-1 text-lg leading-8">{order.request.explanation}</p>
+          {order.request.explanation_by ? (
+            <p className="mt-1 text-xs text-muted">{order.request.explanation_by}</p>
+          ) : null}
+        </section>
+      ) : null}
+
       {order.request ? (
         <section aria-labelledby="request-heading" className="mt-6 rounded-2xl border border-border bg-surface p-5">
           <h2 id="request-heading" className="text-sm font-semibold text-muted">

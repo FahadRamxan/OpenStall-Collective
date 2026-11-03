@@ -113,6 +113,7 @@ function PlanView({ plan }: { plan: Plan }) {
         <p className="text-lg font-semibold">{planHeadline(plan)}</p>
       </div>
       {plan.reason ? <p className="mt-2 leading-7 text-muted">{plan.reason}</p> : null}
+      {plan.explanation ? <Explanation text={plan.explanation} by={plan.explanation_by} /> : null}
       {plan.lines.length > 0 ? <ShareBar plan={plan} /> : null}
       <div className="mt-5">
         <AgGridReact<Row>
@@ -130,5 +131,17 @@ function PlanView({ plan }: { plan: Plan }) {
         />
       </div>
     </div>
+  );
+}
+
+/** The plan in words. Who wrote it is said under it: code checked every number, whoever wrote the sentences. */
+function Explanation({ text, by }: { text: string; by: string | null }) {
+  return (
+    <figure className="mt-4 border-l-2 border-accent pl-4">
+      <blockquote aria-label="The plan in words" className="leading-7">
+        {text}
+      </blockquote>
+      {by ? <figcaption className="mt-1 text-xs text-muted">{by}</figcaption> : null}
+    </figure>
   );
 }
