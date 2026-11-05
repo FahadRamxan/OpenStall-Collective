@@ -29,6 +29,7 @@ from openstall_api.allocation import PlanOut, stored_plan
 from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_entry
 from openstall_api.collective import DraftOrder
 from openstall_api.db import new_session, session_scope
+from openstall_api.delivery import delivered_utc, on_time
 from openstall_api.models import OrderStatus, Passport
 from openstall_api.notices import notice_states, ship_by
 from openstall_api.orders import server_total
@@ -374,6 +375,13 @@ class ShareStatus(BaseModel):
     tracking_on_paypal: bool = Field(
         description="Whether her tracking is on her payment on the PayPal order, so the payer sees it at PayPal."
     )
+    delivered_at: datetime | None = Field(
+        default=None, description="When the buyer confirmed her parcel arrived. None until then."
+    )
+    on_time: bool | None = Field(
+        default=None,
+        description="Whether her parcel arrived by its delivery date. None until it arrived.",
+    )
     payout_rail: str = Field(description="How she is paid: paypal, venmo, hyperwallet, or unavailable.")
     payout_words: str
     paid_through_paypal: bool = Field(description="Whether her payout goes through PayPal Payouts.")
@@ -460,6 +468,8 @@ def get_order_status(
                     carrier=part.carrier,
                     tracking_number=part.tracking_number,
                     tracking_on_paypal=part.paypal_tracker_id is not None,
+                    delivered_at=delivered_utc(part),
+                    on_time=on_time(part),
                     payout_rail=rail,
                     payout_words=words,
                     paid_through_paypal=via_paypal,

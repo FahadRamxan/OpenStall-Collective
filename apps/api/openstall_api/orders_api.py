@@ -17,10 +17,11 @@ from openstall_api.catalog import photo_path
 from openstall_api.claims import ClaimHeld
 from openstall_api.collective import link_issued
 from openstall_api.db import get_session
+from openstall_api.delivery import confirm_delivery, delivered_utc, on_time, tell_maker_delivered
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.notices import NoticeState, notice_states, notify_order, ship_by
 from openstall_api.orders import server_total
-from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, seller_rail, start_checkout
+from openstall_api.payments import PAID, OrderNotFound, WrongStatus, reserve_order, seller_rail, start_checkout
 from openstall_api.settings import Settings, get_settings
 from openstall_api.tracking import track_order
 from openstall_api.webhooks import PayPalConfirmation, confirmations, deliver_fake_webhooks
@@ -98,6 +99,9 @@ class PartOut(BaseModel):
     tracking_number: str | None  # set only once she confirmed it: she is paid on it
     proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
     tracking_on_paypal: bool  # her tracking is on her capture at PayPal (simulated PayPal in fake mode)
+    # When the buyer confirmed her parcel arrived (prompt 34), and whether by its delivery date. None before.
+    delivered_at: datetime | None = None
+    on_time: bool | None = None
     confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
     attention: str | None  # PayPal reported a problem with it, such as a denied payment
     # Who confirms it: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. The page must
@@ -137,6 +141,9 @@ class OrderOut(BaseModel):
     id: str
     status: OrderStatus
     total_usd: Decimal
+    # Where the total went, worked out here: paid to makers on proof, and released back to the buyer.
+    paid_usd: Decimal = Decimal("0.00")
+    released_usd: Decimal = Decimal("0.00")
     units: int
     created_at: datetime
     approved_at: datetime | None
@@ -197,6 +204,8 @@ def _part(
         tracking_number=part.tracking_number,
         proof=ProofOut.of(part.proof_json),
         tracking_on_paypal=part.paypal_tracker_id is not None,
+        delivered_at=delivered_utc(part),
+        on_time=on_time(part),
         confirmed_by_paypal=paypal.confirmed,
         attention=paypal.attention,
         confirmation_source="simulated" if settings.OPENSTALL_MODE == "fake" else "paypal_sandbox",
@@ -226,6 +235,10 @@ def order_out(session: Session, order: Order) -> OrderOut:
         id=order.id,
         status=order.status,
         total_usd=server_total(order),
+        paid_usd=sum((part.amount_usd for part in order.parts if part.status in PAID), Decimal("0.00")),
+        released_usd=sum(
+            (part.amount_usd for part in order.parts if part.status == PartStatus.RELEASED), Decimal("0.00")
+        ),
         units=sum(part.quantity for part in order.parts),
         created_at=order.created_at,
         approved_at=order.approved_at,
@@ -366,6 +379,25 @@ def reserve(order_id: str, session: SessionDep, registry: RegistryDep, backgroun
     # Tracking PayPal did not take yet, for a share already paid, is tried again (prompt 33).
     background.add_task(track_order, order_id, lambda: registry.payment_gateway)
     background.add_task(deliver_fake_webhooks)  # fake mode: PayPal's confirmations follow, as they would for real
+    return order_out(session, _load(session, order_id))
+
+
+@router.post("/orders/{order_id}/parts/{part_id}/delivered")
+def delivered(
+    order_id: str, part_id: str, session: SessionDep, registry: RegistryDep, background: BackgroundTasks
+) -> OrderOut:
+    """The buyer received one maker's parcel (prompt 34): her share is delivered, the order is completed if it was the
+    last, and she is told in her language, after the answer is sent. No money moves: she was paid when she shipped.
+    Safe to call again; it changes nothing then."""
+    part = session.get(OrderPart, part_id)
+    if part is None or part.order_id != order_id:
+        raise HTTPException(status_code=404, detail=f"Order {order_id!r} has no share called {part_id!r}.")
+    with payment_errors():
+        newly = confirm_delivery(session, part_id)
+    session.commit()
+    if newly:
+        background.add_task(tell_maker_delivered, part_id, lambda: registry.messenger)
+    session.expire_all()
     return order_out(session, _load(session, order_id))
 
 

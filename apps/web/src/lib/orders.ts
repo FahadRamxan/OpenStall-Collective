@@ -38,6 +38,10 @@ export type OrderPart = {
   proof?: PartProof | null;
   /** Her tracking is on her payment on the PayPal order (simulated PayPal in test mode). */
   tracking_on_paypal?: boolean;
+  /** When the buyer confirmed her parcel arrived: null until then. */
+  delivered_at?: string | null;
+  /** Whether her parcel arrived by its delivery date: null until it arrived. */
+  on_time?: boolean | null;
   /** A verified PayPal webhook confirmed this share's status. */
   confirmed_by_paypal: boolean;
   /** PayPal reported a problem with this share, such as a denied payment. */
@@ -130,6 +134,9 @@ export type Order = {
   id: string;
   status: OrderStatus;
   total_usd: string;
+  /** Where the total went, worked out by the API: paid to makers on proof, and released back to the buyer. */
+  paid_usd?: string;
+  released_usd?: string;
   units: number;
   created_at: string;
   /** When PayPal reserved the order: null until then. */
@@ -188,6 +195,17 @@ export function simulateProof(partId: string): Promise<Order> {
   return apiPost<Order>(`/api/dev/parts/${encodeURIComponent(partId)}/proof`, {});
 }
 
+/**
+ * The buyer received one maker's parcel: her share is delivered, and the order completes if it was the last. No
+ * money moves. Returns the order as it is now.
+ */
+export function confirmDelivery(orderId: string, partId: string): Promise<Order> {
+  return apiPost<Order>(
+    `/api/orders/${encodeURIComponent(orderId)}/parts/${encodeURIComponent(partId)}/delivered`,
+    {},
+  );
+}
+
 /** Whether the order's PayPal is the simulated one of fake mode. */
 export function isSimulated(order: Order): boolean {
   return order.parts.some((part) => part.confirmation_source === "simulated");
@@ -231,6 +249,6 @@ export const PART_STATUS_LABELS: Record<PartStatus, string> = {
   pending: "Waiting for your approval",
   authorized: "Reserved, paid when she ships",
   captured: "Paid on proof of shipping",
-  delivered: "Delivered",
+  delivered: "Delivered to you",
   released: "Released back to you",
 };

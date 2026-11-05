@@ -51,7 +51,17 @@ The seeded makers have no phone, so in test mode you play them from their phones
 
 Try **Amina's phone** the same way, with "ہاں". Her tracking is saved, but she is not paid: her share stays reserved at PayPal until a payout rail reaches Pakistan. This is a real limit of the build, shown as it is.
 
-## 5. More to try
+## 5. The buyer receives Priya's parcel
+
+PayPal's order trackers only say a parcel shipped, so the buyer, who receives the parcels, confirms each one.
+
+1. Go back to the receipt tab (the page that said "Simulated PayPal is holding $815.00"; reload it). Priya's row now has **Confirm delivery**. Press it.
+2. Her row says "Delivered to you" and "Received" with the date, on time (the order is due December 10). No money moves: she was paid when she shipped.
+3. **Priya's phone** on `/demo` gets the news in Hindi, and **Live activity** says "The buyer received Priya's parcel". `get_order_status` gives the buyer's agent the same: her share delivered, and on time.
+
+The order completes once every parcel that shipped has arrived and the rest were released: the receipt then reads **Order complete**, with what was paid to the makers and what came back to the buyer. Amina's share stays reserved here, since no payout rail reaches Pakistan, so this order stays open.
+
+## 6. More to try
 
 - **The sellers' side:** open **Seller chat** in the header (`/seller-chat`). Pick a maker to read her whole chat; the seeded makers have a **Play** panel there too. **Your demo phone** lets you chat as a new seller. Try being Amina: press **Attach the sample photo** and **Attach the sample voice note** (test mode), then **Send**. The voice note comes back as text under it, word for word in Urdu, and **Your listing so far** appears under the chat: her cushion cover, $18.00 each and 4 a week, each number with the Urdu words it came from. OpenStall answers in Urdu, her language now, with one question: how many days her parcel takes to reach a buyer in the US (**Asking now** in the panel). Answer each question with a bare number or a city, as a seller would: `9`, then `Lahore`, then `15` (the lowest price she would take for one), then `5` (the fewest days she needs to make an order). The last two fill in **Your limits**, which buyers never see. Then she gets all of it back, in Urdu, and is asked to reply yes: send `ہاں` (or `yes`). **Your listing is live** appears with **Open your stall**, her new stall page, and the live feed says her listing is live; buyers' agents can find it in search right away. Typed in English instead, the questions come in English. Record your own voice note and test mode answers with a made-up line; in sandbox mode, with `OPENAI_API_KEY` set, OpenAI writes down what you said. Press **Reset demo** on `/demo` afterwards to take your listing down again before running the story.
 - **Your own AI agent:** the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP). With the virtual environment active, `python scripts/try_mcp.py "cushion covers"` searches it, and `python scripts/run_demo_request.py` plays the whole buyer request and prints the approval link. Agents without MCP can read http://localhost:8000/catalog.json and http://localhost:8000/llms.txt.

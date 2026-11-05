@@ -210,6 +210,65 @@ describe("ReturnView", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("the buyer confirms each parcel that shipped arrived, and the order completes with the last", async () => {
+    const amina: OrderPart = { ...RESERVED.parts[0], status: "released", nothing_to_confirm: true };
+    const priya: OrderPart = { ...RESERVED.parts[1], status: "captured", payout_confirmed: true };
+    const shipped: Order = { ...RESERVED, status: "shipped", parts: [amina, priya] };
+    const complete: Order = {
+      ...shipped,
+      status: "completed",
+      paid_usd: "176.00",
+      released_usd: "216.00",
+      parts: [amina, { ...priya, status: "delivered", delivered_at: "2026-12-04T15:30:00+00:00", on_time: true }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(shipped))
+      .mockResolvedValueOnce(Response.json(complete));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReturnView />);
+
+    const rows = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(within(rows[0]).queryByRole("button", { name: /Confirm delivery/ })).not.toBeInTheDocument();
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Confirm delivery of Priya's parcel" }));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Order complete" })).toBeInTheDocument();
+    const after = within(screen.getByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(after[1]).toHaveTextContent("Delivered to you");
+    expect(after[1]).toHaveTextContent("Received December 4, 2026, on time");
+    expect(within(after[1]).queryByRole("button", { name: /Confirm delivery/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Every parcel that shipped has arrived, and every maker who shipped is paid.")).toBeVisible();
+    const went = screen.getByLabelText("Where the total went");
+    expect(went).toHaveTextContent("Paid to the makers, on proof of shipping$176.00");
+    expect(went).toHaveTextContent("Released back to you, never charged$216.00");
+    expect(screen.queryByText(/Reserved at/)).not.toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe(`http://api.test/api/orders/ord_demo/parts/${priya.id}/delivered`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("says when a parcel arrived late, and shows a refused confirmation", async () => {
+    const late: OrderPart = {
+      ...RESERVED.parts[0],
+      status: "delivered",
+      delivered_at: "2026-12-12T09:00:00+00:00",
+      on_time: false,
+    };
+    const priya: OrderPart = { ...RESERVED.parts[1], status: "captured" };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ ...RESERVED, status: "shipped", parts: [late, priya] }))
+      .mockResolvedValueOnce(Response.json({ detail: "Priya has not shipped her share yet." }, { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReturnView />);
+
+    const rows = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Received December 12, 2026, late: it was due December 10, 2026");
+    fireEvent.click(within(rows[1]).getByRole("button", { name: "Confirm delivery of Priya's parcel" }));
+
+    expect(await within(rows[1]).findByRole("alert")).toHaveTextContent("Priya has not shipped her share yet.");
+  });
+
   it("offers no simulated proof against the real PayPal sandbox", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(RESERVED)));
 

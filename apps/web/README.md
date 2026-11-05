@@ -7,7 +7,7 @@ The Next.js site for OpenStall Collective (spec section 3.9):
 | `/` | What OpenStall is, the makers' stalls, and the way to the live demo |
 | `/demo` | The whole story, live: the buyer agent's request, the offers and how code checks them, the split, the order and its approval, each maker's payment, the makers' phones, and the live feed |
 | `/stall/{id}` | A maker's stall: her listing, photos, trust record, and links for AI agents |
-| `/approve/{order}` | Where a person approves an order an agent drafted, then the receipt (`/approve/{order}/return`) |
+| `/approve/{order}` | Where a person approves an order an agent drafted, then the receipt (`/approve/{order}/return`), where the buyer confirms each parcel that arrived |
 | `/seller-chat` | The sellers' side: each maker's chat, and a demo phone to chat as a seller; a voice note shows as text under it, and a new seller's draft listing and limits under her chat, with the question she is asked now, then her live listing once she says yes (in test mode, attach the sample photo and voice note) |
 | `/status` | The API's mode (test or sandbox) and the state of each outside service |
 | `/fake-paypal` | Test mode only: the simulated PayPal page |

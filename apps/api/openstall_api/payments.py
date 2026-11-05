@@ -9,8 +9,9 @@ same PayPal-Request-Id, as before.
 """
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
 
 from openstall_api.claims import paypal_claim
 from openstall_api.events import EventType, record_event
@@ -391,15 +392,38 @@ def track_share(session: Session, part_id: str, gateway: PaymentGateway) -> Orde
 
 def settle_order(order: Order) -> None:
     """The order's status from its shares: partly shipped while some are paid and some still wait, shipped once
-    none waits, and cancelled if every share was released."""
-    if order.status not in (OrderStatus.AUTHORIZED, OrderStatus.PARTLY_SHIPPED):
-        return
+    none waits, and cancelled if every share was released. A shipped order is completed once every paid share is
+    delivered (prompt 34, delivery.py), whichever share settled last: delivered, or released."""
     statuses = [part.status for part in order.parts]
-    paid = any(status in PAID for status in statuses)
-    waiting = any(status == PartStatus.AUTHORIZED for status in statuses)
-    if waiting:
-        target = OrderStatus.PARTLY_SHIPPED if paid else order.status
-    else:
-        target = OrderStatus.SHIPPED if paid else OrderStatus.CANCELLED
-    if target != order.status:
-        move_order(order, target)
+    if order.status in (OrderStatus.AUTHORIZED, OrderStatus.PARTLY_SHIPPED):
+        paid = any(status in PAID for status in statuses)
+        waiting = any(status == PartStatus.AUTHORIZED for status in statuses)
+        if waiting:
+            target = OrderStatus.PARTLY_SHIPPED if paid else order.status
+        else:
+            target = OrderStatus.SHIPPED if paid else OrderStatus.CANCELLED
+        if target != order.status:
+            move_order(order, target)
+    if order.status == OrderStatus.SHIPPED and PartStatus.CAPTURED not in statuses:
+        complete_order(order)
+
+
+def complete_order(order: Order) -> None:
+    """The end of an order: every maker who shipped is paid and her parcel arrived, and nothing is left reserved at
+    PayPal. Recorded in the order's own transaction."""
+    move_order(order, OrderStatus.COMPLETED)
+    delivered = [part for part in order.parts if part.status == PartStatus.DELIVERED]
+    released = len(order.parts) - len(delivered)
+    units = sum(part.quantity for part in delivered)
+    paid = sum((part.amount_usd for part in delivered), Decimal("0.00"))
+    makers = "1 maker" if len(delivered) == 1 else f"{len(delivered)} makers"
+    session = object_session(order)
+    assert session is not None, "an order is completed in its own session"
+    record_event(
+        session,
+        EventType.ORDER_COMPLETED,
+        f"Order {order.id} is complete: {makers} delivered {units} units and were paid ${paid:,.2f}"
+        + (f"; {released} share{'s were' if released > 1 else ' was'} released" if released else ""),
+        entity_id=order.id,
+        payload={"delivered": len(delivered), "released": released, "units": units, "paid_usd": paid},
+    )

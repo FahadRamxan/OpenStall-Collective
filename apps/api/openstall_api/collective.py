@@ -121,14 +121,14 @@ ORDER_STATUS_WORDS = {
     OrderStatus.AUTHORIZED: "Approved: PayPal holds the total, and each maker is paid when she proves she shipped.",
     OrderStatus.PARTLY_SHIPPED: "Partly shipped: some makers have proved they shipped and are paid.",
     OrderStatus.SHIPPED: "Shipped: every maker has proved she shipped and is paid.",
-    OrderStatus.COMPLETED: "Completed.",
+    OrderStatus.COMPLETED: "Completed: every parcel that shipped was received, and every maker who shipped is paid.",
     OrderStatus.CANCELLED: "Cancelled: every share was released, and nothing was charged.",
 }
 PART_STATUS_WORDS = {
     PartStatus.PENDING: "Not approved yet.",
     PartStatus.AUTHORIZED: "Reserved at PayPal: paid when she proves she shipped.",
     PartStatus.CAPTURED: "Paid: she proved she shipped.",
-    PartStatus.DELIVERED: "Delivered.",
+    PartStatus.DELIVERED: "Delivered: the buyer received her parcel.",
     PartStatus.RELEASED: "Released: she could not deliver, and her share was never charged.",
 }
 

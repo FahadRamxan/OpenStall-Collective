@@ -6,13 +6,14 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
-import { MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, place } from "@/lib/catalog";
 import {
   PART_STATUS_LABELS,
   authorizationSentence,
   awaitingNotices,
+  confirmDelivery,
   confirmedWords,
   getOrder,
   isSimulated,
@@ -173,6 +174,7 @@ function Receipt({
 }) {
   const total = formatUsd(order.total_usd);
   const simulated = isSimulated(order);
+  const complete = order.status === "completed";
   const payPal = simulated ? "simulated PayPal" : "PayPal";
   return (
     <div className="max-w-3xl">
@@ -189,12 +191,13 @@ function Receipt({
           </svg>
         </span>
         <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-          {simulated ? "Simulated PayPal" : "PayPal"} is holding {total}
+          {complete ? "Order complete" : `${simulated ? "Simulated PayPal" : "PayPal"} is holding ${total}`}
         </h1>
       </div>
       <p className="mt-4 text-lg leading-8 text-muted">
-        Nothing has been taken yet. Each maker is paid when she ships, and a share she cannot deliver goes back to
-        you.
+        {complete
+          ? "Every parcel that shipped has arrived, and every maker who shipped is paid."
+          : "Nothing has been taken yet. Each maker is paid when she ships, and a share she cannot deliver goes back to you."}
       </p>
       {simulated ? (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
@@ -239,6 +242,10 @@ function Receipt({
                   </div>
                   <NoticeLine part={part} />
                   <ProofLine part={part} simulated={simulated} />
+                  <DeliveryLine part={part} />
+                  {part.status === "captured" ? (
+                    <ConfirmDelivery orderId={order.id} part={part} onOrder={onOrder} />
+                  ) : null}
                   {simulated && part.status === "authorized" ? (
                     <SimulateProof part={part} onOrder={onOrder} />
                   ) : null}
@@ -252,10 +259,25 @@ function Receipt({
             );
           })}
         </ul>
-        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 px-1">
-          <p className="text-muted">Reserved at {payPal}</p>
-          <p className="text-3xl font-semibold tabular-nums">{total}</p>
-        </div>
+        {complete && order.paid_usd !== undefined ? (
+          <dl aria-label="Where the total went" className="mt-4 space-y-1 px-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <dt className="text-muted">Paid to the makers, on proof of shipping</dt>
+              <dd className="text-3xl font-semibold tabular-nums">{formatUsd(order.paid_usd)}</dd>
+            </div>
+            {order.released_usd && Number(order.released_usd) > 0 ? (
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <dt className="text-muted">Released back to you, never charged</dt>
+                <dd className="font-semibold tabular-nums">{formatUsd(order.released_usd)}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : (
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 px-1">
+            <p className="text-muted">Reserved at {payPal}</p>
+            <p className="text-3xl font-semibold tabular-nums">{total}</p>
+          </div>
+        )}
         <p className="mt-2 px-1 text-sm text-muted">{authorizationSentence(order.total_usd)}</p>
         {order.paypal_order_id ? (
           <p className="mt-2 px-1 text-sm text-muted">
@@ -316,6 +338,51 @@ function SimulateProof({ part, onOrder }: { part: OrderPart; onOrder: (order: Or
       {proof.state === "failed" ? (
         <p role="alert" className="mt-1 text-xs font-semibold text-danger">
           {proof.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+type DeliveryState = { state: "idle" } | { state: "sending" } | { state: "failed"; message: string };
+
+/**
+ * Her parcel arrived: the buyer confirms it here, share by share (prompt 34). Her share is then delivered, with the
+ * day it arrived, and the order completes with its last parcel. No money moves: she was paid when she shipped.
+ */
+function ConfirmDelivery({
+  orderId,
+  part,
+  onOrder,
+}: {
+  orderId: string;
+  part: OrderPart;
+  onOrder: (order: Order) => void;
+}) {
+  const [delivery, setDelivery] = useState<DeliveryState>({ state: "idle" });
+  async function confirm() {
+    setDelivery({ state: "sending" });
+    try {
+      onOrder(await confirmDelivery(orderId, part.id));
+    } catch (error) {
+      setDelivery({ state: "failed", message: errorMessage(error) });
+    }
+  }
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={confirm}
+        disabled={delivery.state === "sending"}
+        aria-label={`Confirm delivery of ${part.seller.name}'s parcel`}
+        className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {delivery.state === "sending" ? "Confirming…" : "Confirm delivery"}
+      </button>
+      <p className="mt-1 text-xs text-muted">Press it once her parcel has arrived. She was already paid when she shipped.</p>
+      {delivery.state === "failed" ? (
+        <p role="alert" className="mt-1 text-xs font-semibold text-danger">
+          {delivery.message}
         </p>
       ) : null}
     </div>

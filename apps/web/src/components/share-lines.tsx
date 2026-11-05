@@ -60,6 +60,24 @@ export function MakersTold({ order }: { order: Order }) {
   );
 }
 
+/**
+ * When the buyer received her parcel, and whether by its delivery date: "Received December 6, 2026, on time".
+ * Nothing before it arrived.
+ */
+export function DeliveryLine({ part }: { part: OrderPart }) {
+  if (part.status !== "delivered" || !part.delivered_at) return null;
+  const late = part.on_time === false && part.delivery_date ? `, late: it was due ${formatDay(part.delivery_date)}` : "";
+  return (
+    <p className="mt-2 inline-flex flex-wrap items-center gap-1 text-xs font-semibold text-success">
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5">
+        <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Received {formatDay(part.delivered_at.slice(0, 10))}
+      {part.on_time ? ", on time" : late}
+    </p>
+  );
+}
+
 /** Whether she was told about her share: where, in which language, and a link to her chat. */
 export function NoticeLine({ part }: { part: OrderPart }) {
   const notice = part.notice;

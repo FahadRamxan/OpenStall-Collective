@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
-import { MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
 import { useLatestOrder } from "@/hooks/use-latest-order";
 import { formatUsd, place } from "@/lib/catalog";
 import { PART_STATUS_LABELS, isSimulated, type Order, type OrderPart } from "@/lib/orders";
@@ -144,6 +144,7 @@ function Payments({ order }: { order: Order }) {
                 </div>
                 <NoticeLine part={part} />
                 <ProofLine part={part} simulated={simulated} />
+                <DeliveryLine part={part} />
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-end">
                 <p className="font-semibold tabular-nums">{formatUsd(part.amount_usd)}</p>
