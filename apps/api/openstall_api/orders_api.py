@@ -22,6 +22,7 @@ from openstall_api.notices import NoticeState, notice_states, notify_order, ship
 from openstall_api.orders import server_total
 from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, seller_rail, start_checkout
 from openstall_api.settings import Settings, get_settings
+from openstall_api.tracking import track_order
 from openstall_api.webhooks import PayPalConfirmation, confirmations, deliver_fake_webhooks
 from openstall_paypal import RAIL_NAMES, PaymentError, PaymentUnavailable, PayoutRail, venmo_payouts_simulated
 from openstall_trust import trust_score
@@ -96,6 +97,7 @@ class PartOut(BaseModel):
     carrier: str | None  # her courier, once she confirmed her tracking
     tracking_number: str | None  # set only once she confirmed it: she is paid on it
     proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
+    tracking_on_paypal: bool  # her tracking is on her capture at PayPal (simulated PayPal in fake mode)
     confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
     attention: str | None  # PayPal reported a problem with it, such as a denied payment
     # Who confirms it: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. The page must
@@ -194,6 +196,7 @@ def _part(
         carrier=part.carrier,
         tracking_number=part.tracking_number,
         proof=ProofOut.of(part.proof_json),
+        tracking_on_paypal=part.paypal_tracker_id is not None,
         confirmed_by_paypal=paypal.confirmed,
         attention=paypal.attention,
         confirmation_source="simulated" if settings.OPENSTALL_MODE == "fake" else "paypal_sandbox",
@@ -360,6 +363,8 @@ def reserve(order_id: str, session: SessionDep, registry: RegistryDep, backgroun
         reserve_order(session, order_id, registry.payment_gateway)
     session.commit()
     background.add_task(notify_order, order_id, lambda: registry.messenger)
+    # Tracking PayPal did not take yet, for a share already paid, is tried again (prompt 33).
+    background.add_task(track_order, order_id, lambda: registry.payment_gateway)
     background.add_task(deliver_fake_webhooks)  # fake mode: PayPal's confirmations follow, as they would for real
     return order_out(session, _load(session, order_id))
 

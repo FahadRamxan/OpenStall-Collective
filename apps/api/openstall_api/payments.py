@@ -28,7 +28,10 @@ from openstall_paypal import (
     Rail,
     Reservation,
     Share,
+    Tracking,
+    carrier_code,
     rail_for,
+    tracker_for,
 )
 
 # Only these orders can be sent to PayPal: a repeated press of Approve finds the order waiting for approval.
@@ -321,6 +324,68 @@ def release_share(session: Session, part_id: str, gateway: PaymentGateway) -> Or
         payload={"order_id": part.order_id, "amount_usd": part.amount_usd, "voided_hold": voided_hold},
     )
     settle_order(part.order)
+    return part
+
+
+def track_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderPart:
+    """Put a paid share's tracking on her capture at PayPal, once (prompt 33). The caller commits.
+
+    PayPal takes no PayPal-Request-Id on this route, so it never dedupes a repeat: the order's trackers are read
+    first, and a tracker already there for her tracking number is recorded instead of being sent again. The call is
+    claimed like every other PayPal write, so two requests never send it at once.
+    """
+    part = load_part(session, part_id)  # locks the order: two requests cannot both send it
+    name = part.seller.name
+    if part.paypal_tracker_id:
+        return part
+    if part.status not in PAID or not part.capture_id:
+        raise WrongStatus(f"{name}'s share is not captured yet, so PayPal has no payment to put her tracking on.")
+    if not part.tracking_number:
+        raise WrongStatus(f"{name}'s share has no confirmed tracking to put on the PayPal order.")
+    paypal_order_id = part.order.paypal_order_id
+    if not paypal_order_id:
+        raise WrongStatus(f"Order {part.order_id} has no PayPal order to put {name}'s tracking on.")
+    carrier, carrier_other = carrier_code(part.carrier)
+    known = gateway.get_order(paypal_order_id).trackers  # read first: this write is not deduped at PayPal
+    tracker = tracker_for(known, part.tracking_number)
+    if tracker is None:
+        with paypal_claim(
+            session,
+            f"track:{part.id}",
+            f"openstall-track-{part.id}",
+            busy=f"{name}'s tracking is being added to PayPal by another request. Try again in a moment.",
+        ) as claim:
+            tracker = gateway.add_tracking(
+                Tracking(
+                    part_id=part.id,
+                    paypal_order_id=paypal_order_id,
+                    capture_id=part.capture_id,
+                    tracking_number=part.tracking_number,
+                    carrier=carrier,
+                    carrier_name_other=carrier_other,
+                    known_trackers=known,
+                )
+            )
+            claim.result = tracker[:64]
+    part.paypal_tracker_id = tracker[:128]
+    simulated = get_settings().OPENSTALL_MODE == "fake"
+    courier = carrier_other or part.carrier or carrier
+    record_event(
+        session,
+        EventType.TRACKING_ADDED,
+        f"{name}'s tracking ({courier} {part.tracking_number}) is on {'simulated ' if simulated else ''}PayPal order "
+        f"{paypal_order_id}, on her payment",
+        entity_id=part.id,
+        payload={
+            "order_id": part.order_id,
+            "paypal_order_id": paypal_order_id,
+            "capture_id": part.capture_id,
+            "tracker_id": part.paypal_tracker_id,
+            "carrier": carrier,
+            "carrier_name_other": carrier_other,
+            "tracking_number": part.tracking_number,
+        },
+    )
     return part
 
 

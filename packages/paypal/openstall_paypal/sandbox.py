@@ -34,6 +34,7 @@ from paypal.models import (
     OrderAuthorizeRequest,
     OrderAuthorizeResponse,
     OrderRequest,
+    OrderTrackerRequest,
     PayeeBase,
     PaymentSource,
     PayPalWallet,
@@ -60,9 +61,11 @@ from openstall_paypal.gateway import (
     PayPalOrderStatus,
     Reservation,
     Share,
+    Tracking,
 )
 from openstall_paypal.rails import DEFAULT_NOTE, payout_item, receiver, venmo_payouts_simulated
 from openstall_paypal.sdk import REPRESENTATION, PayPalSdk
+from openstall_paypal.tracking import OTHER, UNNAMED, tracker_for
 
 BRAND_NAME = "OpenStall Collective"
 TEXT_LIMIT = 127  # PayPal's limit for descriptions and item names
@@ -100,6 +103,18 @@ def holds_of(order: Order | OrderAuthorizeResponse) -> dict[str, str]:
             reference = unit.reference_id if not isinstance(unit.reference_id, UnsetType) else "default"
             holds[reference] = authorizations[0].id
     return holds
+
+
+def trackers_of(order: Order) -> tuple[str, ...]:
+    """The ids of the order's shipment trackers, on every purchase unit, oldest first as PayPal lists them."""
+    found: list[str] = []
+    if isinstance(order.purchase_units, UnsetType):
+        return ()
+    for unit in order.purchase_units:
+        if isinstance(unit.shipping, UnsetType) or isinstance(unit.shipping.trackers, UnsetType):
+            continue
+        found += [tracker.id for tracker in unit.shipping.trackers if not isinstance(tracker.id, UnsetType)]
+    return tuple(found)
 
 
 def order_status(order: Order) -> PayPalOrderStatus:
@@ -177,7 +192,38 @@ class SandboxGateway:
 
     def get_order(self, paypal_order_id: str) -> OrderState:
         order = self.sdk.call(lambda: self.sdk.client.orders.get_order(paypal_order_id))
-        return OrderState(order_status(order), holds_of(order))
+        return OrderState(order_status(order), holds_of(order), trackers_of(order))
+
+    def add_tracking(self, tracking: Tracking) -> str:
+        """Her tracking on her capture (`create_order_tracking`). This route takes no PayPal-Request-Id, so the caller
+        has read the order's trackers first (`tracking.known_trackers`); ours in the answer is the tracker holding the
+        tracking number, or the one new tracker. Without either, the outcome is unknown: read back, never resent."""
+        # carrier_name_other only with OTHER, as PayPal asks; left out (UNSET) otherwise. notify_payer False: PayPal's
+        # app may still tell the payer, and we send no extra email per parcel.
+        if tracking.carrier == OTHER:
+            body = OrderTrackerRequest(
+                capture_id=tracking.capture_id,
+                tracking_number=tracking.tracking_number,
+                carrier=OTHER,
+                carrier_name_other=tracking.carrier_name_other or UNNAMED,
+                notify_payer=False,
+            )
+        else:
+            body = OrderTrackerRequest(
+                capture_id=tracking.capture_id,
+                tracking_number=tracking.tracking_number,
+                carrier=tracking.carrier,
+                notify_payer=False,
+            )
+        order = self.sdk.call(
+            lambda: self.sdk.client.orders.create_order_tracking(tracking.paypal_order_id, body)
+        )
+        tracker = tracker_for(trackers_of(order), tracking.tracking_number, tracking.known_trackers)
+        if tracker is None:
+            raise PaymentUnavailable(
+                "PAYPAL_UNREADABLE", f"PayPal's answer showed no new tracker for share {tracking.part_id}"
+            )
+        return tracker
 
     def reserve(self, paypal_order_id: str) -> Reservation:
         answer = self.sdk.call(

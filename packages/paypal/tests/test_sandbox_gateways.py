@@ -31,6 +31,7 @@ from openstall_paypal import (
     PayPalSdk,
     SandboxGateway,
     Share,
+    Tracking,
 )
 
 BASE = "https://api-m.sandbox.paypal.com"
@@ -796,3 +797,92 @@ def test_the_gateway_closes_both_clients(fake: FakePayPal, sdk: PayPalSdk) -> No
 
     assert fake.closed  # the SDK client closes its transport
     assert client._http.is_closed
+
+
+# Tracking on the PayPal order (prompt 33): orders.create_order_tracking, with no PayPal-Request-Id.
+
+TRACK_PATH = "/v2/checkout/orders/5O190127TN364715T/track"
+
+
+def with_trackers(*ids: str) -> dict[str, Any]:
+    """An order whose one purchase unit has these trackers, as PayPal lists them."""
+    return {
+        "id": "5O190127TN364715T",
+        "status": "COMPLETED",
+        "purchase_units": [{"reference_id": WHOLE_ORDER, "shipping": {"trackers": [{"id": i, "status": "SHIPPED"} for i in ids]}}],
+    }
+
+
+def tracking(carrier: str = "INDIA_POST", other: str | None = None, known: tuple[str, ...] = ()) -> Tracking:
+    return Tracking("op_002", "5O190127TN364715T", "CAP-2", "EE123456789IN", carrier, other, known)
+
+
+def test_tracking_goes_on_her_capture_with_paypals_carrier_and_no_request_id(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", TRACK_PATH, answer(200, with_trackers("CAP-1-7712345678", "CAP-2-EE123456789IN")))
+
+    tracker = PayoutsGateway(client, sdk).add_tracking(tracking())
+
+    body, key = sent(route)
+    assert body == {"capture_id": "CAP-2", "tracking_number": "EE123456789IN", "carrier": "INDIA_POST", "notify_payer": False}
+    assert key is None  # this route takes no PayPal-Request-Id: the caller reads the order back first
+    assert tracker == "CAP-2-EE123456789IN"
+
+
+def test_a_courier_paypal_does_not_list_goes_as_other_with_its_name(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", TRACK_PATH, answer(200, with_trackers("CAP-2-EE123456789IN")))
+
+    PayoutsGateway(client, sdk).add_tracking(tracking("OTHER", "Leopards Courier"))
+
+    body, _ = sent(route)
+    assert (body["carrier"], body["carrier_name_other"]) == ("OTHER", "Leopards Courier")
+
+
+def test_whatever_its_id_says_the_one_tracker_new_since_we_read_the_order_is_ours(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", TRACK_PATH, answer(200, with_trackers("T-OLD", "T-NEW")))
+
+    assert PayoutsGateway(client, sdk).add_tracking(tracking(known=("T-OLD",))) == "T-NEW"
+
+
+def test_an_answer_without_a_new_tracker_is_unknown_never_success(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", TRACK_PATH, answer(200, with_trackers("T-OLD")))
+
+    with pytest.raises(PaymentUnavailable) as error:
+        PayoutsGateway(client, sdk).add_tracking(tracking(known=("T-OLD",)))
+
+    assert (error.value.issue, error.value.outcome_unknown) == ("PAYPAL_UNREADABLE", True)
+
+
+def test_paypal_refusing_tracking_keeps_its_issue(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    refusal = {
+        "name": "UNPROCESSABLE_ENTITY",
+        "message": "The requested action could not be performed.",
+        "debug_id": "f00d",
+        "details": [{"issue": "INVALID_CAPTURE_ID", "description": "no such capture"}],
+    }
+    fake.on("POST", TRACK_PATH, answer(422, refusal))
+
+    with pytest.raises(PaymentError) as error:
+        PayoutsGateway(client, sdk).add_tracking(tracking())
+
+    assert error.value.issue == "INVALID_CAPTURE_ID"
+    assert not isinstance(error.value, PaymentUnavailable)
+
+
+def test_a_track_call_that_got_no_answer_is_never_resent_by_the_sdk(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", TRACK_PATH, httpx2.ReadTimeout("no reply"), answer(200, with_trackers("CAP-2-EE123456789IN")))
+
+    with pytest.raises(PaymentUnavailable) as error:
+        PayoutsGateway(client, sdk).add_tracking(tracking())
+
+    assert error.value.outcome_unknown
+    assert len(route.calls) == 1
+
+
+def test_reading_an_order_lists_its_trackers(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("GET", "/v2/checkout/orders/5O190127TN364715T", answer(200, with_trackers("CAP-1-7712345678")))
+    fake.on("GET", "/v2/checkout/orders/ORDER-NONE", answer(200, {"id": "ORDER-NONE", "status": "APPROVED"}))
+
+    gateway = PayoutsGateway(client, sdk)
+
+    assert gateway.get_order("5O190127TN364715T").trackers == ("CAP-1-7712345678",)
+    assert gateway.get_order("ORDER-NONE").trackers == ()

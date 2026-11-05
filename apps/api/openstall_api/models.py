@@ -309,6 +309,8 @@ class OrderPart(Base):
     # Her proof of shipping (proof.py): the courier receipt photo she sent, what was read from it or what she typed,
     # and whether she has confirmed it yet. Kept after payment, for disputes.
     proof_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # PayPal's tracker for her shipment, once her tracking is on her capture at PayPal (prompt 33, tracking.py).
+    paypal_tracker_id: Mapped[str | None] = mapped_column(String(128))
     delivery_date: Mapped[date | None] = mapped_column(Date)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

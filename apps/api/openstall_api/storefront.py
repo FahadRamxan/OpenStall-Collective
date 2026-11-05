@@ -371,6 +371,9 @@ class ShareStatus(BaseModel):
     )
     carrier: str | None = Field(description="Her courier, once she has sent the tracking.")
     tracking_number: str | None
+    tracking_on_paypal: bool = Field(
+        description="Whether her tracking is on her payment on the PayPal order, so the payer sees it at PayPal."
+    )
     payout_rail: str = Field(description="How she is paid: paypal, venmo, hyperwallet, or unavailable.")
     payout_words: str
     paid_through_paypal: bool = Field(description="Whether her payout goes through PayPal Payouts.")
@@ -456,6 +459,7 @@ def get_order_status(
                     told_at=_utc(notice.at) if notice and notice.state == "sent" else None,
                     carrier=part.carrier,
                     tracking_number=part.tracking_number,
+                    tracking_on_paypal=part.paypal_tracker_id is not None,
                     payout_rail=rail,
                     payout_words=words,
                     paid_through_paypal=via_paypal,

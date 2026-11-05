@@ -36,6 +36,8 @@ export type OrderPart = {
   tracking_number?: string | null;
   /** Her courier receipt photo and what was read from it, from the moment she sends it. */
   proof?: PartProof | null;
+  /** Her tracking is on her payment on the PayPal order (simulated PayPal in test mode). */
+  tracking_on_paypal?: boolean;
   /** A verified PayPal webhook confirmed this share's status. */
   confirmed_by_paypal: boolean;
   /** PayPal reported a problem with this share, such as a denied payment. */

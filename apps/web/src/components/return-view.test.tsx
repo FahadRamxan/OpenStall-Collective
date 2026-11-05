@@ -346,6 +346,7 @@ describe("ReturnView", () => {
           status: "captured",
           carrier: "India Post",
           tracking_number: "EE123456789IN",
+          tracking_on_paypal: true,
           proof: {
             state: "confirmed",
             photo_url: "/media/uploads/def.png",
@@ -367,6 +368,32 @@ describe("ReturnView", () => {
     expect(within(rows[1]).getByRole("link", { name: "See her courier receipt" })).toHaveAttribute(
       "href",
       "http://api.test/media/uploads/def.png",
+    );
+    expect(rows[1]).toHaveTextContent("Tracking on the PayPal order");
+  });
+
+  it("says when tracking is not on the PayPal order yet, and why", async () => {
+    const tracked = {
+      carrier: "TCS",
+      tracking_number: "7712345678",
+      tracking_on_paypal: false,
+      confirmation_source: "simulated" as const,
+    };
+    const order: Order = {
+      ...RESERVED,
+      parts: [
+        { ...RESERVED.parts[0], ...tracked }, // reserved: no capture for PayPal to track yet
+        { ...RESERVED.parts[1], ...tracked, status: "captured" }, // paid, but PayPal did not take her tracking yet
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(order)));
+
+    render(<ReturnView />);
+
+    const rows = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("It goes on the simulated PayPal order once her share is captured.");
+    expect(rows[1]).toHaveTextContent(
+      "Not on the simulated PayPal order yet: it is tried again when this page is opened again.",
     );
   });
 

@@ -247,7 +247,7 @@ function Receipt({
                     <RailChip part={part} />
                   </div>
                   <NoticeLine part={part} />
-                  <ProofLine part={part} />
+                  <ProofLine part={part} simulated={simulated} />
                   {simulated && part.status === "authorized" ? (
                     <SimulateProof part={part} onOrder={onOrder} />
                   ) : null}
@@ -365,30 +365,48 @@ function NoticeLine({ part }: { part: OrderPart }) {
 }
 
 /**
- * Her proof of shipping: the tracking she confirmed (she is paid on it), with her courier receipt photo; or, while she
- * is still answering OpenStall, what was read from it.
+ * Her proof of shipping: the tracking she confirmed (she is paid on it), with her courier receipt photo, and whether
+ * it is on her payment at PayPal; or, while she is still answering OpenStall, what was read from it.
  */
-function ProofLine({ part }: { part: OrderPart }) {
+function ProofLine({ part, simulated }: { part: OrderPart; simulated: boolean }) {
   const proof = part.proof;
   if (part.tracking_number) {
     const courier = part.carrier && part.carrier !== "OTHER" ? ` with ${part.carrier}` : "";
+    const payPalOrder = simulated ? "the simulated PayPal order" : "the PayPal order";
+    const captured = part.status === "captured" || part.status === "delivered";
     return (
-      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs">
-        <span>
-          <span className="font-semibold">Shipped{courier}:</span>{" "}
-          <span className="font-mono break-all">{part.tracking_number}</span>
-        </span>
-        {proof?.photo_url ? (
-          <a
-            href={mediaUrl(proof.photo_url)}
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-accent underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            See her courier receipt
-          </a>
+      <div className="mt-2 text-xs">
+        <p className="flex flex-wrap items-center gap-x-2">
+          <span>
+            <span className="font-semibold">Shipped{courier}:</span>{" "}
+            <span className="font-mono break-all">{part.tracking_number}</span>
+          </span>
+          {proof?.photo_url ? (
+            <a
+              href={mediaUrl(proof.photo_url)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-accent underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              See her courier receipt
+            </a>
+          ) : null}
+        </p>
+        {part.tracking_on_paypal ? (
+          <p className="mt-1 inline-flex items-center gap-1 font-semibold text-success">
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5">
+              <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Tracking on {payPalOrder}
+          </p>
+        ) : part.tracking_on_paypal === false ? (
+          <p className="mt-1 text-muted">
+            {captured
+              ? `Not on ${payPalOrder} yet: it is tried again when this page is opened again.`
+              : `It goes on ${payPalOrder} once her share is captured.`}
+          </p>
         ) : null}
-      </p>
+      </div>
     );
   }
   if (proof?.state === "awaiting_confirmation") {

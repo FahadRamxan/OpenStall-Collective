@@ -9,11 +9,11 @@ the courier and the tracking number, she confirms them, and her share is capture
    share's tracking number and courier are set, and tracking.confirmed is recorded. A number she types replaces what
    was read and is asked about once more; a "no" asks her for the right one.
 3. After that commit, pay_on_proof captures her share and pays her out (payments.pay_share: once, and never without a
-   way to pay her), then tells her in her language. A maker no payout rail reaches yet (Amina, until prompt 52) keeps
+   way to pay her), puts her tracking on her capture at PayPal (tracking.py, prompt 33), then tells her in her
+   language. A maker no payout rail reaches yet (Amina, until prompt 52) keeps
    her confirmed tracking, and is told she is paid once payouts reach her country.
 
-Nothing is paid on what the model read alone: only her confirmation moves money. Tracking on the PayPal order itself
-is prompt 33.
+Nothing is paid on what the model read alone: only her confirmation moves money.
 """
 
 import logging
@@ -40,6 +40,7 @@ from openstall_api.models import Channel, Order, OrderPart, OrderStatus, PartSta
 from openstall_api.notices import ship_by
 from openstall_api.payments import PAID, OrderNotFound, WrongStatus, pay_share, seller_rail
 from openstall_api.settings import get_settings
+from openstall_api.tracking import track_on_paypal
 from openstall_api.webhooks import deliver_fake_webhooks
 from openstall_api.wording import LOCALES, format_money, language_words, template_language
 from openstall_paypal import RAIL_NAMES, PaymentError, PaymentGateway, PaymentUnavailable
@@ -472,6 +473,7 @@ def pay_on_proof(
         _tell(part_id, "payment_failed", messenger, reason=str(trouble))
         return False
     deliver_fake_webhooks()  # fake mode: simulated PayPal's capture and payout confirmations follow, as for real
+    track_on_paypal(part_id, gateway)  # her tracking on her capture at PayPal (prompt 33); retried later if refused
     _tell(part_id, "paid", messenger)
     return True
 

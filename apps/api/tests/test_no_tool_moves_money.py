@@ -42,6 +42,9 @@ class SpyGateway:
     def release_share(self, share):
         return self._never("release_share")
 
+    def add_tracking(self, tracking):
+        return self._never("add_tracking")
+
 
 @pytest.fixture(autouse=True)
 def today(monkeypatch):

@@ -100,10 +100,11 @@ class Reservation:
 
 @dataclass(frozen=True)
 class OrderState:
-    """PayPal's view of an order: its status, and the authorizations once it is reserved."""
+    """PayPal's view of an order: its status, the authorizations once it is reserved, and its shipment trackers."""
 
     status: PayPalOrderStatus
     holds: Mapping[str, str]
+    trackers: tuple[str, ...] = ()  # PayPal's tracker ids on the order, once makers' tracking is added
 
 
 @dataclass(frozen=True)
@@ -135,6 +136,20 @@ class Payment:
     payout_simulated: bool = False
 
 
+@dataclass(frozen=True)
+class Tracking:
+    """One maker's shipment, for her capture on the PayPal order (prompt 33)."""
+
+    part_id: str  # our order part id
+    paypal_order_id: str
+    capture_id: str  # PayPal's capture of her share: tracking is attached to it
+    tracking_number: str
+    carrier: str  # PayPal's carrier code (tracking.carrier_code), or "OTHER"
+    carrier_name_other: str | None = None  # her courier's name, when carrier is "OTHER"
+    # The order's tracker ids just before this call: a new one in PayPal's answer is the one this call added.
+    known_trackers: tuple[str, ...] = ()
+
+
 @runtime_checkable
 class PaymentGateway(Protocol):
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
@@ -155,6 +170,11 @@ class PaymentGateway(Protocol):
 
     def release_share(self, share: Share) -> None:
         """Give one seller's share back to the buyer. Refused once the share is paid."""
+        ...
+
+    def add_tracking(self, tracking: Tracking) -> str:
+        """Attach a shipment's tracking to its capture on the PayPal order; PayPal's tracker id. Not safe to repeat:
+        PayPal takes no PayPal-Request-Id here, so the caller reads the order's trackers first (get_order)."""
         ...
 
 
@@ -223,6 +243,7 @@ class FakeGateway:
         self._authorizations: dict[str, _FakeAuthorization] = {}  # payouts: one per order
         self._hold_orders: dict[str, str] = {}  # authorization id -> PayPal order id
         self._payments: dict[str, Payment] = {}
+        self._trackers: dict[str, list[str]] = {}  # PayPal order id -> its tracker ids, oldest first
 
     def take_outbox(self) -> list[dict[str, Any]]:
         """The webhook events waiting to be sent, oldest first; the outbox is then empty."""
@@ -264,7 +285,7 @@ class FakeGateway:
     def get_order(self, paypal_order_id: str) -> OrderState:
         self.calls.append(("get_order", paypal_order_id))
         order = self._order(paypal_order_id)
-        return OrderState(order.status, dict(order.holds))
+        return OrderState(order.status, dict(order.holds), tuple(self._trackers.get(paypal_order_id, ())))
 
     def reserve(self, paypal_order_id: str) -> Reservation:
         self.calls.append(("reserve", paypal_order_id))
@@ -434,6 +455,27 @@ class FakeGateway:
             {"id": share.hold_id, "status": "VOIDED", "amount": _money(hold.remaining)},
             f"The remaining ${hold.remaining:.2f} was voided",
         )
+
+    def add_tracking(self, tracking: Tracking) -> str:
+        """Like PayPal: tracking goes on a capture of this order. Tracker ids are made from the capture and the
+        tracking number; the same shipment added again keeps its one tracker."""
+        self.calls.append(("add_tracking", tracking))
+        self._order(tracking.paypal_order_id)
+        captures = {
+            payment.capture_id: self._hold_orders.get(payment.capture_id.split("-CAP", 1)[0])
+            for payment in self._payments.values()
+        }
+        if captures.get(tracking.capture_id) != tracking.paypal_order_id:
+            raise PaymentError(
+                "RESOURCE_NOT_FOUND", f"no capture {tracking.capture_id} on order {tracking.paypal_order_id}"
+            )
+        if tracking.carrier == "OTHER" and not tracking.carrier_name_other:
+            raise PaymentError("MISSING_REQUIRED_PARAMETER", "carrier_name_other is required when carrier is OTHER")
+        tracker = f"{tracking.capture_id}-{tracking.tracking_number}"
+        trackers = self._trackers.setdefault(tracking.paypal_order_id, [])
+        if tracker not in trackers:
+            trackers.append(tracker)
+        return tracker
 
     def authorization(self, hold_id: str) -> tuple[Decimal, Decimal, str]:
         """The payouts path's hold as tests see it: (amount held, amount captured, state)."""

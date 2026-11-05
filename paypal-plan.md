@@ -16,6 +16,13 @@ Move every Orders and Payments call of `SandboxGateway` (packages/paypal/opensta
 | `reserve` | `client.orders.authorize_order` | `POST /v2/checkout/orders/{id}/authorize` |
 | `pay_share` (capture part) | `client.payments.capture_authorized_payment` | `POST /v2/payments/authorizations/{authorization_id}/capture` |
 | `release_share` (void) | `client.payments.void_payment` | `POST /v2/payments/authorizations/{authorization_id}/void` |
+| `add_tracking` (prompt 33) | `client.orders.create_order_tracking` | `POST /v2/checkout/orders/{id}/track` |
+
+Prompt 33 (each maker's tracking on the PayPal order) adds the last row: once a share is captured, its confirmed
+tracking number and courier are attached to that capture on the order. Unlike every other write here, this route
+takes **no `PayPal-Request-Id`** (the SDK method has no such parameter, and none of its headers is one), so PayPal
+does not dedupe a repeat for us: the order's trackers are read first (`get_order`), the call is claimed like every
+other write (`track:{part_id}`), and a tracker already on the order is recorded instead of being sent again.
 
 Not in this SDK (40 operations, 5 controllers; none is Payouts or Notifications), so they stay on our own
 `PayPalClient` (client.py): `POST /v1/payments/payouts` and `POST /v1/notifications/verify-webhook-signature`, and
@@ -78,8 +85,9 @@ and its payout is simulated, because PayPal's sandbox refuses Venmo payouts; no 
 | `orders.authorize_order` | `id_: str` | `pay_pal_request_id="openstall-reserve-{paypal_order_id}"`, `prefer="return=representation"`, `body=OrderAuthorizeRequest()` (serializes to `{}`) | `OrderAuthorizeResponse` | `AuthorizeOrderErrorBody = Error \| RawError`; `Error` from 400, 401, 403, 404, 422, 500 |
 | `payments.capture_authorized_payment` | `authorization_id: str` | `pay_pal_request_id="openstall-capture-{part_id}"`, `prefer="return=representation"`, `body=CaptureRequest(...)` | `CapturedPayment` | `CaptureAuthorizedPaymentErrorBody = Error \| RawError`; `Error` from 400, 401, 403, 404, 409, 422; 500 is `RawError` |
 | `payments.void_payment` | `authorization_id: str` | `pay_pal_request_id="openstall-release-{part_id}"`, `prefer="return=representation"` | `PaymentAuthorization` (200 with representation) | `VoidPaymentErrorBody = Error \| RawError`; `Error` from 401, 403, 404, 409, 422; 500 is `RawError` |
+| `orders.create_order_tracking` | `id_: str` (the PayPal order), `body: OrderTrackerRequest \| OrderTrackerRequestDict` | none: its only keywords are `pay_pal_auth_assertion` and `request_options`; **no `pay_pal_request_id`, no `prefer`** | `Order` (PayPal documents 200 "with a JSON response body that shows tracker details") | `CreateOrderTrackingErrorBody = Error \| RawError`; `Error` from 400, 403, 404, 422, 500; anything else (401 included) is `RawError` |
 
-None of the five returns `None` (the 11 `None` operations are all out of scope). Every operation also has
+None of the six returns `None` (the 11 `None` operations are all out of scope). Every operation also has
 `with_raw_response`; we use the parsed (raising) spelling everywhere.
 
 `prefer` is a header param defaulting to `"return=minimal"`: a minimal answer lacks purchase units and links, so
@@ -103,6 +111,7 @@ also treat a `204` from PayPal as success, since we read nothing from a void's b
 | `PayPalWalletExperienceContext` | none | `brand_name`, `shipping_preference`, `user_action`, `return_url`, `cancel_url`. Members with real defaults are **always sent**: `contact_preference="NO_CONTACT_INFO"`, `landing_page="NO_PREFERENCE"`, `payment_method_preference="UNRESTRICTED"` (and `shipping_preference`/`user_action`, which we set). |
 | `OrderAuthorizeRequest` | none | nothing: `{}` |
 | `CaptureRequest` | none (`final_capture: bool = False` has a real default, always sent) | `invoice_id`, `final_capture`, and `amount` on the payouts path |
+| `OrderTrackerRequest` | `capture_id: str` (`notify_payer: bool = False` has a real default, always sent) | `capture_id`, `tracking_number`, `carrier: ShipmentCarrierOrStr`, `carrier_name_other` (only when `carrier` is `OTHER`), `notify_payer=False` (PayPal's app may still tell the payer; we send no extra email per parcel); `items` left out |
 
 The request body is dumped with `UNSET` stripped (`core/bodies.py`, `strip_unset`); real defaults stay.
 
@@ -115,6 +124,7 @@ The request body is dumped with `UNSET` stripped (`core/bodies.py`, `strip_unset
 | `PayPalExperienceUserAction` | `PAY_NOW` |
 | `ItemCategory` | `PHYSICAL_GOODS` |
 | `OrderStatus` (read) | `CREATED`, `SAVED`, `APPROVED`, `VOIDED`, `COMPLETED`, `PAYER_ACTION_REQUIRED`; an unknown wire value arrives as a `str` and is passed through as-is |
+| `ShipmentCarrier` (`paypal.models.enums.shipment_carrier`, 4,256 lines) | the demo's couriers, each checked to exist: `TCS` ("TCS courier"), `INDIA_POST`, `MEX_ESTAFETA` ("Estafeta"), `ROYAL_MAIL`, `PARCELFORCE`, `USPS`, `UPS`, `FEDEX`, `DHL`, `BLUEDART`, `IND_DELHIVERY`, `DTDC_IN`, `CORREOS_DE_MEXICO`; anything else is `OTHER` with the name in `carrier_name_other` (Leopards has no member; `OTHER` with "Leopards Courier" was accepted on the sandbox, docs/day-one-checks.md) |
 
 ### Response members we depend on (all `Optional` = may be `UNSET`; guard each)
 
@@ -128,6 +138,9 @@ The request body is dumped with `UNSET` stripped (`core/bodies.py`, `strip_unset
 | `PaymentCollection` | `authorizations: Optional[list[AuthorizationWithAdditionalData]]` | |
 | `AuthorizationWithAdditionalData` | `id: Optional[str]` | |
 | `CapturedPayment` | `id: Optional[str]` | no `id` after a capture: outcome unknown (`PaymentUnavailable`) |
+| `PurchaseUnit` (tracking) | `shipping: Optional[ShippingWithTrackingDetails]` | |
+| `ShippingWithTrackingDetails` | `trackers: Optional[list[OrderTrackerResponse]]` | |
+| `OrderTrackerResponse` | `id: Optional[str]` (documented only as "The tracker id."), `status: Optional[OrderTrackerStatusOrStr]` (`SHIPPED`, `CANCELLED`); it has **no** tracking-number or capture-id member | after a track call, ours is the tracker whose `id` contains our tracking number, else the one id that was not on the order when we read it just before; neither: outcome unknown (`PaymentUnavailable`), read back next time |
 | `Error` (`paypal.models`) | `name: str`, `message: str`, `debug_id: str` (all required), `details: Optional[list[ErrorDetails]]` | |
 | `ErrorDetails` | `issue: str` (required) | |
 
@@ -206,6 +219,7 @@ two takers cannot both win. `ClaimHeld` is answered with 409 by `orders_api.paym
 | Reserve (`authorize_order`) | `paypal_claims` row `reserve:{order_id}` | the primary key on `paypal_claims.key`, or the holder compare-and-set; on Postgres first the order's row lock | `except IntegrityError` in `claims.take_claim`, raised as `ClaimHeld` | `claims.take_claim` (via `claims.paypal_claim` in `payments.reserve_order`), then `SandboxGateway.reserve` |
 | Pay a share (`capture_authorized_payment`) | `paypal_claims` row `capture:{part_id}` | the primary key on `paypal_claims.key`, or the holder compare-and-set; on Postgres first the order's row lock (`load_part`) | `except IntegrityError` in `claims.take_claim`, raised as `ClaimHeld` | `claims.take_claim` (via `claims.paypal_claim` in `payments.pay_share`), then `SandboxGateway.capture` |
 | Release a share (`void_payment`) | `paypal_claims` row `release:{part_id}` | the primary key on `paypal_claims.key`, or the holder compare-and-set; on Postgres first the order's row lock (`load_part`) | `except IntegrityError` in `claims.take_claim`, raised as `ClaimHeld` | `claims.take_claim` (via `claims.paypal_claim` in `payments.release_share`), then `SandboxGateway.void` |
+| Tracking on a share's capture (`create_order_tracking`) | `paypal_claims` row `track:{part_id}`, request id `openstall-track-{part_id}` (stored for the takeover rule only: this route sends no `PayPal-Request-Id`) | the primary key on `paypal_claims.key`, or the holder compare-and-set; on Postgres first the order's row lock (`load_part`); and before any send, the order's trackers read back, so a tracker that already landed is recorded, never sent twice | `except IntegrityError` in `claims.take_claim`, raised as `ClaimHeld` | `payments.track_share` (reads `gateway.get_order(...).trackers`, then `claims.paypal_claim`), then `SandboxGateway.add_tracking` |
 
 ## Assumptions & Blockers
 
@@ -222,6 +236,14 @@ two takers cannot both win. `ClaimHeld` is answered with 409 by `orders_api.paym
   as before, and then gets the stored result. A repeat once the first has finished returns the stored result.
 - After an unknown outcome (no answer to a write), a repeat goes ahead at once with the same `PayPal-Request-Id`,
   as before this change; it is not refused.
+- **Tracking (prompt 33), proven by hand, not yet through the SDK.** The sandbox proof attached tracking to two
+  captures with `POST /v2/checkout/orders/{id}/track` (carrier `DHL`, and `OTHER` with `carrier_name_other`), but
+  did not record the answer, and the SDK documents the tracker `id` only as "The tracker id." So, until the hosted
+  demo's first real tracking runs, two things are assumed: the answer lists the order's trackers (its decoder is
+  `Order`), and after a call that got **no** answer, our tracker can be recognised on the order by an `id` that
+  contains our tracking number. The first is not relied on for safety: an answer without a new tracker is read as
+  unknown, never as success. If the second is wrong, a retry after a lost answer could add the tracking twice
+  (PayPal does not dedupe this route); check the ids on the first real run and record them here.
 - Not run: the claims tests on Postgres. There is no Postgres server on the development machine; the Postgres path
   is covered by a test that runs it on SQLite and counts one pooled connection per request.
 

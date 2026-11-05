@@ -59,6 +59,9 @@ class EventType(StrEnum):
     ORDER_NOTICE_FAILED = "message.order_notice_failed"
     TRACKING_READ = "tracking.read"
     TRACKING_CONFIRMED = "tracking.confirmed"
+    # Her confirmed tracking put on her capture at PayPal (prompt 33), or why it could not be yet.
+    TRACKING_ADDED = "tracking.added"
+    TRACKING_NOT_ADDED = "tracking.not_added"
     DELIVERY_CONFIRMED = "delivery.confirmed"
     PASSPORT_ISSUED = "passport.issued"
     PASSPORT_UPDATED = "passport.updated"

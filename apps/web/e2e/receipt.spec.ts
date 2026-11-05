@@ -67,6 +67,8 @@ test("Priya photographs her courier receipt, confirms it in Hindi, and is paid o
   await expect(row(page, "Priya")).toContainText("Paid on proof of shipping");
   await expect(row(page, "Priya")).toContainText("Shipped with India Post: EE123456789IN");
   await expect(row(page, "Priya").getByRole("link", { name: "See her courier receipt" })).toBeVisible();
+  // Prompt 33: her tracking is on her payment at (simulated) PayPal.
+  await expect(row(page, "Priya")).toContainText("Tracking on the simulated PayPal order");
   await expect(row(page, "Lucía")).toContainText("Reserved, paid when she ships");
   await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-paid-1280.png"), fullPage: true });
 
@@ -75,6 +77,7 @@ test("Priya photographs her courier receipt, confirms it in Hindi, and is paid o
   const feed = page.getByRole("list", { name: "Activity, newest first" });
   await expect(feed).toContainText(`Priya confirmed her tracking for order ${orderId}: India Post EE123456789IN`);
   await expect(feed).toContainText("Priya was paid $176.00 on proof of shipping");
+  await expect(feed).toContainText("Priya's tracking (India Post EE123456789IN) is on simulated PayPal order");
   await expect(feed).toContainText(`Priya was told in the web chat, in Hindi, that she is paid for order ${orderId}`);
 });
 
@@ -104,4 +107,6 @@ test("Amina confirms her receipt in Urdu, and is told to wait: no payout rail re
   await expect(row(page, "Amina")).toContainText("Shipped with TCS: 7712345678");
   await expect(row(page, "Amina")).toContainText("Reserved, paid when she ships");
   await expect(row(page, "Amina")).toContainText("Payout rail not connected yet (Pakistan)");
+  // PayPal tracks a payment, and hers is not captured: her tracking waits.
+  await expect(row(page, "Amina")).toContainText("It goes on the simulated PayPal order once her share is captured.");
 });

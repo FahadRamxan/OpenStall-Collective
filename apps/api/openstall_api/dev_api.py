@@ -24,6 +24,7 @@ from openstall_api.payments import pay_share, release_share
 from openstall_api.quotes import create_quote_request, run_quote
 from openstall_api.quotes_api import QuoteOut
 from openstall_api.seed import DEMO_REQUEST, story_order
+from openstall_api.tracking import track_on_paypal
 from openstall_api.webhooks import deliver_fake_webhooks
 
 router = APIRouter(prefix="/api/dev", tags=["dev"], dependencies=[Depends(fake_mode_only)])
@@ -79,6 +80,9 @@ def simulate_proof(
     with payment_errors():
         pay_share(session, part_id, registry.payment_gateway)
     session.commit()
+    # Her (simulated) tracking on her capture at simulated PayPal, as after a real receipt photo (prompt 33).
+    track_on_paypal(part_id, lambda: registry.payment_gateway)
+    session.expire_all()
     background.add_task(deliver_fake_webhooks)  # simulated PayPal's capture and payout confirmations follow
     return order_out(session, _load(session, part.order_id))
 
