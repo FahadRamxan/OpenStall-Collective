@@ -129,6 +129,23 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(screen.queryByRole("form", { name: "Send a message" })).not.toBeInTheDocument();
   });
 
+  it("her voice note shows as text too, word for word, marked with the language it was heard in", async () => {
+    const urdu = "کڑھائی والے کشن کور، تین رنگوں میں";
+    const heard: Conversation = {
+      ...CONVERSATION,
+      messages: [{ ...CONVERSATION.messages[0], transcript: urdu, language: "ur" }, CONVERSATION.messages[1]],
+    };
+    vi.stubGlobal("fetch", api({ ...BROWSING, "GET /api/chats/s_amina": () => Response.json(heard) }));
+
+    render(<SellerChatView />);
+
+    const thread = await screen.findByRole("list", { name: "Messages with Amina" });
+    const [fromHer, reply] = within(thread).getAllByRole("listitem");
+    expect(within(fromHer).getByText("Voice note in Urdu, as text")).toBeInTheDocument();
+    expect(within(fromHer).getByText(urdu)).toHaveAttribute("lang", "ur");
+    expect(within(reply).queryByText(/as text/)).not.toBeInTheDocument();
+  });
+
   it("a new message appears without reloading", async () => {
     const later: Conversation = {
       ...CONVERSATION,
@@ -336,6 +353,47 @@ describe("SellerChatView, your own demo phone", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Not sent: Write a message or attach");
     expect(screen.getByLabelText("Message")).toHaveValue("Hello?");
+  });
+
+  it("in test mode, offers the sample voice note, sent like one you recorded", async () => {
+    let sent: FormData | null = null;
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json([]),
+        "GET /api/seller-chat/samples": () => Response.json({ voice_note: "/api/dev/samples/voice-note.wav" }),
+        "GET /api/dev/samples/voice-note.wav": () => new Response("RIFF", { headers: { "Content-Type": "audio/wav" } }),
+        "POST /api/seller-chat/messages": (init) => {
+          sent = init?.body as FormData;
+          return Response.json({ seller_id: "s_web", message_id: "cm_9", replies: [WELCOME] });
+        },
+        "GET /api/chats/s_web": () => Response.json(MINE),
+      }),
+    );
+    render(<SellerChatView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Attach the sample voice note/ }));
+    await screen.findByRole("button", { name: "Remove the voice note" });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText(WELCOME)).toBeInTheDocument();
+    const file = sent!.get("files") as File;
+    expect([file.name, file.type]).toEqual(["sample-voice-note.wav", "audio/wav"]);
+  });
+
+  it("outside test mode there is no sample voice note to attach", async () => {
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json([]),
+        "GET /api/seller-chat/samples": () => Response.json({ voice_note: null }),
+      }),
+    );
+
+    render(<SellerChatView />);
+
+    expect(await screen.findByText(/No seller has written yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sample voice note/ })).not.toBeInTheDocument();
   });
 
   it("without a microphone, offers to upload a voice note instead", async () => {

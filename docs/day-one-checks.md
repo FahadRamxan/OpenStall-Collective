@@ -88,6 +88,6 @@ Sandbox emails and merchant IDs only.
 
 ## Model providers
 
-Vision and text:
+Vision and text: Claude (Anthropic) through the Anthropic SDK, model `LLM_MODEL` (`claude-sonnet-5-5` by default): the seller agents, the plan in words, and courier receipts.
 
-Speech to text (Urdu):
+Speech to text (Urdu): OpenAI's transcriptions with `whisper-1` (`SPEECH_MODEL`), answering in `verbose_json`, which names the language heard (prompt 16). Not yet run on a real Urdu voice note: it needs `OPENAI_API_KEY`. When it is, check that Urdu comes back in Urdu script and as `urdu`, not as Hindi (docs/decisions.md, prompt 16).

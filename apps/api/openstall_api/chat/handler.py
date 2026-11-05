@@ -6,8 +6,11 @@ both in the event log, so pages showing the chat update live. The caller deliver
 sends them through the Messenger, and the web chat shows them.
 
 The chat moves through the states collecting, asking, awaiting_confirmation and live. Later steps give each state its
-own turn (transcribing, drafting the listing, asking what is missing, publishing); for now every turn welcomes a new
-seller, or says what arrived.
+own turn (drafting the listing, asking what is missing, publishing); for now every turn welcomes a new seller, or says
+what arrived.
+
+Her voice notes are turned into text before the message is stored (listen_to_voice_notes, outside any transaction;
+chat/voice.py): the words go on her message as she said them, and their language on her profile if she has none yet.
 
 A maker whose share waits for proof of shipping is answered by the receipt flow first (proof.py): her courier receipt
 photo is read before the message is stored (look_at_photos, outside any transaction), she confirms the number, and the
@@ -21,10 +24,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from openstall_agents.adapters import LLM
+from openstall_agents.adapters import LLM, Media, SpeechToText
 from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
+from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
 from openstall_api.events import EventType, record_event
-from openstall_api.media import MediaRejected, MediaStore
+from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
 from openstall_api.models import Channel, ChatMessage, ChatSession, DataSource, Direction, Seller
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
 
@@ -169,9 +173,10 @@ def refusals(media: list[dict[str, Any]]) -> list[Reply]:
     ]
 
 
-def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]]) -> list[Reply]:
-    """The chat's answer to one message, from its state. Files that could not be kept are always said first."""
-    replies = refusals(media)
+def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]], heard: Heard) -> list[Reply]:
+    """The chat's answer to one message, from its state. Files that could not be kept, then voice notes that could not
+    be heard, are always said first."""
+    replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
     if first:
         replies.append(Reply(WELCOME))
@@ -195,6 +200,20 @@ def look_at_photos(
     return look_at_photo(sender.channel, sender.address, sender.seller_id, photos[0], llm)
 
 
+def listen_to_voice_notes(files: Sequence[InboundFile | Refused], speech: Callable[[], SpeechToText]) -> Heard:
+    """Before her message is stored: what each voice note she sent says (voice.listen). Only voice notes the media store
+    will keep are sent anywhere; the adapter is not even made when there are none."""
+    notes = [
+        Media(item.data, item.content_type)
+        for item in files
+        if isinstance(item, InboundFile)
+        and item.content_type.startswith("audio/")
+        and item.content_type in ALLOWED_TYPES
+        and len(item.data) <= MAX_BYTES
+    ]
+    return listen(notes, speech)
+
+
 def handle_inbound(
     session: Session,
     store: MediaStore,
@@ -202,9 +221,12 @@ def handle_inbound(
     text: str,
     files: Sequence[InboundFile | Refused],
     photo: PhotoReading | None = None,
+    heard: Heard | None = None,
 ) -> HandledMessage:
     """Store a seller's message and work out the replies. The caller commits, then delivers the replies, then pays
-    any share in `pay_after`. `photo` is what look_at_photos read on her photo, before this transaction."""
+    any share in `pay_after`. `photo` is what look_at_photos read on her photo, and `heard` what listen_to_voice_notes
+    heard in her voice notes, both before this transaction."""
+    heard = heard or Heard()
     seller = find_seller(session, sender)
     chat = find_chat(session, seller, sender.channel)
     first = not session.scalar(
@@ -212,6 +234,8 @@ def handle_inbound(
     )
     media = keep_media(store, files)
     message = save_message(session, chat, Direction.INBOUND, text, media)
+    message.transcript = heard.transcript
+    message.language = heard.language
     record_event(
         session,
         EventType.MESSAGE_RECEIVED,
@@ -219,11 +243,25 @@ def handle_inbound(
         entity_id=seller.id,
         payload={"channel": sender.channel, "message_id": message.id},
     )
+    if heard.texts:
+        saved = remember_language(seller, heard.language)
+        record_event(
+            session,
+            EventType.MESSAGE_TRANSCRIBED,
+            transcribed_words(seller.name, heard, saved),
+            entity_id=seller.id,
+            payload={
+                "channel": sender.channel,
+                "message_id": message.id,
+                "language": heard.language,
+                "language_saved": saved,
+            },
+        )
     proof = proof_turn(session, seller, text, media, photo, message.id)
     if proof is not None:
-        replies = refusals(media) + [Reply(reply) for reply in proof.replies]
+        replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]
     else:
-        replies = turn(chat, first, text, media)
+        replies = turn(chat, first, text, media, heard)
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(

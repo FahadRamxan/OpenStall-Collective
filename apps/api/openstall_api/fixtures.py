@@ -5,12 +5,26 @@ All are generated, so the repo holds no binary files for them, and the same byte
 input, so the media store keeps each once.
 """
 
+import hashlib
 import math
 import struct
 import zlib
 from functools import cache
 
+from openstall_agents.adapters import Transcript
 from openstall_agents.receipt_reader import fixture_receipt_text
+
+# What fake mode hears in fixture_voice_note(), the sample voice note: Amina's words from the story (spec section 2,
+# step 1) as she would say them in Urdu. "Embroidered cushion covers, in three colours, 18 dollars each. I can make
+# 15 a week."
+SAMPLE_VOICE_NOTE_SAYS = Transcript(
+    "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں پندرہ بنا سکتی ہوں۔", "ur"
+)
+
+
+def known_voice_notes() -> dict[str, Transcript]:
+    """What fake mode's speech to text hears in each sample voice note, by the file's sha256."""
+    return {hashlib.sha256(fixture_voice_note()).hexdigest(): SAMPLE_VOICE_NOTE_SAYS}
 
 CREAM = (247, 240, 226)
 TEAL = (14, 110, 100)

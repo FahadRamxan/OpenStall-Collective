@@ -119,6 +119,23 @@ describe("MakerPhones", () => {
     );
   });
 
+  it("shows her voice note as its text, or says it is a voice note when it could not be heard", async () => {
+    latest.order = { ...ORDER, parts: [share("Amina", "s_amina", "ur")] };
+    const words = "کڑھائی والے کشن کور، تین رنگوں میں";
+    const voiceNote = { url: "/media/uploads/note.wav", content_type: "audio/wav", size: 9, refused: null };
+    const amina = chat("s_amina", "Amina", ["me:", "me:"]);
+    amina.messages[0] = { ...amina.messages[0], text: null, media: [voiceNote], transcript: words, language: "ur" };
+    amina.messages[1] = { ...amina.messages[1], text: null, media: [voiceNote] };
+    vi.stubGlobal("fetch", api({ "GET /api/chats/s_amina": () => Response.json(amina) }));
+
+    render(<MakerPhones />);
+
+    const phone = screen.getByRole("article", { name: "Amina's phone" });
+    expect(await within(phone).findByText(words)).toHaveAttribute("lang", "ur");
+    expect(within(phone).getByText("Voice note in Urdu, as text")).toBeInTheDocument();
+    expect(within(phone).getByText("A voice note")).toBeInTheDocument();
+  });
+
   it("in test mode, plays a maker: her courier receipt, then yes in her language when she is asked", async () => {
     const posted: unknown[] = [];
     latest.order = {

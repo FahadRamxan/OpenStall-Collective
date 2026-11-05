@@ -18,12 +18,14 @@ from openstall_agents.adapters import (
     FakeLLM,
     FakeSpeechToText,
     ImageSearch,
+    OpenAISpeechToText,
     SpeechToText,
 )
 from openstall_agents.adapters.claude import ClaudeLLM
 from openstall_agents.fake_answers import fake_answer
 from openstall_api.db import reset_engine
 from openstall_api.feeds import clear_catalog_cache
+from openstall_api.fixtures import known_voice_notes
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
 from openstall_api.whatsapp import TwilioMessenger
@@ -70,6 +72,12 @@ def make_claude(settings: Settings) -> ClaudeLLM:
     return ClaudeLLM(settings.ANTHROPIC_API_KEY.get_secret_value(), settings.LLM_MODEL)
 
 
+def make_openai_speech(settings: Settings) -> OpenAISpeechToText:
+    """OpenAI's transcriptions, with the model from SPEECH_MODEL. The registry checks the key is set first."""
+    assert settings.OPENAI_API_KEY
+    return OpenAISpeechToText(settings.OPENAI_API_KEY.get_secret_value(), settings.SPEECH_MODEL)
+
+
 def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
     """Twilio's WhatsApp sandbox. The registry checks the keys are set before calling it."""
     assert settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN
@@ -94,7 +102,8 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         purpose="Turns sellers' voice notes into text.",
         service="OpenAI transcription",
         keys=("OPENAI_API_KEY",),
-        make_fake=lambda settings: FakeSpeechToText(),
+        make_fake=lambda settings: FakeSpeechToText(known=known_voice_notes()),
+        make_real=lambda settings: make_openai_speech(settings),
     ),
     AdapterSpec(
         name="embedder",

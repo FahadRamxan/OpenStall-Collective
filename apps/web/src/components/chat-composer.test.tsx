@@ -1,9 +1,15 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "@/components/chat-composer";
+
+const SAMPLE = "/api/dev/samples/voice-note.wav";
+
+beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://api.test");
+});
 
 /** A browser that can record. jsdom has neither MediaRecorder nor navigator.mediaDevices. */
 function giveTheBrowserAMicrophone() {
@@ -13,8 +19,46 @@ function giveTheBrowserAMicrophone() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   Reflect.deleteProperty(navigator, "mediaDevices");
   document.body.innerHTML = "";
+});
+
+describe("ChatComposer, the sample voice note (test mode)", () => {
+  it("attaches the sample as a voice note and sends it like any other", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("RIFF a made-up wav", { headers: { "Content-Type": "audio/wav" } }));
+    vi.stubGlobal("fetch", fetch);
+    const onSend = vi.fn().mockResolvedValue(true);
+    render(<ChatComposer onSend={onSend} busy={false} sampleVoiceNote={SAMPLE} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Attach the sample voice note/ }));
+
+    expect(await screen.findByRole("button", { name: "Remove the voice note" })).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(`http://api.test${SAMPLE}`);
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    const [text, files] = onSend.mock.calls[0] as [string, File[]];
+    expect(text).toBe("");
+    expect(files.map((file) => [file.name, file.type])).toEqual([["sample-voice-note.wav", "audio/wav"]]);
+  });
+
+  it("says so when the sample cannot be loaded, and keeps everything else as it was", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("gone", { status: 404 })));
+    render(<ChatComposer onSend={vi.fn()} busy={false} sampleVoiceNote={SAMPLE} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Attach the sample voice note/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The sample voice note could not be attached");
+    expect(screen.queryByRole("list", { name: "Attached" })).not.toBeInTheDocument();
+  });
+
+  it("outside test mode there is no sample to attach", () => {
+    render(<ChatComposer onSend={vi.fn()} busy={false} sampleVoiceNote={null} />);
+
+    expect(screen.queryByRole("button", { name: /sample voice note/ })).not.toBeInTheDocument();
+  });
 });
 
 describe("ChatComposer", () => {

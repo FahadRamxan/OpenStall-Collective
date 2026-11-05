@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { useLatestOrder } from "@/hooks/use-latest-order";
 import { errorMessage } from "@/lib/api";
@@ -162,6 +163,7 @@ function Phone({
 function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string; onPhoto: () => void }) {
   const hers = message.direction === "inbound";
   const photo = message.media.find((item) => item.url && item.content_type.startsWith("image/"));
+  const voiceNote = message.media.some((item) => item.url && item.content_type.startsWith("audio/"));
   return (
     <li className={`flex flex-col ${hers ? "items-end" : "items-start"}`}>
       <div
@@ -178,6 +180,11 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
             onLoad={onPhoto}
             className="mb-1 max-h-28 w-auto rounded-lg border border-border"
           />
+        ) : null}
+        {message.transcript ? (
+          <VoiceTranscript text={message.transcript} language={message.language} />
+        ) : voiceNote ? (
+          <p className="text-muted italic">A voice note</p>
         ) : null}
         {message.text ? (
           <p dir="auto" className="break-words whitespace-pre-line">

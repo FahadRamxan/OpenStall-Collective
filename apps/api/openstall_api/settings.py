@@ -66,6 +66,8 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: SecretStr | None = None
     OPENAI_API_KEY: SecretStr | None = None
     LLM_MODEL: str = "claude-sonnet-5-5"
+    # OpenAI's model for voice notes. whisper-1 also says which language it heard; other models do not.
+    SPEECH_MODEL: str = "whisper-1"
     # Unlocks /demo's Run and Reset controls in sandbox mode (header X-Demo-Run-Token). Unset: they are off there.
     DEMO_RUN_TOKEN: SecretStr | None = None
     GOOGLE_VISION_API_KEY: SecretStr | None = None

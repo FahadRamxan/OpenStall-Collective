@@ -59,7 +59,7 @@ The first searches the listings. The second plays the buyer agent's whole reques
 
 ### On PayPal's sandbox
 
-Set `OPENSTALL_MODE=sandbox` in `.env`, with a PayPal sandbox REST app's `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` (and `ANTHROPIC_API_KEY` for the AI agents). Approving an order then goes to PayPal's sandbox checkout, where you sign in as a sandbox personal account from your PayPal Developer Dashboard. `/status` shows which services are connected and names any missing key. In sandbox mode the seeded makers cannot be played from `/demo` (test-mode controls are off); a maker proves she shipped from her own WhatsApp or web chat.
+Set `OPENSTALL_MODE=sandbox` in `.env`, with a PayPal sandbox REST app's `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` (and `ANTHROPIC_API_KEY` for the AI agents, `OPENAI_API_KEY` for voice notes). Approving an order then goes to PayPal's sandbox checkout, where you sign in as a sandbox personal account from your PayPal Developer Dashboard. `/status` shows which services are connected and names any missing key. In sandbox mode the seeded makers cannot be played from `/demo` (test-mode controls are off); a maker proves she shipped from her own WhatsApp or web chat.
 
 ## What works today
 
@@ -69,6 +69,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Proven on PayPal's real sandbox:** one authorization, several partial captures with tracking on each, a final capture, a void, a payout, and OpenStall's own Approve flow end to end. See [docs/day-one-checks.md](docs/day-one-checks.md).
 - **Built on APIMatic's PayPal SDK,** with APIMatic's PayPal Context Plugin (below).
 - **Sellers chat on WhatsApp or in the browser.** A verified Twilio webhook stores their messages, photos and voice notes; `/seller-chat` is the same chat as a phone in the browser. One handler serves both.
+- **Voice notes become text.** Each voice note a seller sends is turned into text before her message is stored, kept word for word under it (never translated, so a wrong reading can be traced to the recording), and the language it was heard in is saved on her profile if she has none yet. One that cannot be heard is kept, and she is asked to send it again or type it. In test mode, `/seller-chat` can attach a sample voice note, heard as Amina's words from the story in Urdu.
 - **Stalls and the agent storefront.** Five seeded makers with stall pages and trust records (marked as demo data), and an MCP server at `/mcp` that a buyer's AI agent can order through:
   - `search_products`: the live listings, with filters for price, quantity and deadline; each result has the maker's trust record and how many she can still make by the deadline. Every search is logged, and `/demo` lists them live, with the ones that found nothing in amber.
   - `get_product` and `get_trust_card`: a listing in full, and a maker's trust card (its signature says "pending" until passports are signed). Agents without MCP read the same listings at `/catalog.json` and a short guide at `/llms.txt`, and each stall page has a "For AI agents" box with these links and the MCP address to copy.
@@ -102,6 +103,7 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 - **Buyer agents** shop through an MCP storefront: search, product and trust cards, quotes, a draft collective order, an approval link, and order status. None of the tools can move money.
 - **Seller agents** (Claude in sandbox mode) propose each maker's price and a sentence to the buyer. Code checks every price against her limits and the buyer's maximum, and refuses one that breaks a limit, whatever the buyer wrote.
 - **The split** is plain code: cheapest valid offers first, each maker up to what she can make by the deadline. Claude explains it in two or three sentences, and code checks every number in them against the plan.
+- **Voice notes** are turned into text by OpenAI's speech to text (`whisper-1`), word for word in the language she spoke; the language it hears goes on her profile.
 - **Courier receipts** are read by Claude with vision: the courier and the tracking number. Code checks the number, and the maker confirms it before anything is paid.
 - **Messages to makers** are written by code from templates in her language, because they carry the numbers she acts on.
 
@@ -110,17 +112,17 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 - **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
 - **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
 - **Not connected yet:** payouts to Pakistan (Amina's share stays reserved), and a buyer's street address (makers are told the buyer's city).
-- **Not built yet:** turning a seller's photos and voice notes into a listing over WhatsApp, a real AI agent as the buyer, delivery and passports that update, the order that heals itself when a maker drops out, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
+- **Not built yet:** turning a seller's photos and words into a listing over WhatsApp (her voice notes already become text), a real AI agent as the buyer, delivery and passports that update, the order that heals itself when a maker drops out, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **29 done, 4 partly done, 25 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **30 done, 4 partly done, 24 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
 | Foundation | 01–06 | | |
 | PayPal | 07, 09, 10, 11, 13 | 08: the sandbox proof ran and is recorded, its script is not in the repo yet; 12: the Render blueprint, the deploy needs an account | |
-| Sellers on WhatsApp | 14, 15 | | 16 voice notes to text, 17 a listing from photos, 18 asking for what is missing, 19 confirm and publish |
+| Sellers on WhatsApp | 14, 15, 16 | | 17 a listing from photos, 18 asking for what is missing, 19 confirm and publish |
 | Agent storefront | 20, 21 | | |
 | Negotiation and the collective | 22–29 | | 30 a real AI agent as the buyer |
 | After payment | 31, 32, 33 | | 34 delivery and the end of an order |
@@ -130,7 +132,7 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo, then delivery and the end of an order (34).
+Next: a listing from a seller's photos and words (17), asking for what is missing (18) and publishing it (19); the hosted demo once there is a Render account; then delivery and the end of an order (34).
 
 ## Run it locally, in more detail
 

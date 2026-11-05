@@ -12,6 +12,7 @@ from openstall_agents.adapters import (
     FakeLLM,
     FakeSpeechToText,
     ImageSearch,
+    OpenAISpeechToText,
     SpeechToText,
 )
 from openstall_agents.adapters.claude import ClaudeLLM
@@ -124,12 +125,22 @@ def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_se
     assert statuses(registry) == {
         **dict.fromkeys(ALL_ADAPTERS, "not built"),
         "llm": "real",
+        "speech_to_text": "real",
         "payment_gateway": "real",
         "messenger": "real",
     }
     assert all(report.missing_keys == () for report in registry.report())
-    with pytest.raises(AdapterUnavailable, match=r"real Speech to text adapter \(OpenAI transcription\).*not built yet"):
-        registry.speech_to_text
+    with pytest.raises(AdapterUnavailable, match=r"real Embedder adapter \(OpenAI embeddings\).*not built yet"):
+        registry.embedder
+
+
+def test_sandbox_mode_turns_voice_notes_into_text_with_openai_and_the_model_from_the_settings(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", SPEECH_MODEL="gpt-4o-transcribe", **EVERY_KEY))
+
+    speech = registry.speech_to_text
+    assert isinstance(speech, OpenAISpeechToText)
+    assert speech.model == "gpt-4o-transcribe"
+    assert AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY)).speech_to_text.model == "whisper-1"
 
 
 def test_sandbox_mode_uses_claude_with_the_model_from_the_settings(use_settings):

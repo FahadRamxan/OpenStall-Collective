@@ -28,6 +28,7 @@ UI_LABELS = [
     "Tracking on PayPal",
     "Reset demo",
     "Your demo phone",
+    "Attach the sample voice note",
     "API online",
     "API offline",
 ]

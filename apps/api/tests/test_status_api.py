@@ -78,8 +78,9 @@ def test_sandbox_mode_with_a_key_but_no_real_adapter_says_not_built(use_settings
 
     adapters = adapters_by_name(get_status())
 
-    assert adapters["speech_to_text"]["status"] == "not built"
-    assert adapters["speech_to_text"]["missing_keys"] == []
+    assert adapters["embedder"]["status"] == "not built"
+    assert adapters["embedder"]["missing_keys"] == []
+    assert adapters["speech_to_text"]["status"] == "real"
     assert adapters["messenger"]["status"] == "missing key"
 
 

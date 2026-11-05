@@ -7,7 +7,15 @@ from openstall_agents.adapters.embedder import Embedder, FakeEmbedder
 from openstall_agents.adapters.image_search import FakeImageSearch, ImageSearch, WebMatches
 from openstall_agents.adapters.llm import LLM, FakeLLM, LLMCall, LLMError
 from openstall_agents.adapters.media import Media
-from openstall_agents.adapters.speech import FakeSpeechToText, SpeechToText, Transcript
+from openstall_agents.adapters.openai_speech import OpenAISpeechToText
+from openstall_agents.adapters.speech import (
+    FakeSpeechToText,
+    SpeechToText,
+    SpeechToTextError,
+    Transcript,
+    language_code,
+    language_name,
+)
 
 __all__ = [
     "LLM",
@@ -20,7 +28,11 @@ __all__ = [
     "LLMCall",
     "LLMError",
     "Media",
+    "OpenAISpeechToText",
     "SpeechToText",
+    "SpeechToTextError",
     "Transcript",
     "WebMatches",
+    "language_code",
+    "language_name",
 ]

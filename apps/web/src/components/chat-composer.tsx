@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 
+import { Badge } from "@/components/badge";
+import { errorMessage } from "@/lib/api";
+import { fetchSample } from "@/lib/chats";
+
 type Recording = { recorder: MediaRecorder; started: number };
+
+/** The most files one message carries, as the API takes them. */
+const MAX_FILES = 5;
 
 /** True when this browser can record from the microphone. Without it, a voice note can still be uploaded. */
 function canRecord(): boolean {
@@ -28,19 +35,25 @@ const BUTTON =
 /**
  * The seller's side of the web chat: a message, photos, and a voice note recorded in the browser (or uploaded, where
  * the browser cannot record). `onSend` says whether it went; on failure everything stays, ready to send again.
+ * `sampleVoiceNote`, in test mode: the API path of a sample voice note to attach, so a voice note can be tried without
+ * a microphone (test mode hears it as Amina's words in Urdu).
  */
 export function ChatComposer({
   onSend,
   busy,
+  sampleVoiceNote = null,
 }: {
   onSend: (text: string, files: File[]) => Promise<boolean>;
   busy: boolean;
+  sampleVoiceNote?: string | null;
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [recording, setRecording] = useState<Recording | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
+  const [sampleProblem, setSampleProblem] = useState<string | null>(null);
+  const [fetchingSample, setFetchingSample] = useState(false);
   const recordable = useCanRecord();
   const form = useRef<HTMLFormElement>(null);
 
@@ -53,7 +66,21 @@ export function ChatComposer({
   function add(picked: FileList | null) {
     if (!picked) return;
     const chosen = Array.from(picked); // copied now: clearing the input afterwards empties the live FileList
-    setFiles((current) => [...current, ...chosen].slice(0, 5));
+    setFiles((current) => [...current, ...chosen].slice(0, MAX_FILES));
+  }
+
+  async function attachSample() {
+    if (!sampleVoiceNote) return;
+    setSampleProblem(null);
+    setFetchingSample(true);
+    try {
+      const sample = await fetchSample(sampleVoiceNote, "sample-voice-note.wav");
+      setFiles((current) => [...current, sample].slice(0, MAX_FILES));
+    } catch (error) {
+      setSampleProblem(`The sample voice note could not be attached: ${errorMessage(error)}`);
+    } finally {
+      setFetchingSample(false);
+    }
   }
 
   async function startRecording() {
@@ -169,6 +196,16 @@ export function ChatComposer({
             Upload a voice note
           </label>
         )}
+        {sampleVoiceNote ? (
+          <button
+            type="button"
+            onClick={attachSample}
+            disabled={fetchingSample || !!recording || files.length >= MAX_FILES}
+            className={`${BUTTON} disabled:cursor-not-allowed disabled:opacity-60`}
+          >
+            Attach the sample voice note <Badge tone="warning">Test mode</Badge>
+          </button>
+        ) : null}
         <button
           type="submit"
           disabled={busy || !!recording || (!text.trim() && files.length === 0)}
@@ -180,6 +217,11 @@ export function ChatComposer({
       {problem ? (
         <p role="status" className="mt-2 text-sm text-muted">
           {problem}
+        </p>
+      ) : null}
+      {sampleProblem ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {sampleProblem}
         </p>
       ) : null}
     </form>

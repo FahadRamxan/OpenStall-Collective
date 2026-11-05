@@ -1,4 +1,4 @@
-import { apiFetch, apiGet, apiPost } from "@/lib/api";
+import { apiBaseUrl, apiFetch, apiGet, apiPost, ApiError } from "@/lib/api";
 
 export type ChatChannel = "whatsapp" | "web";
 
@@ -13,6 +13,12 @@ export type ChatMessage = {
   channel: ChatChannel;
   text: string | null;
   media: ChatMedia[];
+  /**
+   * What her voice notes said, word for word as she said them (never translated), and the language it was heard in
+   * (ISO 639-1). Null when the message had no voice note, or none could be heard.
+   */
+  transcript?: string | null;
+  language?: string | null;
   created_at: string;
 };
 
@@ -52,6 +58,26 @@ export function sendWebMessage(sender: string, text: string, files: File[]): Pro
   form.set("text", text);
   for (const file of files) form.append("files", file);
   return apiFetch<WebChatReply>("/api/seller-chat/messages", { method: "POST", body: form });
+}
+
+/** Sample files the web chat can attach, as paths on the API: in test mode only, null otherwise. */
+export type ChatSamples = { voice_note: string | null };
+
+export function getSamples(init: RequestInit = {}): Promise<ChatSamples> {
+  return apiGet<ChatSamples>("/api/seller-chat/samples", init);
+}
+
+/** A sample file from the API, as a file to attach and send like one the seller chose. */
+export async function fetchSample(path: string, name: string): Promise<File> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`);
+  } catch {
+    throw new ApiError(`Could not reach the OpenStall API at ${apiBaseUrl()}. Check that it is running.`, null);
+  }
+  if (!response.ok) throw new ApiError(`The sample could not be loaded (HTTP ${response.status}).`, response.status);
+  const type = response.headers.get("Content-Type")?.split(";", 1)[0].trim() || "application/octet-stream";
+  return new File([await response.arrayBuffer()], name, { type });
 }
 
 /**

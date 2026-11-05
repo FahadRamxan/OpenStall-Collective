@@ -31,6 +31,7 @@ ENVIRONMENT = {
     "ANTHROPIC_API_KEY": "made-up-anthropic-key",
     "OPENAI_API_KEY": "made-up-openai-key",
     "LLM_MODEL": "made-up-model",
+    "SPEECH_MODEL": "made-up-speech-model",
     "DEMO_RUN_TOKEN": "made-up-demo-token",
     "GOOGLE_VISION_API_KEY": "made-up-vision-key",
     "DATABASE_URL": "postgresql://openstall:made-up-password@db.example:5432/openstall",
@@ -80,6 +81,7 @@ def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings, monkey
     assert settings.PAYPAL_SANDBOX_PAYEE_PRIYA is None
     assert settings.TWILIO_WHATSAPP_FROM == "whatsapp:+14155238886"
     assert settings.LLM_MODEL == "claude-sonnet-5-5"
+    assert settings.SPEECH_MODEL == "whisper-1"
     assert settings.DATABASE_URL.get_secret_value() == "sqlite:///./data/openstall.db"
     assert settings.AUTO_MIGRATE is True
     assert not any(settings.is_set(key) for key in KEYS)

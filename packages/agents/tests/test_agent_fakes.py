@@ -19,6 +19,7 @@ from openstall_agents.adapters import (
     LLMCall,
     Media,
     SpeechToText,
+    SpeechToTextError,
     Transcript,
     WebMatches,
 )
@@ -113,6 +114,24 @@ def test_fake_speech_to_text_tells_voice_notes_apart():
     stt = FakeSpeechToText()
 
     assert stt.transcribe(VOICE_NOTE).text != stt.transcribe(Media(b"OggS another note", "audio/ogg")).text
+
+
+def test_fake_speech_to_text_knows_a_voice_note_by_its_fingerprint():
+    amina = Transcript("کڑھائی والے کشن کور", "ur")
+    stt = FakeSpeechToText(known={VOICE_NOTE.sha256: amina})
+
+    assert stt.transcribe(VOICE_NOTE) == amina
+    assert stt.transcribe(Media(b"OggS another note", "audio/ogg")).language == "en"
+
+
+def test_fake_speech_to_text_raises_a_queued_failure_as_a_provider_would():
+    stt = FakeSpeechToText()
+    stt.queue(SpeechToTextError("The provider timed out"))
+
+    with pytest.raises(SpeechToTextError, match="timed out"):
+        stt.transcribe(VOICE_NOTE)
+    assert stt.transcribe(VOICE_NOTE).language == "en"
+    assert stt.calls == [VOICE_NOTE, VOICE_NOTE]
 
 
 def test_fake_embedder_gives_the_same_unit_vectors_every_time():

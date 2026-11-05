@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { ChatComposer } from "@/components/chat-composer";
+import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
 import { mediaUrl, place } from "@/lib/catalog";
@@ -13,11 +14,13 @@ import {
   CHANNEL_LABELS,
   getChats,
   getConversation,
+  getSamples,
   messageTime,
   playSeller,
   sendWebMessage,
   type ChatMedia,
   type ChatMessage,
+  type ChatSamples,
   type ChatSummary,
   type Conversation,
 } from "@/lib/chats";
@@ -42,6 +45,7 @@ export function SellerChatView() {
   const [pending, setPending] = useState<Pending[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [samples, setSamples] = useState<ChatSamples | null>(null);
   const nextKey = useRef(1);
   const { events } = useEventStream();
   // The newest message event: when it changes, someone wrote, so look again.
@@ -49,6 +53,16 @@ export function SellerChatView() {
 
   const mine = !chosen || chosen === phone?.sellerId;
   const sellerId = chosen ?? phone?.sellerId ?? null;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getSamples({ signal: controller.signal })
+      .then(setSamples)
+      .catch(() => {
+        // Without the samples the chat works the same: there is just no sample to attach.
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -160,7 +174,11 @@ export function SellerChatView() {
                     {problem}
                   </p>
                 ) : null}
-                <ChatComposer onSend={send} busy={pending.some((item) => item.messageId === null)} />
+                <ChatComposer
+                  onSend={send}
+                  busy={pending.some((item) => item.messageId === null)}
+                  sampleVoiceNote={samples?.voice_note ?? null}
+                />
               </>
             }
           />
@@ -421,6 +439,7 @@ function Bubble({
         {message.media.map((item, index) => (
           <Media key={index} item={item} />
         ))}
+        {message.transcript ? <VoiceTranscript text={message.transcript} language={message.language} /> : null}
         {/* dir="auto": a message in Urdu reads right to left, as on her phone, and English left to right. */}
         {message.text ? (
           <p dir="auto" className="break-words whitespace-pre-line">

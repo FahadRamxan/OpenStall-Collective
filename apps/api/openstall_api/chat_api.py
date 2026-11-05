@@ -45,6 +45,10 @@ class MessageOut(BaseModel):
     channel: Channel
     text: str | None
     media: list[MediaOut]
+    # What her voice notes said, word for word as she said them (never translated), and the language it was heard
+    # in (ISO 639-1). None when the message had no voice note, or none could be heard.
+    transcript: str | None = None
+    language: str | None = None
     created_at: datetime
 
 
@@ -138,6 +142,8 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
                 channel=message.channel,
                 text=message.text,
                 media=[media_out(item) for item in message.media_json],
+                transcript=message.transcript,
+                language=message.language,
                 created_at=aware(message.created_at),
             )
             for message in reversed(recent)

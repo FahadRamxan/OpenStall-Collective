@@ -14,18 +14,34 @@ from openstall_api.chat.handler import InboundFile, Refused, Sender
 from openstall_api.chat.inbox import receive
 from openstall_api.media import MAX_BYTES, media_type
 from openstall_api.models import Channel
+from openstall_api.settings import get_settings
 
 router = APIRouter(prefix="/api/seller-chat", tags=["seller chat"])
 
 DEMO_PHONE = r"^[A-Za-z0-9_-]{8,32}$"
 MAX_FILES = 5
 READ_CHUNK = 1024 * 1024
+# Fake mode's sample voice note (dev_api.sample_voice_note), which fake mode hears as Amina's words in Urdu.
+SAMPLE_VOICE_NOTE = "/api/dev/samples/voice-note.wav"
 
 
 class WebChatReply(BaseModel):
     seller_id: str
     message_id: str
     replies: list[str]
+
+
+class Samples(BaseModel):
+    """Sample files the web chat can attach, as paths on this API. None where this mode has none."""
+
+    voice_note: str | None
+
+
+@router.get("/samples")
+def samples() -> Samples:
+    """In fake mode, the sample voice note /seller-chat offers to attach. None in sandbox mode, where a voice note goes
+    to OpenAI, which would hear no words in the sample's hum. Always answers, so the page never logs a failed request."""
+    return Samples(voice_note=SAMPLE_VOICE_NOTE if get_settings().OPENSTALL_MODE == "fake" else None)
 
 
 async def read_upload(upload: UploadFile) -> InboundFile | Refused:

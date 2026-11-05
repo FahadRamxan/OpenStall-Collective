@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from openstall_api.chat.inbox import receive
 from openstall_api.chat.store import channel_for
 from openstall_api.db import get_session, new_session
 from openstall_api.events_api import fake_mode_only
-from openstall_api.fixtures import demo_shipment, fixture_receipt
+from openstall_api.fixtures import demo_shipment, fixture_receipt, fixture_voice_note
 from openstall_api.models import Offer, OrderPart, PartStatus, Seller
 from openstall_api.offers import OfferOut
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
@@ -47,6 +47,14 @@ class StoryQuote(BaseModel):
     quote: QuoteOut
     offers: list[OfferOut]  # every proposal, in the order the agents made them
     valid_offers: list[OfferOut]  # each maker's valid offer, one at most
+
+
+@router.get("/samples/voice-note.wav")
+def sample_voice_note() -> Response:
+    """Fake mode's sample voice note, which fake mode's speech to text hears as Amina telling OpenStall about her
+    cushion covers in Urdu (fixtures.SAMPLE_VOICE_NOTE_SAYS). /seller-chat offers to attach it (GET
+    /api/seller-chat/samples), so anyone can try a voice note without a microphone or an OpenAI key."""
+    return Response(fixture_voice_note(), media_type="audio/wav")
 
 
 @router.post("/story-orders", status_code=201)
