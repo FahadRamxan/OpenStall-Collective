@@ -4,7 +4,15 @@ import { expect, test, type Page } from "@playwright/test";
 
 import type { StatusReport } from "../src/lib/api";
 
-const ADAPTERS = ["LLM", "Speech to text", "Embedder", "Messenger", "Payment gateway", "Image search"];
+const ADAPTERS = [
+  "LLM",
+  "Speech to text",
+  "Text to speech",
+  "Embedder",
+  "Messenger",
+  "Payment gateway",
+  "Image search",
+];
 const SCREENSHOTS = path.join(__dirname, "screenshots");
 
 function adaptersTable(page: Page) {

@@ -13,7 +13,15 @@ from openstall_api.settings import get_settings
 # No `with` block: that would run the app's lifespan, and the MCP session manager can only start once per process.
 client = TestClient(app)
 
-ALL_ADAPTERS = ["llm", "speech_to_text", "embedder", "messenger", "payment_gateway", "image_search"]
+ALL_ADAPTERS = [
+    "llm",
+    "speech_to_text",
+    "text_to_speech",
+    "embedder",
+    "messenger",
+    "payment_gateway",
+    "image_search",
+]
 
 # A made-up value for every setting that is secret or names an account. None may ever appear in the response.
 MADE_UP_SECRETS = {
@@ -24,6 +32,7 @@ MADE_UP_SECRETS = {
     "TWILIO_AUTH_TOKEN": "made-up-twilio-token-9e1d",
     "ANTHROPIC_API_KEY": "sk-ant-made-up-4c7b",
     "OPENAI_API_KEY": "sk-made-up-openai-2a6f",
+    "ELEVENLABS_API_KEY": "sk_madeupelevenlabs5e0c",
     "GOOGLE_VISION_API_KEY": "made-up-vision-key-8b3c",
     "PASSPORT_SIGNING_KEY": "bWFkZS11cC1zaWduaW5nLWtleS0xZTc=",
     "DATABASE_URL": "postgresql://openstall:made-up-db-password-6d2a@db.example:5432/openstall",
@@ -80,8 +89,27 @@ def test_sandbox_mode_with_a_key_but_no_real_adapter_says_not_built(use_settings
 
     assert adapters["embedder"]["status"] == "not built"
     assert adapters["embedder"]["missing_keys"] == []
-    assert adapters["speech_to_text"]["status"] == "real"
+    # Voice notes go to ElevenLabs unless SPEECH_PROVIDER says OpenAI; this one has no ElevenLabs key.
+    assert adapters["speech_to_text"]["status"] == "missing key"
+    assert adapters["speech_to_text"]["missing_keys"] == ["ELEVENLABS_API_KEY"]
     assert adapters["messenger"]["status"] == "missing key"
+
+
+def test_the_speech_adapter_names_the_provider_it_uses(use_settings):
+    use_settings(OPENSTALL_MODE="sandbox", ELEVENLABS_API_KEY="sk_madeupelevenlabs5e0c")
+    elevenlabs = adapters_by_name(get_status())
+    use_settings(OPENSTALL_MODE="sandbox", SPEECH_PROVIDER="openai", OPENAI_API_KEY="sk-made-up-openai-2a6f")
+    openai = adapters_by_name(get_status())
+
+    assert (elevenlabs["speech_to_text"]["service"], elevenlabs["speech_to_text"]["status"]) == (
+        "ElevenLabs Scribe",
+        "real",
+    )
+    assert elevenlabs["text_to_speech"]["status"] == "real"
+    assert (openai["speech_to_text"]["service"], openai["speech_to_text"]["keys"]) == (
+        "OpenAI transcription",
+        ["OPENAI_API_KEY"],
+    )
 
 
 def test_sandbox_mode_with_an_anthropic_key_has_the_real_llm(use_settings):

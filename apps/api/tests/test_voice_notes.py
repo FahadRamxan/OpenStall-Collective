@@ -162,11 +162,11 @@ def test_her_voice_note_is_heard_before_her_message_is_stored(db, fakes, monkeyp
     stored_while_hearing: list[int] = []
     hear = fakes.speech_to_text.transcribe
 
-    def transcribe(audio):
+    def transcribe(audio, language=None):
         # What another connection sees while the provider is asked: nothing of her message is stored yet.
         with new_session() as other:
             stored_while_hearing.append(other.scalar(select(func.count()).select_from(ChatMessage)) or 0)
-        return hear(audio)
+        return hear(audio, language)
 
     monkeypatch.setattr(fakes.speech_to_text, "transcribe", transcribe)
 

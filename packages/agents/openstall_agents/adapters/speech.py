@@ -1,9 +1,17 @@
-"""Speech to text: a voice note in, its text and language out (spec 3.1, step 2).
+"""Speech to text: a voice note in, its text and language out (spec 3.1, step 2); and text to speech, for answering a
+maker who talks to OpenStall in voice notes with a voice note of its own.
 
-OpenAISpeechToText (openai_speech.py) is the real adapter, in sandbox mode. FakeSpeechToText stands in for it in fake
-mode: it knows what fake mode's sample voice note says, and makes up a line for any other.
+The real adapters, in sandbox mode: ElevenLabs' Scribe (elevenlabs.py) or OpenAI's whisper-1 (openai_speech.py) for
+speech to text, and ElevenLabs' Eleven v4 Turbo for text to speech. FakeSpeechToText stands in for speech to text in
+fake mode: it knows what fake mode's sample voice note says, and makes up a line for any other. FakeTextToSpeech
+answers with a short tone, the same for the same words.
 """
 
+import hashlib
+import io
+import math
+import struct
+import wave
 from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -27,8 +35,23 @@ class SpeechToTextError(Exception):
 
 @runtime_checkable
 class SpeechToText(Protocol):
-    def transcribe(self, audio: Media) -> Transcript:
-        """The words in one voice note, and their language. Raises SpeechToTextError when it cannot say."""
+    def transcribe(self, audio: Media, language: str | None = None) -> Transcript:
+        """The words in one voice note, and their language. `language`: the language she is known to speak (ISO
+        639-1), as a hint: spoken Urdu and Hindi sound alike, and without one an Urdu voice note can come back as Hindi,
+        in Devanagari. Raises SpeechToTextError when it cannot say."""
+        ...
+
+
+class TextToSpeechError(Exception):
+    """Words could not be spoken: the provider failed or refused them. The message says why, for the logs; it never
+    holds a key."""
+
+
+@runtime_checkable
+class TextToSpeech(Protocol):
+    def speak(self, text: str, language: str | None = None) -> Media:
+        """The words spoken, as audio, in `language` (ISO 639-1) when given. Raises TextToSpeechError when it
+        cannot."""
         ...
 
 
@@ -63,12 +86,33 @@ ALIASES: dict[str, str] = {
     "letzeburgesch": "lb", "pushto": "ps", "panjabi": "pa", "moldavian": "ro", "moldovan": "ro",
     "sinhalese": "si", "castilian": "es", "mandarin": "zh",
 }  # fmt: skip
-_BY_NAME = {name.lower(): code for code, name in LANGUAGES.items()} | ALIASES
+# The same languages by their three-letter codes (ISO 639-3, and the 639-2 forms some providers use): ElevenLabs'
+# Scribe answers "urd" for Urdu.
+THREE_LETTER: dict[str, str] = {
+    "afr": "af", "amh": "am", "ara": "ar", "arb": "ar", "asm": "as", "aze": "az", "azj": "az", "bak": "ba",
+    "bel": "be", "bul": "bg", "ben": "bn", "bod": "bo", "tib": "bo", "bre": "br", "bos": "bs", "cat": "ca",
+    "ces": "cs", "cze": "cs", "cym": "cy", "wel": "cy", "dan": "da", "deu": "de", "ger": "de", "ell": "el",
+    "gre": "el", "eng": "en", "spa": "es", "est": "et", "ekk": "et", "eus": "eu", "baq": "eu", "fas": "fa",
+    "per": "fa", "pes": "fa", "fin": "fi", "fao": "fo", "fra": "fr", "fre": "fr", "glg": "gl", "guj": "gu",
+    "hau": "ha", "haw": "haw", "heb": "he", "hin": "hi", "hrv": "hr", "hat": "ht", "hun": "hu", "hye": "hy",
+    "arm": "hy", "ind": "id", "isl": "is", "ice": "is", "ita": "it", "jpn": "ja", "jav": "jv", "kat": "ka",
+    "geo": "ka", "kaz": "kk", "khm": "km", "kan": "kn", "kor": "ko", "lat": "la", "ltz": "lb", "lin": "ln",
+    "lao": "lo", "lit": "lt", "lav": "lv", "lvs": "lv", "mlg": "mg", "mri": "mi", "mao": "mi", "mkd": "mk",
+    "mac": "mk", "mal": "ml", "mon": "mn", "khk": "mn", "mar": "mr", "msa": "ms", "may": "ms", "zsm": "ms",
+    "mlt": "mt", "mya": "my", "bur": "my", "nep": "ne", "npi": "ne", "nld": "nl", "dut": "nl", "nno": "nn",
+    "nor": "no", "nob": "no", "oci": "oc", "pan": "pa", "pnb": "pa", "pol": "pl", "pus": "ps", "por": "pt",
+    "ron": "ro", "rum": "ro", "rus": "ru", "san": "sa", "snd": "sd", "sin": "si", "slk": "sk", "slo": "sk",
+    "slv": "sl", "sna": "sn", "som": "so", "sqi": "sq", "alb": "sq", "srp": "sr", "sun": "su", "swe": "sv",
+    "swa": "sw", "swh": "sw", "tam": "ta", "tel": "te", "tgk": "tg", "tha": "th", "tuk": "tk", "tgl": "tl",
+    "fil": "tl", "tur": "tr", "tat": "tt", "ukr": "uk", "urd": "ur", "uzb": "uz", "uzn": "uz", "vie": "vi",
+    "yid": "yi", "yor": "yo", "yue": "yue", "zho": "zh", "chi": "zh", "cmn": "zh",
+}  # fmt: skip
+_BY_NAME = {name.lower(): code for code, name in LANGUAGES.items()} | ALIASES | THREE_LETTER
 
 
 def language_code(heard: object) -> str | None:
-    """The code for the language a provider names: "urdu", "Urdu" or "ur" all give "ur". None for anything else, so
-    a language nobody can read is never saved on a seller's profile."""
+    """The code for the language a provider names: "urdu", "Urdu", "ur" or "urd" all give "ur". None for anything
+    else, so a language nobody can read is never saved on a seller's profile."""
     if not isinstance(heard, str):
         return None
     value = heard.strip().lower()
@@ -95,6 +139,7 @@ class FakeSpeechToText:
         known: Mapping[str, Transcript] | None = None,
     ) -> None:
         self.calls: list[Media] = []
+        self.hints: list[str | None] = []  # the language hint each voice note came with
         self._queued: deque[Transcript | SpeechToTextError] = deque(transcripts)
         self._known = dict(known or {})
 
@@ -102,8 +147,9 @@ class FakeSpeechToText:
         """Answers to give, in order, before the others: a Transcript, or a SpeechToTextError to raise."""
         self._queued.extend(answers)
 
-    def transcribe(self, audio: Media) -> Transcript:
+    def transcribe(self, audio: Media, language: str | None = None) -> Transcript:
         self.calls.append(audio)
+        self.hints.append(language)
         if self._queued:
             answer = self._queued.popleft()
             if isinstance(answer, SpeechToTextError):
@@ -113,3 +159,32 @@ class FakeSpeechToText:
         if known is not None:
             return known
         return Transcript(text=f"Fake transcript of voice note {audio.sha256[:8]}", language="en")
+
+
+class FakeTextToSpeech:
+    """Fake mode's voice: a short tone for each text, the same tone for the same words, as a WAV file, so the web chat
+    can play a spoken answer offline. Records every (text, language) in `calls`; set `fail` to make it raise."""
+
+    RATE = 8000
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str | None]] = []
+        self.fail: TextToSpeechError | None = None
+
+    def speak(self, text: str, language: str | None = None) -> Media:
+        self.calls.append((text, language))
+        if self.fail is not None:
+            raise self.fail
+        seed = hashlib.sha256(f"{language}|{text}".encode()).digest()
+        pitch = 330 + seed[0] * 2  # a tone between 330 and 840 Hz
+        frames = int(self.RATE * 0.4)
+        samples = b"".join(
+            struct.pack("<h", int(6000 * math.sin(2 * math.pi * pitch * n / self.RATE))) for n in range(frames)
+        )
+        out = io.BytesIO()
+        with wave.open(out, "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(self.RATE)
+            audio.writeframes(samples)
+        return Media(out.getvalue(), "audio/wav")

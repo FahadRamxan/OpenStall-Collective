@@ -38,7 +38,9 @@ test("a WhatsApp message with a photo shows in the seller's chat, and her next o
   await sendOnWhatsApp(request, { sender, profile_name: "Shazia", text: "And here is a voice note.", voice_note: true });
 
   await expect(thread).toContainText("And here is a voice note.", { timeout: 5_000 });
-  await expect(thread.locator("audio")).toHaveCount(1);
+  await expect(thread.getByLabel("A voice note", { exact: true })).toHaveCount(1);
+  // Her voice note is answered aloud too (test mode's stand-in voice).
+  await expect(thread.getByLabel("OpenStall's answer, spoken")).toHaveCount(1);
   await page.screenshot({ path: path.join(SCREENSHOTS, "seller-chat-1280.png"), fullPage: true });
 });
 

@@ -80,6 +80,9 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      # ElevenLabs: Scribe turns sellers' voice notes into text, and Eleven v4 Turbo speaks OpenStall's answers.
+      - key: ELEVENLABS_API_KEY
+        sync: false
       - key: GOOGLE_VISION_API_KEY
         sync: false
       - key: PASSPORT_SIGNING_KEY

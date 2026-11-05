@@ -32,6 +32,12 @@ ENVIRONMENT = {
     "OPENAI_API_KEY": "made-up-openai-key",
     "LLM_MODEL": "made-up-model",
     "SPEECH_MODEL": "made-up-speech-model",
+    "SPEECH_PROVIDER": "openai",
+    "ELEVENLABS_API_KEY": "made-up-elevenlabs-key",
+    "ELEVENLABS_SPEECH_MODEL": "made-up-scribe",
+    "VOICE_MODEL": "made-up-voice-model",
+    "VOICE_ID": "made-up-voice",
+    "SPOKEN_REPLIES": "false",
     "DEMO_RUN_TOKEN": "made-up-demo-token",
     "GOOGLE_VISION_API_KEY": "made-up-vision-key",
     "DATABASE_URL": "postgresql://openstall:made-up-password@db.example:5432/openstall",
@@ -45,6 +51,7 @@ SECRETS = (
     "TWILIO_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
+    "ELEVENLABS_API_KEY",
     "GOOGLE_VISION_API_KEY",
     "PASSPORT_SIGNING_KEY",
     "DEMO_RUN_TOKEN",
@@ -82,6 +89,8 @@ def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings, monkey
     assert settings.TWILIO_WHATSAPP_FROM == "whatsapp:+14155238886"
     assert settings.LLM_MODEL == "claude-sonnet-5-5"
     assert settings.SPEECH_MODEL == "whisper-1"
+    assert (settings.SPEECH_PROVIDER, settings.ELEVENLABS_SPEECH_MODEL) == ("elevenlabs", "scribe_v2")
+    assert (settings.VOICE_MODEL, settings.SPOKEN_REPLIES) == ("eleven_v4_turbo", True)
     assert settings.DATABASE_URL.get_secret_value() == "sqlite:///./data/openstall.db"
     assert settings.AUTO_MIGRATE is True
     assert not any(settings.is_set(key) for key in KEYS)

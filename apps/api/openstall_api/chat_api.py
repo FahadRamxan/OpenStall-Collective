@@ -37,6 +37,8 @@ class MediaOut(BaseModel):
     content_type: str
     size: int | None = None
     refused: str | None = None
+    # OpenStall's answer spoken, in the message's language, for a maker who sent a voice note.
+    spoken: bool = False
 
 
 class MessageOut(BaseModel):
@@ -117,6 +119,7 @@ def media_out(item: dict[str, Any]) -> MediaOut:
         content_type=str(item.get("content_type") or ""),
         size=item.get("size"),
         refused=item.get("refused"),
+        spoken=bool(item.get("spoken")),
     )
 
 

@@ -14,7 +14,8 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
-from openstall_api.chat.handler import HandledMessage, InboundFile, Refused, Sender, country_of
+from openstall_api.chat.handler import HandledMessage, InboundFile, Refused, Sender
+from openstall_api.chat.store import country_of
 from openstall_api.chat.inbox import receive
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event

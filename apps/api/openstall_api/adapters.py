@@ -12,14 +12,18 @@ from typing import Any, Literal, cast
 
 from openstall_agents.adapters import (
     LLM,
+    ElevenLabsSpeechToText,
+    ElevenLabsTextToSpeech,
     Embedder,
     FakeEmbedder,
     FakeImageSearch,
     FakeLLM,
     FakeSpeechToText,
+    FakeTextToSpeech,
     ImageSearch,
     OpenAISpeechToText,
     SpeechToText,
+    TextToSpeech,
 )
 from openstall_agents.adapters.claude import ClaudeLLM
 from openstall_agents.fake_answers import fake_answer
@@ -51,6 +55,9 @@ class AdapterSpec:
     keys: tuple[str, ...]  # the settings the real service needs; names only
     make_fake: Callable[[Settings], Any]
     make_real: Callable[[Settings], Any] | None = None  # None until a build step adds the real adapter
+    # When a setting chooses the real service (SPEECH_PROVIDER): its name and keys for those settings.
+    service_for: Callable[[Settings], str] | None = None
+    keys_for: Callable[[Settings], tuple[str, ...]] | None = None
 
 
 def make_paypal_gateway(settings: Settings) -> PaymentGateway:
@@ -78,6 +85,31 @@ def make_openai_speech(settings: Settings) -> OpenAISpeechToText:
     return OpenAISpeechToText(settings.OPENAI_API_KEY.get_secret_value(), settings.SPEECH_MODEL)
 
 
+def make_speech(settings: Settings) -> SpeechToText:
+    """The speech to text SPEECH_PROVIDER names: ElevenLabs' Scribe (the default) or OpenAI. The registry checks
+    its key is set first."""
+    if settings.SPEECH_PROVIDER == "openai":
+        return make_openai_speech(settings)
+    assert settings.ELEVENLABS_API_KEY
+    return ElevenLabsSpeechToText(settings.ELEVENLABS_API_KEY.get_secret_value(), settings.ELEVENLABS_SPEECH_MODEL)
+
+
+def make_voice(settings: Settings) -> ElevenLabsTextToSpeech:
+    """ElevenLabs' text to speech, with VOICE_MODEL and VOICE_ID. The registry checks the key is set first."""
+    assert settings.ELEVENLABS_API_KEY
+    return ElevenLabsTextToSpeech(
+        settings.ELEVENLABS_API_KEY.get_secret_value(), settings.VOICE_MODEL, settings.VOICE_ID
+    )
+
+
+def speech_service(settings: Settings) -> str:
+    return "OpenAI transcription" if settings.SPEECH_PROVIDER == "openai" else "ElevenLabs Scribe"
+
+
+def speech_keys(settings: Settings) -> tuple[str, ...]:
+    return ("OPENAI_API_KEY",) if settings.SPEECH_PROVIDER == "openai" else ("ELEVENLABS_API_KEY",)
+
+
 def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
     """Twilio's WhatsApp sandbox. The registry checks the keys are set before calling it."""
     assert settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN
@@ -100,10 +132,21 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         name="speech_to_text",
         label="Speech to text",
         purpose="Turns sellers' voice notes into text.",
-        service="OpenAI transcription",
-        keys=("OPENAI_API_KEY",),
+        service="ElevenLabs Scribe",
+        keys=("ELEVENLABS_API_KEY",),
         make_fake=lambda settings: FakeSpeechToText(known=known_voice_notes()),
-        make_real=lambda settings: make_openai_speech(settings),
+        make_real=lambda settings: make_speech(settings),
+        service_for=speech_service,
+        keys_for=speech_keys,
+    ),
+    AdapterSpec(
+        name="text_to_speech",
+        label="Text to speech",
+        purpose="Speaks OpenStall's answers to sellers who send voice notes, in their language.",
+        service="ElevenLabs (Eleven v4 Turbo)",
+        keys=("ELEVENLABS_API_KEY",),
+        make_fake=lambda settings: FakeTextToSpeech(),
+        make_real=lambda settings: make_voice(settings),
     ),
     AdapterSpec(
         name="embedder",
@@ -169,7 +212,17 @@ class AdapterRegistry:
         """The keys this adapter needs that are not set. Always empty in fake mode, which needs none."""
         if self.settings.OPENSTALL_MODE == "fake":
             return ()
-        return tuple(key for key in self._spec(name).keys if not self.settings.is_set(key))
+        return tuple(key for key in self.keys(name) if not self.settings.is_set(key))
+
+    def keys(self, name: str) -> tuple[str, ...]:
+        """The keys this adapter's real service needs, with these settings."""
+        spec = self._spec(name)
+        return spec.keys_for(self.settings) if spec.keys_for else spec.keys
+
+    def service(self, name: str) -> str:
+        """The real service behind this adapter, with these settings."""
+        spec = self._spec(name)
+        return spec.service_for(self.settings) if spec.service_for else spec.service
 
     def status(self, name: str) -> AdapterStatus:
         spec = self._spec(name)
@@ -186,9 +239,9 @@ class AdapterRegistry:
                 name=spec.name,
                 label=spec.label,
                 purpose=spec.purpose,
-                service=spec.service,
+                service=self.service(spec.name),
                 status=self.status(spec.name),
-                keys=spec.keys,
+                keys=self.keys(spec.name),
                 missing_keys=self.missing_keys(spec.name),
             )
             for spec in self._specs.values()
@@ -208,6 +261,10 @@ class AdapterRegistry:
     @property
     def speech_to_text(self) -> SpeechToText:
         return cast(SpeechToText, self.get("speech_to_text"))
+
+    @property
+    def text_to_speech(self) -> TextToSpeech:
+        return cast(TextToSpeech, self.get("text_to_speech"))
 
     @property
     def embedder(self) -> Embedder:
@@ -246,13 +303,13 @@ class AdapterRegistry:
         missing = self.missing_keys(spec.name)
         if missing:
             raise AdapterUnavailable(
-                f"Sandbox mode needs {' and '.join(missing)} for the {spec.label} adapter ({spec.service}). "
+                f"Sandbox mode needs {' and '.join(missing)} for the {spec.label} adapter ({self.service(spec.name)}). "
                 f"Set {'it' if len(missing) == 1 else 'them'} in .env or the host's environment, "
                 "or run with OPENSTALL_MODE=fake."
             )
         if spec.make_real is None:
             raise AdapterUnavailable(
-                f"Sandbox mode needs the real {spec.label} adapter ({spec.service}), and it is not built yet. "
+                f"Sandbox mode needs the real {spec.label} adapter ({self.service(spec.name)}), and it is not built yet. "
                 "Run with OPENSTALL_MODE=fake until it is."
             )
         return spec.make_real(self.settings)

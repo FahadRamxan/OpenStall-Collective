@@ -5,8 +5,12 @@ can take seconds, and must not hold the database meanwhile. handle_inbound then 
 word for word and never translated, so a wrong reading can be traced to the voice note; and saves the language on her
 profile when she has none yet.
 
-A voice note that cannot be heard (the provider failed, or sandbox mode has no OPENAI_API_KEY) is kept all the same,
-and she is asked to send it again or type it.
+A voice note that cannot be heard (the provider failed, or sandbox mode has no key for it) is kept all the same, and
+she is asked to send it again or type it.
+
+Spoken Urdu and Hindi sound alike, and a provider left to guess can write an Urdu voice note in Hindi's script
+(checked with ElevenLabs on 2026-11-06). So the language she is known to speak goes with each voice note as a hint
+(language_hint): the one on her profile, or Urdu for a WhatsApp number in Pakistan.
 """
 
 import logging
@@ -15,7 +19,9 @@ from dataclasses import dataclass
 
 from openstall_agents.adapters import Media, SpeechToText, SpeechToTextError, language_name
 from openstall_api.adapters import AdapterUnavailable
-from openstall_api.models import Seller
+from openstall_api.chat.store import country_of, known_seller
+from openstall_api.db import new_session
+from openstall_api.models import Channel, Seller
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +44,28 @@ class Heard:
         return "\n\n".join(self.texts) or None
 
 
-def listen(voice_notes: Sequence[Media], speech: Callable[[], SpeechToText]) -> Heard:
-    """Each voice note turned into text, in order. One that cannot be is counted, never raised: her message is kept
-    either way. Run it outside any transaction."""
+# The language a WhatsApp number's country writes in, for a seller whose own language is not known yet. Pakistan
+# writes Urdu, in its own script; elsewhere the provider decides.
+LANGUAGE_BY_COUNTRY = {"PK": "ur"}
+
+
+def language_hint(channel: Channel, address: str, seller_id: str | None = None) -> str | None:
+    """The language she is known to speak, as a hint for her voice notes: the one on her profile; else Urdu for a
+    seller in Pakistan, by her profile's country or her WhatsApp number; else None. It only reads."""
+    with new_session() as session:
+        seller = known_seller(session, channel, address, seller_id)
+        if seller is not None and seller.language:
+            return seller.language
+        country = seller.country if seller is not None else None
+    if country is None and channel == Channel.WHATSAPP:
+        country = country_of(address)
+    return LANGUAGE_BY_COUNTRY.get(country or "")
+
+
+def listen(voice_notes: Sequence[Media], speech: Callable[[], SpeechToText], hint: str | None = None) -> Heard:
+    """Each voice note turned into text, in order, with `hint` as the language she is known to speak
+    (language_hint). One that cannot be is counted, never raised: her message is kept either way. Run it outside any
+    transaction."""
     if not voice_notes:
         return Heard()
     try:
@@ -53,7 +78,7 @@ def listen(voice_notes: Sequence[Media], speech: Callable[[], SpeechToText]) -> 
     failed = 0
     for note in voice_notes:
         try:
-            transcript = transcriber.transcribe(note)
+            transcript = transcriber.transcribe(note, hint)
         except SpeechToTextError as error:
             log.warning("A voice note (%r) could not be turned into text: %s", note, error)
             failed += 1

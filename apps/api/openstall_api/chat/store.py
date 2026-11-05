@@ -10,6 +10,17 @@ from sqlalchemy.orm import Session
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Seller, utcnow
 
 CHANNEL_WORDS = {Channel.WHATSAPP: "on WhatsApp", Channel.WEB: "in the web chat"}
+# The countries in the demo, by dialing code. Other numbers leave the country empty until the seller says.
+DIALING_CODES = {"92": "PK", "91": "IN", "52": "MX", "44": "GB", "1": "US"}
+
+
+def country_of(number: str) -> str | None:
+    """Her country from her WhatsApp number, by its dialing code: "+923001234567" is PK."""
+    digits = number.lstrip("+")
+    for code in sorted(DIALING_CODES, key=len, reverse=True):
+        if digits.startswith(code):
+            return DIALING_CODES[code]
+    return None
 
 
 def channel_for(seller: Seller) -> Channel:

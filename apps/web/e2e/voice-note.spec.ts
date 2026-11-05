@@ -23,7 +23,10 @@ test("in the web chat, the sample voice note comes back as her words in Urdu, an
   await expect(words).toBeVisible();
   await expect(words).toHaveAttribute("lang", "ur");
   await expect(thread.getByText("Voice note in Urdu, as text")).toBeVisible();
-  await expect(thread.locator("audio")).toHaveCount(1);
+  await expect(thread.getByLabel("A voice note", { exact: true })).toHaveCount(1);
+  // She talks in voice notes, so OpenStall's answers are spoken too, in Urdu (test mode's stand-in voice here).
+  await expect(thread.getByLabel("OpenStall's answer, spoken")).toHaveCount(2);
+  await expect(thread.getByText("Spoken in Urdu")).toHaveCount(2);
   await page.screenshot({ path: "e2e/screenshots/voice-note-web-chat.png", fullPage: true });
 
   await page.goto("/demo");
@@ -31,6 +34,7 @@ test("in the web chat, the sample voice note comes back as her words in Urdu, an
   await expect(
     feed.getByText(/voice note was turned into text, in Urdu, now saved as her language/).first(),
   ).toBeVisible();
+  await expect(feed.getByText(/OpenStall's 2 answers were spoken to .* in Urdu, as she sent a voice note/).first()).toBeVisible();
 });
 
 test("a voice note that arrives on WhatsApp shows as text in her chat", async ({ page, request }) => {

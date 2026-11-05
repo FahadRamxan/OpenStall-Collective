@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
-from openstall_agents.adapters import FakeEmbedder, FakeImageSearch, FakeLLM, FakeSpeechToText
+from openstall_agents.adapters import FakeEmbedder, FakeImageSearch, FakeLLM, FakeSpeechToText, FakeTextToSpeech
 from openstall_api.adapters import get_registry, reset_app_state
 from openstall_api.db import get_engine, new_session
 from openstall_api.messaging import FakeMessenger
@@ -96,6 +96,10 @@ class Fakes:
     @property
     def speech_to_text(self) -> FakeSpeechToText:
         return get_registry().get("speech_to_text")
+
+    @property
+    def text_to_speech(self) -> FakeTextToSpeech:
+        return get_registry().get("text_to_speech")
 
     @property
     def embedder(self) -> FakeEmbedder:

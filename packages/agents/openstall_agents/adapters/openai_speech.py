@@ -61,7 +61,7 @@ class OpenAISpeechToText:
         """Whether this model's answer says which language it heard: whisper's verbose_json does."""
         return self.model.startswith("whisper")
 
-    def transcribe(self, audio: Media) -> Transcript:
+    def transcribe(self, audio: Media, language: str | None = None) -> Transcript:
         kind = audio.media_type.split(";", 1)[0].strip().lower()
         extension = EXTENSIONS.get(kind)
         if extension is None:
@@ -69,7 +69,11 @@ class OpenAISpeechToText:
         try:
             response = self._client.post(
                 "/audio/transcriptions",
-                data={"model": self.model, "response_format": "verbose_json" if self.names_language else "json"},
+                data={
+                    "model": self.model,
+                    "response_format": "verbose_json" if self.names_language else "json",
+                    **({"language": language} if language else {}),
+                },
                 files={"file": (f"voice-note.{extension}", audio.data, kind)},
             )
         except httpx.TimeoutException as error:

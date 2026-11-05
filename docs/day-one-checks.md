@@ -90,4 +90,6 @@ Sandbox emails and merchant IDs only.
 
 Vision and text: Claude (Anthropic) through the Anthropic SDK, model `LLM_MODEL` (`claude-sonnet-5-5` by default): the seller agents, the plan in words, and courier receipts.
 
-Speech to text (Urdu): OpenAI's transcriptions with `whisper-1` (`SPEECH_MODEL`), answering in `verbose_json`, which names the language heard (prompt 16). Not yet run on a real Urdu voice note: it needs `OPENAI_API_KEY`. When it is, check that Urdu comes back in Urdu script and as `urdu`, not as Hindi (docs/decisions.md, prompt 16).
+Speech to text (Urdu): ElevenLabs' Scribe (`scribe_v2`, `SPEECH_PROVIDER=elevenlabs`, the default), checked with the real `ELEVENLABS_API_KEY` on November 6: an Urdu voice note with no hint came back as Hindi (`hin`, 98%), in Devanagari; with the hint `ur` (or `urd`) as Urdu (`urd`), in Urdu script. So OpenStall sends her known language as a hint (Urdu for a number in Pakistan). Scribe names languages by three-letter codes, kept as two-letter ones. OpenAI's `whisper-1` stays possible with `SPEECH_PROVIDER=openai`; it was never run, as no OpenAI key given so far worked.
+
+Spoken answers: ElevenLabs' `eleven_v4_turbo` (`VOICE_MODEL`) with the premade voice Jessica (`VOICE_ID`), checked the same day: it speaks Urdu with `language_code: ur`, and Scribe hears its words back in Urdu. The key in use cannot read the account's plan (`user_read` is not granted), which OpenStall never needs.

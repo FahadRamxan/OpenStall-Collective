@@ -146,6 +146,27 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(within(reply).queryByText(/as text/)).not.toBeInTheDocument();
   });
 
+  it("OpenStall's answer to her voice note is spoken too, in her language", async () => {
+    const answer = {
+      ...CONVERSATION.messages[1],
+      language: "ur",
+      media: [
+        { url: "/media/uploads/ans.mp3", content_type: "audio/mpeg", size: 2048, refused: null, spoken: true },
+      ],
+    };
+    const spokenTo: Conversation = { ...CONVERSATION, messages: [CONVERSATION.messages[0], answer] };
+    vi.stubGlobal("fetch", api({ ...BROWSING, "GET /api/chats/s_amina": () => Response.json(spokenTo) }));
+
+    render(<SellerChatView />);
+
+    const thread = await screen.findByRole("list", { name: "Messages with Amina" });
+    const [fromHer, reply] = within(thread).getAllByRole("listitem");
+    const spoken = within(reply).getByLabelText("OpenStall's answer, spoken");
+    expect(spoken).toHaveAttribute("src", "http://api.test/media/uploads/ans.mp3");
+    expect(reply).toHaveTextContent("Spoken in Urdu");
+    expect(within(fromHer).queryByLabelText("OpenStall's answer, spoken")).not.toBeInTheDocument();
+  });
+
   it("shows her listing so far under her chat while she is making one", async () => {
     const drafting: Conversation = {
       ...CONVERSATION,

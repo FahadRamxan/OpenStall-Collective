@@ -163,7 +163,8 @@ function Phone({
 function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string; onPhoto: () => void }) {
   const hers = message.direction === "inbound";
   const photo = message.media.find((item) => item.url && item.content_type.startsWith("image/"));
-  const voiceNote = message.media.some((item) => item.url && item.content_type.startsWith("audio/"));
+  const voiceNote = message.media.some((item) => item.url && item.content_type.startsWith("audio/") && !item.spoken);
+  const spoken = message.media.some((item) => item.url && item.spoken);
   return (
     <li className={`flex flex-col ${hers ? "items-end" : "items-start"}`}>
       <div
@@ -191,6 +192,7 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
             {message.text}
           </p>
         ) : null}
+        {spoken ? <p className="mt-1 text-muted italic">Also sent as a voice note</p> : null}
       </div>
       <time dateTime={message.created_at} className="mt-0.5 px-1 text-[0.7rem] text-muted">
         {messageTime(message.created_at)}

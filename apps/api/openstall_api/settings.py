@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "claude-sonnet-5-5"
     # OpenAI's model for voice notes. whisper-1 also says which language it heard; other models do not.
     SPEECH_MODEL: str = "whisper-1"
+    # Who turns voice notes into text in sandbox mode: ElevenLabs' Scribe (needs ELEVENLABS_API_KEY), or OpenAI
+    # (needs OPENAI_API_KEY, with SPEECH_MODEL).
+    SPEECH_PROVIDER: Literal["elevenlabs", "openai"] = "elevenlabs"
+    ELEVENLABS_API_KEY: SecretStr | None = None
+    ELEVENLABS_SPEECH_MODEL: str = "scribe_v2"
+    # The voice that speaks OpenStall's answers to a maker who sends voice notes: ElevenLabs' model, and one of its
+    # voices ("Jessica", premade, so every account has it).
+    VOICE_MODEL: str = "eleven_v4_turbo"
+    VOICE_ID: str = "cgSgspJ2msm6clMCkdW9"
+    # Whether a maker who sends a voice note hears OpenStall's answer as a voice note too.
+    SPOKEN_REPLIES: bool = True
     # Unlocks /demo's Run and Reset controls in sandbox mode (header X-Demo-Run-Token). Unset: they are off there.
     DEMO_RUN_TOKEN: SecretStr | None = None
     GOOGLE_VISION_API_KEY: SecretStr | None = None

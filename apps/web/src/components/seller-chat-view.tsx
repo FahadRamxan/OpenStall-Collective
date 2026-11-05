@@ -11,7 +11,7 @@ import { LiveListingCard } from "@/components/live-listing";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
-import { mediaUrl, place } from "@/lib/catalog";
+import { languageName, mediaUrl, place } from "@/lib/catalog";
 import {
   CHANNEL_LABELS,
   getChats,
@@ -445,7 +445,7 @@ function Bubble({
       >
         <span className="sr-only">{speaker}: </span>
         {message.media.map((item, index) => (
-          <Media key={index} item={item} />
+          <Media key={index} item={item} language={message.language} />
         ))}
         {message.transcript ? <VoiceTranscript text={message.transcript} language={message.language} /> : null}
         {/* dir="auto": a message in Urdu reads right to left, as on her phone, and English left to right. */}
@@ -480,7 +480,7 @@ function PendingBubble({ item }: { item: Pending }) {
   );
 }
 
-function Media({ item }: { item: ChatMedia }) {
+function Media({ item, language }: { item: ChatMedia; language?: string | null }) {
   if (item.refused || !item.url) {
     return <p className="mb-1 text-xs text-muted italic">A file that was not kept: {item.refused}</p>;
   }
@@ -491,6 +491,18 @@ function Media({ item }: { item: ChatMedia }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="A photo the seller sent" className="max-h-64 w-auto rounded-xl border border-border" />
       </a>
+    );
+  }
+  if (item.spoken) {
+    // OpenStall's answer read out, for a maker who talks to it in voice notes.
+    const spokenIn = languageName(language ?? null);
+    return (
+      <figure className="mb-2">
+        <audio controls preload="metadata" src={url} aria-label="OpenStall's answer, spoken" className="w-64 max-w-full">
+          <a href={url}>Play the spoken answer</a>
+        </audio>
+        <figcaption className="mt-1 text-xs text-muted">{spokenIn ? `Spoken in ${spokenIn}` : "Spoken"}</figcaption>
+      </figure>
     );
   }
   if (item.content_type.startsWith("audio/")) {

@@ -6,14 +6,18 @@ import pytest
 
 from openstall_agents.adapters import (
     LLM,
+    ElevenLabsSpeechToText,
+    ElevenLabsTextToSpeech,
     Embedder,
     FakeEmbedder,
     FakeImageSearch,
     FakeLLM,
     FakeSpeechToText,
+    FakeTextToSpeech,
     ImageSearch,
     OpenAISpeechToText,
     SpeechToText,
+    TextToSpeech,
 )
 from openstall_agents.adapters.claude import ClaudeLLM
 from openstall_agents.fake_answers import fake_answer
@@ -29,11 +33,20 @@ from openstall_paypal import (
     PayPalSdk,
 )
 
-ALL_ADAPTERS = ["llm", "speech_to_text", "embedder", "messenger", "payment_gateway", "image_search"]
+ALL_ADAPTERS = [
+    "llm",
+    "speech_to_text",
+    "text_to_speech",
+    "embedder",
+    "messenger",
+    "payment_gateway",
+    "image_search",
+]
 
 EVERY_KEY = {
     "ANTHROPIC_API_KEY": "made-up-anthropic-key",
     "OPENAI_API_KEY": "made-up-openai-key",
+    "ELEVENLABS_API_KEY": "made-up-elevenlabs-key",
     "TWILIO_ACCOUNT_SID": "ACmadeup0000",
     "TWILIO_AUTH_TOKEN": "made-up-twilio-token",
     "PAYPAL_CLIENT_ID": "made-up-paypal-client-id",
@@ -55,6 +68,7 @@ def test_fake_mode_uses_a_fake_for_every_adapter(use_settings):
 
     assert isinstance(registry.llm, FakeLLM)
     assert isinstance(registry.speech_to_text, FakeSpeechToText)
+    assert isinstance(registry.text_to_speech, FakeTextToSpeech)
     assert isinstance(registry.embedder, FakeEmbedder)
     assert isinstance(registry.messenger, FakeMessenger)
     assert isinstance(registry.payment_gateway, FakeGateway)
@@ -75,6 +89,7 @@ def test_each_fake_follows_its_interface(use_settings):
 
     assert isinstance(registry.llm, LLM)
     assert isinstance(registry.speech_to_text, SpeechToText)
+    assert isinstance(registry.text_to_speech, TextToSpeech)
     assert isinstance(registry.embedder, Embedder)
     assert isinstance(registry.messenger, Messenger)
     assert isinstance(registry.payment_gateway, PaymentGateway)
@@ -87,6 +102,9 @@ def test_sandbox_mode_with_no_keys_reports_a_missing_key_for_every_adapter(use_s
     assert statuses(registry) == dict.fromkeys(ALL_ADAPTERS, "missing key")
     assert registry.missing_keys("messenger") == ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
     assert registry.missing_keys("llm") == ("ANTHROPIC_API_KEY",)
+    assert registry.missing_keys("speech_to_text") == registry.missing_keys("text_to_speech") == (
+        "ELEVENLABS_API_KEY",
+    )
 
 
 def test_sandbox_mode_names_only_the_keys_still_missing(use_settings):
@@ -126,6 +144,7 @@ def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_se
         **dict.fromkeys(ALL_ADAPTERS, "not built"),
         "llm": "real",
         "speech_to_text": "real",
+        "text_to_speech": "real",
         "payment_gateway": "real",
         "messenger": "real",
     }
@@ -134,13 +153,40 @@ def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_se
         registry.embedder
 
 
-def test_sandbox_mode_turns_voice_notes_into_text_with_openai_and_the_model_from_the_settings(use_settings):
-    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", SPEECH_MODEL="gpt-4o-transcribe", **EVERY_KEY))
+def test_sandbox_mode_turns_voice_notes_into_text_with_elevenlabs_scribe_by_default(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY))
+
+    speech = registry.speech_to_text
+    assert isinstance(speech, ElevenLabsSpeechToText)
+    assert speech.model == "scribe_v2"
+    assert registry.service("speech_to_text") == "ElevenLabs Scribe"
+    chosen = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", ELEVENLABS_SPEECH_MODEL="scribe_v1", **EVERY_KEY))
+    assert chosen.speech_to_text.model == "scribe_v1"
+
+
+def test_speech_provider_openai_turns_voice_notes_into_text_with_openai_and_its_model(use_settings):
+    settings = use_settings(
+        OPENSTALL_MODE="sandbox", SPEECH_PROVIDER="openai", SPEECH_MODEL="gpt-4o-transcribe", OPENAI_API_KEY="made-up"
+    )
+    registry = AdapterRegistry(settings)
 
     speech = registry.speech_to_text
     assert isinstance(speech, OpenAISpeechToText)
     assert speech.model == "gpt-4o-transcribe"
-    assert AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", **EVERY_KEY)).speech_to_text.model == "whisper-1"
+    assert (registry.service("speech_to_text"), registry.keys("speech_to_text")) == (
+        "OpenAI transcription",
+        ("OPENAI_API_KEY",),
+    )
+    # Its voice is still ElevenLabs', which has no key here.
+    assert registry.missing_keys("text_to_speech") == ("ELEVENLABS_API_KEY",)
+
+
+def test_sandbox_mode_speaks_answers_with_eleven_v4_turbo_and_the_voice_from_the_settings(use_settings):
+    registry = AdapterRegistry(use_settings(OPENSTALL_MODE="sandbox", VOICE_ID="voice-123", **EVERY_KEY))
+
+    voice = registry.text_to_speech
+    assert isinstance(voice, ElevenLabsTextToSpeech)
+    assert (voice.model, voice.voice) == ("eleven_v4_turbo", "voice-123")
 
 
 def test_sandbox_mode_uses_claude_with_the_model_from_the_settings(use_settings):

@@ -32,7 +32,7 @@ from openstall_agents.listing_reader import ListingReading
 from openstall_api.chat.asking import asking_reply, live_reply
 from openstall_api.chat.listing import DRAFTING, read_her_listing, update_draft
 from openstall_api.chat.publish import publish, said_yes, stall_url
-from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
+from openstall_api.chat.store import CHANNEL_WORDS, DIALING_CODES, country_of, find_chat, save_message
 from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
@@ -40,9 +40,8 @@ from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, D
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
 from openstall_api.wording import LOCALES, template_language
 
-# The countries in the demo, by dialing code. Other numbers leave the country empty until the seller says.
-DIALING_CODES = {"92": "PK", "91": "IN", "52": "MX", "44": "GB", "1": "US"}
-__all__ = ["CHANNEL_WORDS", "find_chat", "save_message"]  # kept here too: they moved to chat/store.py
+# Kept here too: they moved to chat/store.py.
+__all__ = ["CHANNEL_WORDS", "DIALING_CODES", "country_of", "find_chat", "save_message"]
 
 
 # The first answer a seller gets, in her language when it is known (from her first voice note, or her profile).
@@ -104,14 +103,10 @@ class HandledMessage:
     pay_after: list[str] = field(default_factory=list)
     # The listing her yes published, for the caller to announce once this message is committed.
     published: str | None = None
-
-
-def country_of(number: str) -> str | None:
-    digits = number.lstrip("+")
-    for code in sorted(DIALING_CODES, key=len, reverse=True):
-        if digits.startswith(code):
-            return DIALING_CODES[code]
-    return None
+    # Each reply's stored message, in order, and the template language they are in: a maker who sent a voice note
+    # hears them spoken (chat/spoken.py).
+    reply_ids: list[str] = field(default_factory=list)
+    language: str = "en"
 
 
 def find_seller(session: Session, sender: Sender) -> Seller:
@@ -247,10 +242,12 @@ def keepable(files: Sequence[InboundFile | Refused], kind: str) -> list[Media]:
     ]
 
 
-def listen_to_voice_notes(files: Sequence[InboundFile | Refused], speech: Callable[[], SpeechToText]) -> Heard:
-    """Before her message is stored: what each voice note she sent says (voice.listen). The adapter is not even made
-    when there are none."""
-    return listen(keepable(files, "audio/"), speech)
+def listen_to_voice_notes(
+    files: Sequence[InboundFile | Refused], speech: Callable[[], SpeechToText], language: str | None = None
+) -> Heard:
+    """Before her message is stored: what each voice note she sent says (voice.listen), with the language she is
+    known to speak as a hint (voice.language_hint). The adapter is not even made when there are none."""
+    return listen(keepable(files, "audio/"), speech, language)
 
 
 def read_listing_from(
@@ -337,8 +334,10 @@ def handle_inbound(
         draft = update_draft(session, chat, seller, reading, message.id) if drafting else None
         live_at = stall_url(seller) if chat.state == ChatState.LIVE else None
         replies = turn(chat, first, text, media, heard, draft, language, live_at)
+    reply_ids: list[str] = []
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
+        reply_ids.append(sent.id)
         record_event(
             session,
             EventType.MESSAGE_SENT,
@@ -352,6 +351,8 @@ def handle_inbound(
         replies=replies,
         pay_after=proof.pay_after if proof else [],
         published=published,
+        reply_ids=reply_ids,
+        language=language,
     )
 
 

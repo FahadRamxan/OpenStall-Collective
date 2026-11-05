@@ -5,7 +5,14 @@ export type ChatChannel = "whatsapp" | "web";
 export type ChatSeller = { id: string; name: string; city: string | null; country: string | null };
 
 /** A kept photo or voice note (`url`, a path on the API), or a file that was not kept and why (`refused`). */
-export type ChatMedia = { url: string | null; content_type: string; size: number | null; refused: string | null };
+export type ChatMedia = {
+  url: string | null;
+  content_type: string;
+  size: number | null;
+  refused: string | null;
+  /** OpenStall's answer spoken, in the message's language, for a maker who sent a voice note. */
+  spoken?: boolean;
+};
 
 export type ChatMessage = {
   id: string;
