@@ -566,3 +566,13 @@ Code: `apps/api/openstall_api/passports.py` (`issue_passport` signs the card's f
 - **Test mode says its key is a test key.** Fake mode signs with a fixed key anyone can rebuild from the code; `/passport/public-key` says `test_mode: true`. Sandbox mode needs `PASSPORT_SIGNING_KEY` (`scripts/make_signing_key.py`); without it the key and the checks answer 503 in words.
 - **Seed again after this change.** A database seeded earlier holds passports signed over the old fields, which no longer check out as cards. `python scripts/seed_demo.py --reset --demo-order` signs them again; tests and the browser tests seed their own.
 - **Where it shows.** The stall page says the record is "signed by OpenStall so an agent can check that nothing was changed", its For AI agents box has a "Signed" badge and **Check its signature**, and llms.txt and get_trust_card say where the key and the checks are. The tamper check, a card changed live and checked in the browser, is prompt 38.
+
+## November 6: the tamper check, shown live (prompt 38)
+
+Code: `apps/web/src/lib/passports.ts` (`canonicalJson`, `verifyInBrowser`) and `apps/web/src/components/tamper-check.tsx`, on `/demo` after the makers' phones.
+
+- **Built from spec 3.7: prompt.md was not on hand.** "Changing one number makes verification fail, shown live."
+- **Checked twice, by two parties.** The browser checks the signature itself, with OpenStall's public key and Web Crypto's Ed25519, so the check does not rest on OpenStall's word; OpenStall's `POST /passport/verify` answers beside it. The headline follows the browser's check, or OpenStall's when the browser has no Ed25519 (Chrome 137, Firefox 129 and Safari 17 have it).
+- **The same bytes in both languages.** `canonicalJson` writes what `packages/trust`'s `canonical_json` writes: every field but the signature, keys sorted at every level, no spaces, text as UTF-8, and whole-number floats as integers (`0.0` as `0`), as `JSON.stringify` does. A Vitest pins the exact string Python writes for a sample card, so a change on either side fails.
+- **Only the numbers can be changed.** The six numbers (orders delivered, the three rates, the score, the deliveries through OpenStall), each changed one outlined in red; **Put it back** restores the card as signed and checks it again. Nothing is saved: the changed card lives only in the page.
+- **Test mode says so.** The panel labels test mode's fixed key, as `/passport/public-key` does.

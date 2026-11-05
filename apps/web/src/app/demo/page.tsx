@@ -11,6 +11,7 @@ import { OrderCard } from "@/components/order-card";
 import { OffersGrid } from "@/components/offers-grid";
 import { PaymentsPanel } from "@/components/payments-panel";
 import { RequestCard } from "@/components/request-card";
+import { TamperCheck } from "@/components/tamper-check";
 import { EventStreamProvider } from "@/hooks/use-event-stream";
 import { LatestOrderProvider } from "@/hooks/use-latest-order";
 
@@ -19,8 +20,9 @@ export const metadata: Metadata = { title: "Live demo" };
 /**
  * The whole story on one page (spec 3.9: request, offers, validation, allocation, payments, phones), in its order:
  * the buyer agent's request, the offer rules and each seller agent's checked offer, the split, the order and its one
- * PayPal approval, each maker's payment on proof, and the makers' own phones. The live feed sits beside it on a wide
- * screen and after it on a phone.
+ * PayPal approval, each maker's payment on proof, the makers' own phones, and a trust passport checked live (spec
+ * 3.7: change one number and its signature fails). The live feed sits beside it on a wide screen and after it on a
+ * phone.
  */
 export default function DemoPage() {
   return (
@@ -48,6 +50,7 @@ export default function DemoPage() {
               <OrderCard />
               <PaymentsPanel />
               <MakerPhones />
+              <TamperCheck />
             </div>
             <aside aria-label="The live feed" className="max-w-3xl min-w-0 xl:sticky xl:top-4 xl:max-w-none">
               <LiveActivity scroll />

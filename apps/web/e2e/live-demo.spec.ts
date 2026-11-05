@@ -43,7 +43,7 @@ test("the whole story on one page: the request, one approval, each maker told on
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await openLive(page);
-  await expect(page.getByRole("navigation", { name: "The story on this page" }).getByRole("link")).toHaveCount(9);
+  await expect(page.getByRole("navigation", { name: "The story on this page" }).getByRole("link")).toHaveCount(10);
 
   // The buyer agent asks; the page follows the new draft order.
   await controls(page).getByRole("button", { name: "Run the demo request" }).click();
