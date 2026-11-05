@@ -53,13 +53,26 @@ export type ListingDraft = {
   missing: string[];
   /** The field she was asked about last, which her next message answers. */
   asked?: string | null;
+  /** Nothing is left to ask: she was sent all of it, and her yes would publish it. */
+  confirming?: boolean;
+};
+
+/** Her listing once her yes published it from her chat: live for buyers' agents. */
+export type LiveListing = {
+  product_id: string;
+  title: string;
+  price_usd: string;
+  /** Her stall page on this web app. */
+  stall_path: string;
 };
 
 export type Conversation = {
   seller: ChatSeller;
   messages: ChatMessage[];
-  /** Her listing draft, while she is making one. */
+  /** Her listing draft, while she is making one and until her yes. */
   draft?: ListingDraft | null;
+  /** The listing her yes published from her chat. */
+  listing?: LiveListing | null;
   /** Test mode only, for a maker with no phone of her own (the seeded makers): this page can play her. */
   playable?: boolean;
 };

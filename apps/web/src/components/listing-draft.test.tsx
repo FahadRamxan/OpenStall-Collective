@@ -81,6 +81,14 @@ describe("ListingDraftCard", () => {
     expect(field("Days to make an order")).toHaveTextContent("5 days at least");
     expect(screen.queryByText("Still to ask")).not.toBeInTheDocument();
     expect(screen.queryByText("Asking now")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Waiting for her yes/)).not.toBeInTheDocument();
+  });
+
+  it("says when it only waits for her yes", () => {
+    render(<ListingDraftCard draft={{ ...DRAFT, missing: [], asked: null, confirming: true }} mine={false} />);
+
+    expect(screen.getByText(/Waiting for her yes/)).toHaveTextContent("Only a yes publishes it.");
+    expect(screen.getByRole("heading", { name: /Her listing so far/ })).toHaveTextContent("Draft, not live yet");
   });
 
   it("on your own phone it says your", () => {

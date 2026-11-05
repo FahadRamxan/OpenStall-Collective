@@ -1,19 +1,31 @@
 import { expect, test } from "@playwright/test";
 
-// A draft listing from photos and words (prompts 17 and 18, spec 3.1 steps 3 and 4): what a new seller sends is read
-// into a draft listing shown under her chat, and each answer asks her one short question, in her language, for what
-// is still missing, then for her limits. Test mode reads its sample photo as the seeded Amina's cushion cover, and its
-// sample voice note as her words in Urdu: 18 dollars each, four a week. Her bare answers ("9") answer the question
-// asked.
+import { E2E_API_URL } from "../playwright.config";
+
+// A listing from a chat (prompts 17 to 19, spec 3.1 steps 3 to 6): what a new seller sends is read into a draft
+// listing shown under her chat; each answer asks her one short question, in her language, for what is still missing,
+// then for her limits; once nothing is missing she gets all of it back, and her yes publishes it. Test mode reads its
+// sample photo as the seeded Amina's cushion cover, and its sample voice note as her words in Urdu: 18 dollars each,
+// four a week. Her bare answers ("9") answer the question asked.
 const ASK = {
   days: "آپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
   city: "آپ کس شہر سے بھیجتی ہیں؟",
   lowest: "بڑے آرڈر کے لیے آپ ایک کی کم سے کم کتنی قیمت لیں گی، امریکی ڈالر میں؟",
   leadDays: "آرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
-  done: "آپ کی لسٹنگ کے لیے سب کچھ مل گیا ہے۔",
+  summary: "یہ آپ کی لسٹنگ ہے: Hand-embroidered cushion cover",
+  confirm: 'اسے شائع کرنے کے لیے "ہاں" لکھیں، یا بتائیں کیا بدلنا ہے۔',
+  live: "آپ کی لسٹنگ اب لائیو ہے!",
 };
 
-test("the sample photo and voice note become a draft, and she answers one question at a time in Urdu", async ({
+// The first test publishes a cushion cover. Put the demo world back as seeded afterwards: later spec files search and
+// quote the story's request, and expect its five makers only.
+test.afterAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext();
+  expect((await api.post(`${E2E_API_URL}/api/demo/reset`)).ok()).toBeTruthy();
+  await api.dispose();
+});
+
+test("the sample photo and voice note become a listing: one question at a time in Urdu, then her yes", async ({
   page,
 }) => {
   await page.goto("/seller-chat");
@@ -48,18 +60,31 @@ test("the sample photo and voice note become a draft, and she answers one questi
   await expect(draft).toContainText("Lahore");
   await answer("15", ASK.leadDays);
   await expect(draft).toContainText("$15.00 each, for a big order");
-  await answer("5", ASK.done);
+  await answer("5", ASK.confirm);
+  await expect(thread).toContainText(ASK.summary);
   await expect(draft).toContainText("5 days at least");
   await expect(draft.getByText("Still to ask")).toHaveCount(0);
   await expect(draft.getByText("Asking now")).toHaveCount(0);
+  await expect(draft).toContainText("Waiting for your yes");
   await expect(draft.getByRole("heading", { name: "Your limits" })).toBeVisible();
   await page.screenshot({ path: "e2e/screenshots/listing-draft.png", fullPage: true });
+
+  await answer("ہاں", ASK.live);
+  const live = page.getByRole("region", { name: /Your listing is live/ });
+  await expect(live).toContainText("Hand-embroidered cushion cover, $18.00 each.");
+  await expect(page.getByRole("region", { name: /Your listing so far/ })).toHaveCount(0);
+  await page.screenshot({ path: "e2e/screenshots/listing-live.png", fullPage: true });
+
+  await live.getByRole("link", { name: "Open your stall" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Web seller");
+  await expect(page.getByText("Hand-embroidered cushion cover").first()).toBeVisible();
 
   await page.goto("/demo");
   const feed = page.getByRole("list", { name: "Activity, newest first" });
   await expect(
     feed.getByText(/listing draft has everything it needs: Hand-embroidered cushion cover.*5 days to make an order/).first(),
   ).toBeVisible();
+  await expect(feed.getByText(/listing is live: Hand-embroidered cushion cover/).first()).toBeVisible();
 });
 
 test("typed in English, she is asked in English, a photo first", async ({ page }) => {

@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from openstall_api.db import get_session
-from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Seller
+from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Product, Seller
 from openstall_api.settings import get_settings
 
 router = APIRouter(prefix="/api", tags=["chats"])
@@ -82,13 +82,26 @@ class ListingDraftOut(BaseModel):
     words: dict[str, str] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
     asked: str | None = None
+    # Nothing is left to ask: she was sent all of it, and her yes would publish it (spec 3.1 step 5).
+    confirming: bool = False
+
+
+class LiveListingOut(BaseModel):
+    """Her listing once her yes published it from this chat (spec 3.1 step 6): live for buyers' agents."""
+
+    product_id: str
+    title: str
+    price_usd: str
+    stall_path: str  # her stall page on the web app
 
 
 class Conversation(BaseModel):
     seller: ChatSeller
     messages: list[MessageOut]
-    # Her listing draft, while she is making one (prompt 17); None otherwise.
+    # Her listing draft, while she is making one and until her yes (prompts 17 to 19); None otherwise.
     draft: ListingDraftOut | None = None
+    # The listing her yes published from her chat (prompt 19); None before.
+    listing: LiveListingOut | None = None
     # Fake mode only, for a maker with no phone of her own (the seeded makers): /seller-chat can play her, through
     # POST /api/dev/sellers/{id}/messages, to send her courier receipt and answer OpenStall.
     playable: bool = False
@@ -163,9 +176,22 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
         .order_by(ChatSession.updated_at.desc())
         .limit(1)
     )
+    draft, listing = None, None
+    if drafting is not None and drafting.draft_json:
+        if drafting.state != ChatState.LIVE:
+            confirming = drafting.state == ChatState.AWAITING_CONFIRMATION
+            draft = ListingDraftOut.model_validate({**drafting.draft_json, "confirming": confirming})
+        elif (product := session.get(Product, drafting.draft_json.get("published", ""))) is not None:
+            listing = LiveListingOut(
+                product_id=product.id,
+                title=product.title,
+                price_usd=f"{product.price_usd:.2f}",
+                stall_path=f"/stall/{seller.id}",
+            )
     return Conversation(
         seller=seller_out(seller),
-        draft=ListingDraftOut.model_validate(drafting.draft_json) if drafting and drafting.draft_json else None,
+        draft=draft,
+        listing=listing,
         playable=get_settings().OPENSTALL_MODE == "fake" and not seller.whatsapp_number and not seller.web_chat_id,
         messages=[
             MessageOut(

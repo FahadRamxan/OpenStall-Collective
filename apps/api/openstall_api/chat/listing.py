@@ -27,6 +27,7 @@ from openstall_agents.adapters import LLM, LLMError, Media
 from openstall_agents.listing_reader import ListingReading, Said, read_listing
 from openstall_api.adapters import AdapterUnavailable
 from openstall_api.chat.asking import described, given, still_to_ask
+from openstall_api.chat.publish import said_yes
 from openstall_api.chat.store import known_seller
 from openstall_api.chat.voice import Heard
 from openstall_api.db import new_session
@@ -62,9 +63,9 @@ FIELDS: dict[str, str] = {
     "min_lead_days": "the days she needs to make an order",
 }
 MAX_SOURCE = 4000  # her words kept on the draft, the latest last
-# Where her listing is still being drafted: collecting what she sends, then asking for what is missing. Later states
-# belong to confirming and publishing (prompt 19).
-DRAFTING = frozenset({ChatState.COLLECTING, ChatState.ASKING})
+# Where her listing is still a draft, read again with each message: collecting what she sends, asking for what is
+# missing, and waiting for her yes, when anything but a yes is a change (chat/publish.py). Once live, it is not.
+DRAFTING = frozenset({ChatState.COLLECTING, ChatState.ASKING, ChatState.AWAITING_CONFIRMATION})
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class Gathered:
     said: list[Said]
     photo_keys: list[str]
     asking: str | None = None
+    confirming: bool = False  # her chat waits for her yes
 
 
 def gather(
@@ -107,7 +109,8 @@ def gather(
                 for item in message.media_json
                 if str(item.get("content_type", "")).startswith("image/") and "key" in item
             )
-    return Gathered(maker=seller.name, said=said, photo_keys=keys, asking=draft.get("asked"))
+    confirming = chat is not None and chat.state == ChatState.AWAITING_CONFIRMATION
+    return Gathered(maker=seller.name, said=said, photo_keys=keys, asking=draft.get("asked"), confirming=confirming)
 
 
 def said_in(text: str | None, transcript: str | None, language: str | None, asked: str | None = None) -> list[Said]:
@@ -139,8 +142,8 @@ def read_her_listing(
         return None
     with new_session() as session:
         gathered = gather(session, channel, address, seller_id, name_guess)
-    if gathered is None:
-        return None
+    if gathered is None or (gathered.confirming and said_yes(text, heard, len(photos))):
+        return None  # her yes is not read: it publishes her listing as it stands
     new_said = [replace(item, asked=gathered.asking) for item in new_said]  # this message answers the open question
     earlier: list[Media] = []
     for key in gathered.photo_keys[-MAX_PHOTOS:]:
@@ -215,7 +218,7 @@ def update_draft(
     left = still_to_ask(draft)
     draft["asked"] = left[0] if left else None
     chat.draft_json = draft
-    chat.state = ChatState.ASKING
+    chat.state = ChatState.ASKING if draft["asked"] else ChatState.AWAITING_CONFIRMATION
     if {name: draft.get(name) for name in FIELDS} != before:
         record_event(
             session,

@@ -7,7 +7,8 @@ sends them through the Messenger, and the web chat shows them.
 
 The chat moves through the states collecting, asking, awaiting_confirmation and live. A new seller is welcomed; while
 her listing is drafted (collecting, then asking), each answer tells her the listing so far and asks one question, in
-her language (chat/asking.py); confirming and publishing are prompt 19.
+her language (chat/asking.py). Once nothing is missing she gets all of it back and must say yes; her yes publishes it
+(chat/publish.py), in this transaction, and anything else is read as a change. Once live, she is told where it is.
 
 Her voice notes are turned into text before the message is stored (listen_to_voice_notes, outside any transaction;
 chat/voice.py): the words go on her message as she said them, and their language on her profile if she has none yet.
@@ -28,13 +29,14 @@ from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import LLM, Media, SpeechToText
 from openstall_agents.listing_reader import ListingReading
-from openstall_api.chat.asking import asking_reply
+from openstall_api.chat.asking import asking_reply, live_reply
 from openstall_api.chat.listing import DRAFTING, read_her_listing, update_draft
+from openstall_api.chat.publish import publish, said_yes, stall_url
 from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
 from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
-from openstall_api.models import Channel, ChatMessage, ChatSession, DataSource, Direction, Seller
+from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
 from openstall_api.wording import LOCALES, template_language
 
@@ -100,6 +102,8 @@ class HandledMessage:
     replies: list[Reply] = field(default_factory=list)
     # Shares she proved she shipped, to capture and pay once this message is committed (proof.pay_on_proof).
     pay_after: list[str] = field(default_factory=list)
+    # The listing her yes published, for the caller to announce once this message is committed.
+    published: str | None = None
 
 
 def country_of(number: str) -> str | None:
@@ -197,16 +201,20 @@ def turn(
     heard: Heard,
     draft: dict[str, Any] | None = None,
     language: str = "en",
+    live_at: str | None = None,
 ) -> list[Reply]:
     """The chat's answer to one message, from its state. Files that could not be kept, then voice notes that could not
     be heard, are always said first. While her listing is drafted (`draft`), she is told the listing so far and asked
-    the one question open now, in her template language."""
+    the one question open now, in her template language. Once her listing is live (`live_at`, her stall), she is
+    told where it is."""
     replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
     if first:
         replies.append(Reply(WELCOMES[language]))
     if draft is not None:
         replies.append(Reply(asking_reply(draft, language, thanks=bool(what) and not first)))
+    elif live_at is not None:
+        replies.append(Reply(live_reply(language, live_at, again=True)))
     elif what and not first:
         replies.append(Reply(f"Thank you, I have {what}. {NUDGE}"))
     return replies
@@ -313,15 +321,22 @@ def handle_inbound(
             },
         )
     proof = proof_turn(session, seller, text, media, photo, message.id)
+    language = template_language(seller.language)
+    published: str | None = None
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]
+    elif confirmed(chat, text, heard, media):
+        published = publish(session, chat, seller).id
+        live = [Reply(live_reply(language, stall_url(seller)))]
+        replies = refusals(media) + [Reply(words) for words in unclear(heard)] + live
     else:
         # A draft starts once something for a listing is read; once there is one, every message of hers counts, even
         # one the model could not read, so the question open is asked again.
         started = bool(chat.draft_json) or (reading is not None and not reading.empty)
         drafting = chat.state in DRAFTING and started
         draft = update_draft(session, chat, seller, reading, message.id) if drafting else None
-        replies = turn(chat, first, text, media, heard, draft, template_language(seller.language))
+        live_at = stall_url(seller) if chat.state == ChatState.LIVE else None
+        replies = turn(chat, first, text, media, heard, draft, language, live_at)
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(
@@ -332,5 +347,17 @@ def handle_inbound(
             payload={"channel": sender.channel, "message_id": sent.id},
         )
     return HandledMessage(
-        seller_id=seller.id, message_id=message.id, replies=replies, pay_after=proof.pay_after if proof else []
+        seller_id=seller.id,
+        message_id=message.id,
+        replies=replies,
+        pay_after=proof.pay_after if proof else [],
+        published=published,
     )
+
+
+def confirmed(chat: ChatSession, text: str, heard: Heard, media: list[dict[str, Any]]) -> bool:
+    """Whether this message is her yes to the listing she was sent (spec 3.1 step 5): only then is it published."""
+    if chat.state != ChatState.AWAITING_CONFIRMATION or not chat.draft_json or chat.draft_json.get("missing"):
+        return False
+    photos = sum(1 for item in media if str(item.get("content_type", "")).startswith("image/") and "key" in item)
+    return said_yes(text, heard, photos)

@@ -99,7 +99,10 @@ class Parts:
     unnamed: str  # the title, before there is one
     joiner: str
     so_far: str  # {listing}
-    all_set: str
+    summary: str  # {listing}: everything, once nothing is left to ask
+    confirm: str  # her yes, asked for
+    live: str  # {link}: her stall, once her yes published it
+    still_live: str  # {link}: her answer once she is live
     thanks: str
 
 
@@ -114,7 +117,10 @@ PARTS: dict[str, Parts] = {
         unnamed="your item, not named yet",
         joiner=", ",
         so_far="Your listing so far: {listing}.",
-        all_set="That is everything your listing needs.",
+        summary="Here is your listing: {listing}.",
+        confirm="Reply YES to publish it, or tell me what to change.",
+        live="Your listing is live! AI shopping agents can find it now. Your stall: {link}",
+        still_live="Your listing is live: {link}",
         thanks="Thank you.",
     ),
     "ur": Parts(
@@ -127,7 +133,10 @@ PARTS: dict[str, Parts] = {
         unnamed="آپ کی چیز، نام ابھی باقی ہے",
         joiner="، ",
         so_far="آپ کی لسٹنگ اب تک: {listing}۔",
-        all_set="آپ کی لسٹنگ کے لیے سب کچھ مل گیا ہے۔",
+        summary="یہ آپ کی لسٹنگ ہے: {listing}۔",
+        confirm='اسے شائع کرنے کے لیے "ہاں" لکھیں، یا بتائیں کیا بدلنا ہے۔',
+        live="آپ کی لسٹنگ اب لائیو ہے! AI شاپنگ ایجنٹ اب اسے ڈھونڈ سکتے ہیں۔ آپ کا اسٹال: {link}",
+        still_live="آپ کی لسٹنگ لائیو ہے: {link}",
         thanks="شکریہ۔",
     ),
     "hi": Parts(
@@ -140,7 +149,10 @@ PARTS: dict[str, Parts] = {
         unnamed="आपकी चीज़, नाम अभी बाकी है",
         joiner=", ",
         so_far="आपकी लिस्टिंग अब तक: {listing}।",
-        all_set="आपकी लिस्टिंग के लिए सब कुछ मिल गया है।",
+        summary="यह आपकी लिस्टिंग है: {listing}।",
+        confirm='इसे प्रकाशित करने के लिए "हाँ" लिखें, या बताएँ क्या बदलना है।',
+        live="आपकी लिस्टिंग अब लाइव है! AI शॉपिंग एजेंट अब इसे ढूँढ सकते हैं। आपकी दुकान: {link}",
+        still_live="आपकी लिस्टिंग लाइव है: {link}",
         thanks="धन्यवाद।",
     ),
     "es": Parts(
@@ -153,7 +165,10 @@ PARTS: dict[str, Parts] = {
         unnamed="tu artículo, aún sin nombre",
         joiner=", ",
         so_far="Tu anuncio hasta ahora: {listing}.",
-        all_set="Ya tengo todo lo que necesita tu anuncio.",
+        summary="Este es tu anuncio: {listing}.",
+        confirm="Responde SÍ para publicarlo, o dime qué cambiar.",
+        live="¡Tu anuncio ya está publicado! Los agentes de compra con IA ya pueden encontrarlo. Tu puesto: {link}",
+        still_live="Tu anuncio está publicado: {link}",
         thanks="¡Gracias!",
     ),
 }
@@ -194,9 +209,19 @@ def described(draft: Mapping[str, Any], language: str = "en") -> str:
 
 def asking_reply(draft: Mapping[str, Any], language: str, *, thanks: bool) -> str:
     """Her answer while her listing is drafted, in a template language: thanks (not for her first message, which is
-    welcomed instead), her listing so far, then the one question open now (`asked`), or that nothing is left to ask."""
+    welcomed instead), then her listing so far and the one question open now (`asked`); or, once nothing is left to
+    ask, all of it and a request for her yes (spec 3.1 step 5)."""
     parts = PARTS[language]
     asked = draft.get("asked")
-    ending = QUESTIONS[language][asked] if asked else parts.all_set
-    text = f"{parts.so_far.format(listing=described(draft, language))} {ending}"
+    listing = described(draft, language)
+    if asked:
+        text = f"{parts.so_far.format(listing=listing)} {QUESTIONS[language][asked]}"
+    else:
+        text = f"{parts.summary.format(listing=listing)} {parts.confirm}"
     return f"{parts.thanks} {text}" if thanks else text
+
+
+def live_reply(language: str, link: str, *, again: bool = False) -> str:
+    """In a template language: her listing is live, with her stall's link; `again`, for a message once it is."""
+    parts = PARTS[language]
+    return f"{parts.thanks} {parts.still_live.format(link=link)}" if again else parts.live.format(link=link)

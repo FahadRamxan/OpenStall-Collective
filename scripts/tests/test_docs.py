@@ -33,6 +33,8 @@ UI_LABELS = [
     "Your listing so far",
     "Asking now",
     "Your limits",
+    "Your listing is live",
+    "Open your stall",
     "API online",
     "API offline",
 ]

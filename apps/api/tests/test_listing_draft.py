@@ -108,9 +108,10 @@ def test_she_answers_one_question_at_a_time_and_her_limits_come_last(db):
             f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore, lowest $15.00 for a big order. "
             f"{QUESTIONS['min_lead_days']}"
         ],
-        [
-            f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore, lowest $15.00 for a big order, 5 days to make an "
-            "order. That is everything your listing needs."
+        [  # nothing left to ask: all of it, and her yes asked for (prompt 19)
+            "Thank you. Here is your listing: Hand-embroidered cushion cover, $18.00 each, 4 a week, arrives in 9 days, "
+            "from Lahore, lowest $15.00 for a big order, 5 days to make an order. Reply YES to publish it, or tell me "
+            "what to change."
         ],
     ]
     draft = chat_of(db, first["seller_id"]).draft_json

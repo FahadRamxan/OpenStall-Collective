@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/badge";
 import { ChatComposer } from "@/components/chat-composer";
 import { ListingDraftCard } from "@/components/listing-draft";
+import { LiveListingCard } from "@/components/live-listing";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -185,6 +186,7 @@ export function SellerChatView() {
               }
             />
             {sellerId && loaded?.draft ? <ListingDraftCard draft={loaded.draft} mine /> : null}
+            {sellerId && loaded?.listing ? <LiveListingCard listing={loaded.listing} mine /> : null}
           </>
         ) : conversation?.state === "failed" ? (
           <p role="alert" className="rounded-2xl border border-border bg-surface p-5 text-muted">
@@ -209,6 +211,7 @@ export function SellerChatView() {
               }
             />
             {loaded.draft ? <ListingDraftCard draft={loaded.draft} mine={false} /> : null}
+            {loaded.listing ? <LiveListingCard listing={loaded.listing} mine={false} /> : null}
             {loaded.playable ? (
               <PlayPanel name={loaded.seller.name} sellerId={loaded.seller.id} onSent={() => setVersion((count) => count + 1)} />
             ) : null}

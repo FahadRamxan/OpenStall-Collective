@@ -92,6 +92,12 @@ export function ListingDraftCard({ draft, mine }: { draft: ListingDraft; mine: b
         Read from {whose} photos and words. A price or a number is only taken from what was said. OpenStall asks for
         what is missing, one question at a time, in {whose} language.
       </p>
+      {draft.confirming ? (
+        <p className="mt-3 rounded-lg bg-warning-soft px-3 py-2 text-sm font-medium">
+          Waiting for {whose} yes: nothing is left to ask, and {mine ? "you were" : "she was"} sent all of it to check.
+          Only a yes publishes it.
+        </p>
+      ) : null}
       <dl className="mt-4 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[9rem_1fr]">{rows(FIELD_LABELS)}</dl>
       <h4 className="mt-5 font-semibold">{mine ? "Your limits" : "Her limits"}</h4>
       <p className="mt-1 text-sm leading-6 text-muted">

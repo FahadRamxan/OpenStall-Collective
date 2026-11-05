@@ -1,6 +1,7 @@
 """One chat handler for WhatsApp and the web (spec 3.1): the same input through either channel is stored the same way
 and gets the same replies, so a judge can onboard a seller in the browser."""
 
+from decimal import Decimal
 from urllib.parse import urlencode
 
 import pytest
@@ -14,7 +15,7 @@ from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
 from openstall_api.media import MAX_BYTES
-from openstall_api.models import Event, Seller
+from openstall_api.models import Event, Product, ProductStatus, Seller
 from openstall_api.whatsapp import twilio_signature
 
 client = TestClient(app)
@@ -97,24 +98,61 @@ def test_same_input_through_whatsapp_and_the_web_gives_the_same_messages_and_rep
 def test_same_listing_from_both_channels(twilio):
     """Spec checklist: "/seller-chat and WhatsApp produce the same listing from the same input".
 
-    Started in prompt 15, where the chats themselves must match; prompt 17 compares the draft listings; prompt 19 adds
-    the published listings.
+    Started in prompt 15, where the chats themselves must match; prompt 17 compares the draft listings; prompt 19 the
+    published listings, once she has answered every question and said yes.
     """
+    channels = ({"whatsapp_number": "+923001234567"}, {"web_chat_id": DEMO_PHONE})
     for number, (text, files) in enumerate(CONVERSATION):
         send_on_whatsapp("+923001234567", f"SM{number}", text, files)
         send_on_the_web(DEMO_PHONE, text, files)
 
     assert conversation_of(twilio, whatsapp_number="+923001234567") == conversation_of(twilio, web_chat_id=DEMO_PHONE)
-    drafts = [
-        client.get(f"/api/chats/{twilio.scalars(select(Seller).filter_by(**by)).one().id}").json()["draft"]
-        for by in ({"whatsapp_number": "+923001234567"}, {"web_chat_id": DEMO_PHONE})
-    ]
+    sellers = [twilio.scalars(select(Seller).filter_by(**by)).one() for by in channels]
+    drafts = [client.get(f"/api/chats/{seller.id}").json()["draft"] for seller in sellers]
     assert drafts[0] == drafts[1]
     assert (drafts[0]["title"], drafts[0]["price_usd"], drafts[0]["missing"], drafts[0]["asked"]) == (
         "Hand-embroidered cushion cover",
         "18.00",
         ["ship_days", "floor_price_usd", "min_lead_days"],
         "ship_days",
+    )
+
+    for number, text in enumerate(("9", "15", "5", "ہاں"), start=len(CONVERSATION)):
+        send_on_whatsapp("+923001234567", f"SM{number}", text, [])
+        send_on_the_web(DEMO_PHONE, text, [])
+
+    # The same chats, each with her own stall's link at the end.
+    chats = [
+        [(direction, (text or "").replace(seller.id, "<her id>"), media) for direction, text, media in chat]
+        for seller, chat in zip(sellers, (conversation_of(twilio, **by) for by in channels), strict=True)
+    ]
+    assert chats[0] == chats[1]
+    assert chats[0][-1][1].endswith("/stall/<her id>")
+    twilio.expire_all()
+    published = [twilio.scalars(select(Product).where(Product.seller_id == seller.id)).one() for seller in sellers]
+    listed = [
+        {
+            "status": product.status,
+            "title": product.title,
+            "description": product.description,
+            "category": product.category,
+            "variants": product.variants_json,
+            "price_usd": product.price_usd,
+            "capacity_per_week": product.capacity_per_week,
+            "ship_days": product.ship_days,
+            "ship_from_city": product.ship_from_city,
+            "photos": product.photos_json,
+            "source_text": product.source_text,
+            "policy": {name: value for name, value in (product.seller.policy_json or {}).items() if name != "seller_id"},
+        }
+        for product in published
+    ]
+    assert listed[0] == listed[1]
+    assert (listed[0]["status"], listed[0]["price_usd"], listed[0]["ship_days"], listed[0]["policy"]) == (
+        ProductStatus.LIVE,
+        Decimal("18.00"),
+        9,
+        {"floor_price_usd": "15.00", "max_discount_pct": "16.67", "capacity_per_week": 4, "min_lead_days": 5},
     )
 
 
