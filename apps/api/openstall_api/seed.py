@@ -36,6 +36,7 @@ from openstall_api.models import (
 )
 from openstall_api.orders import DraftPart, create_draft_order
 from openstall_api.passports import issue_passport
+from openstall_api.radar import seed_radar_searches
 from openstall_api.settings import Settings, get_settings
 
 MAX_DISCOUNT_PCT = 15
@@ -193,13 +194,15 @@ def reset_all(session: Session) -> None:
 
 
 def reset_demo_world(session: Session, today: date) -> "SeedReport":
-    """The demo world as seeded: every table emptied but the event log, then the five makers (Amina too) and the
-    story's draft order. The events stay, so pages that are open keep following the live feed. The caller commits."""
+    """The demo world as seeded: every table emptied but the event log, then the five makers (Amina too), the
+    story's draft order and Demand Radar's seeded searches. The events stay, so pages that are open keep following
+    the live feed. The caller commits."""
     for table in reversed(Base.metadata.sorted_tables):
         if table.name != Event.__tablename__:
             session.execute(delete(table))
     report = seed(session, with_amina=True)
     seed_demo_order(session, today)
+    seed_radar_searches(session)
     return report
 
 

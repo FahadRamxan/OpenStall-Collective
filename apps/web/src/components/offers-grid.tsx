@@ -1,23 +1,15 @@
 "use client";
 
-import {
-  AllCommunityModule,
-  ModuleRegistry,
-  themeQuartz,
-  type ColDef,
-  type GetRowIdParams,
-  type ICellRendererParams,
-} from "ag-grid-community";
+import type { ColDef, GetRowIdParams, ICellRendererParams } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 
 import { Badge } from "@/components/badge";
+import { GRID_THEME, WRAPPED } from "@/components/grid-theme";
 import { useLiveList, type LiveListSource } from "@/hooks/use-live-list";
 import { formatUsd } from "@/lib/catalog";
 import { arrivalWords, getRecentOffers, offerFromEvent, roundWords, type AgentOffer } from "@/lib/offers";
 import { MAX_ROUNDS } from "@/lib/quotes";
 import { formatDay } from "@/lib/orders";
-
-ModuleRegistry.registerModules([AllCommunityModule]);
 
 /** The most offers the panel keeps. It shows those of the latest request. */
 export const RECENT_OFFERS = 50;
@@ -29,24 +21,6 @@ const OFFERS: LiveListSource<AgentOffer> = {
   time: (offer) => offer.created_at,
   limit: RECENT_OFFERS,
 };
-
-/** AG Grid in the site's own colours, light and dark, from the same tokens as the rest of the page. */
-const THEME = themeQuartz.withParams({
-  backgroundColor: "var(--surface)",
-  foregroundColor: "var(--foreground)",
-  textColor: "var(--foreground)",
-  borderColor: "var(--border)",
-  accentColor: "var(--accent)",
-  headerBackgroundColor: "var(--background)",
-  headerTextColor: "var(--muted)",
-  rowHoverColor: "var(--accent-soft)",
-  fontFamily: "inherit",
-  fontSize: 14,
-  wrapperBorderRadius: 12,
-});
-
-/** Wrapped text at the page's own line height, not the grid's row height, with room above and below. */
-const WRAPPED = { lineHeight: "1.375rem", paddingTop: "0.625rem", paddingBottom: "0.625rem" };
 
 /*
  * The verdict comes right after the price it is about: on a laptop every column is in view, and on a phone, where the
@@ -132,7 +106,7 @@ export function OffersGrid() {
             Round {Math.max(...latest.map((offer) => offer.round))} of {MAX_ROUNDS}
           </p>
           <AgGridReact<AgentOffer>
-            theme={THEME}
+            theme={GRID_THEME}
             rowData={latest}
             columnDefs={COLUMNS}
             defaultColDef={{ sortable: true, resizable: true, suppressMovable: true }}

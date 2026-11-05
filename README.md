@@ -93,6 +93,8 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Trust passports update after each delivery.** When a buyer receives a maker's parcel, her trust passport is worked out again (orders delivered, on-time rate, dispute rate, her score) and signed again with OpenStall's key. It is worked out from facts each time: her history (made-up numbers for the seeded makers, which stay marked as demo data) and every parcel of hers a buyer received, on time or not by its delivery date. Her stall page, her trust card for agents and search results say how many of her orders came through OpenStall; the live feed shows the old and new score. A maker who joined through the chat gets her first passport once her photos can be checked (not built yet).
 - **A buyer agent you can run.** `python scripts/run_demo_request.py` plays the story through the MCP storefront (search, quote, draft order, approval link) and prints each step; add `--pause` to step through it for a recording, and `--url` to point it at the hosted demo. On `/demo`, "Run the demo request" does the same on the server, a stepper follows it from Search to Approval, and "Reset demo" puts the seeded world back. In sandbox mode both buttons need the `DEMO_RUN_TOKEN`.
 - **The whole story on `/demo`, live.** In the story's order: the buyer agent's request, the offer rules and every checked offer, the split, the order and its one PayPal approval, each maker's payment (reserved, told, paid on proof, tracking on PayPal), and the makers' own phones, each showing her order in her language, her courier receipt and her payment as they happen, and a maker's trust passport you can tamper with. The live feed of everything that happens sits beside it. In test mode you can play a seeded maker from her phone: send her courier receipt, then say yes in her language.
+- **The dashboard, in AG Grid.** `/dashboard` lists the recent orders (top-ups marked), each maker's share and payout, every parcel's tracking (on PayPal, delivered, on time), and the trust passports with whether each signature holds. It follows the live feed.
+- **Demand Radar.** Searches that found nothing are grouped by their words (plural and singular alike, filler words left out), counted for the week, and matched to the maker whose listings share the most describing words, the most trusted first. The dashboard leads with the biggest group: in the seeded world, "23 agents searched for ceramic mugs this week. Nobody sells them.", marked as seeded demo searches. **Send the tip to Noor** sends a group's tip to its maker, in her language, once a week.
 - **A status page** at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
@@ -123,11 +125,11 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 - **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
 - **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
 - **Not connected yet:** payouts to Pakistan (Amina's share stays reserved), and a buyer's street address (makers are told the buyer's city).
-- **Not built yet:** changing a listing once it is live, a real AI agent as the buyer, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
+- **Not built yet:** changing a listing once it is live, and a real AI agent as the buyer. [Build progress](#build-progress) lists every step.
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **39 done, 3 partly done, 16 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **40 done, 3 partly done, 15 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -139,11 +141,11 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | After payment | 31–34 | | |
 | Trust passports | 35, 36, 38 | | 37 materials advance |
 | The order heals itself; guardrails | 39, 40 | | |
-| Pages and design | 43 | | 41 home page, 42 PayPal buttons on stalls, 44 the AG Grid dashboard, 45 design pass |
+| Pages and design | 43, 44 | | 41 home page, 42 PayPal buttons on stalls, 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account; then the AG Grid dashboard (44).
+Next: the hosted demo once there is a Render account, and the Devpost draft; then a real AI agent as the buyer (30) and the home page (41).
 
 ## Run it locally, in more detail
 

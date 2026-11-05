@@ -69,6 +69,7 @@ class EventType(StrEnum):
     PASSPORT_ISSUED = "passport.issued"
     PASSPORT_UPDATED = "passport.updated"
     SECURITY_REJECTED = "security.rejected"
+    RADAR_TIP_SENT = "radar.tip_sent"  # a Demand Radar tip sent to a maker (radar.py); the entity is its group
     DEMO_TEST = "demo.test"  # made with POST /api/dev/events, in fake mode only
     DEMO_RUN = "demo.run"  # the scripted buyer agent started the story (POST /api/demo/run)
     DEMO_RESET = "demo.reset"  # the demo world was put back as seeded (POST /api/demo/reset)

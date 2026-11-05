@@ -1,13 +1,27 @@
 import type { Metadata } from "next";
 
-import { ComingSoon } from "@/components/coming-soon";
+import { DashboardView } from "@/components/dashboard-view";
+import { EventStreamProvider } from "@/hooks/use-event-stream";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
+/**
+ * The dashboard (spec 3.9): AG Grid tables of orders, payouts, tracking, trust passports and Demand Radar, which follow
+ * the live feed.
+ */
 export default function DashboardPage() {
   return (
-    <ComingSoon title="Dashboard">
-      Orders, payouts, tracking, trust passports and Demand Radar tips, in tables that update as things happen.
-    </ComingSoon>
+    <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16">
+      <div className="max-w-3xl">
+        <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">Dashboard</h1>
+        <p className="mt-4 text-lg leading-8 text-muted">
+          Every order, each maker&apos;s payout and tracking, the trust passports, and what buyers&apos; agents searched
+          for and could not find, as it happens.
+        </p>
+      </div>
+      <EventStreamProvider>
+        <DashboardView />
+      </EventStreamProvider>
+    </section>
   );
 }

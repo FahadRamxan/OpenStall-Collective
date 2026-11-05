@@ -24,6 +24,7 @@ export const CATEGORIES: Record<string, Category> = {
   delivery: { label: "Delivery", tone: "success" },
   passport: { label: "Passport", tone: "accent" },
   security: { label: "Security", tone: "danger" },
+  radar: { label: "Radar", tone: "accent" },
   demo: { label: "Demo", tone: "warning" },
 };
 

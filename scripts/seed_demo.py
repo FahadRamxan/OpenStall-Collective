@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 
 from openstall_api.db import migrate, session_scope
 from openstall_api.models import Seller
+from openstall_api.radar import seed_radar_searches
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 
 
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         report = seed(session, with_amina=args.with_amina or args.demo_order, reset=args.reset)
         if args.demo_order:
             order = seed_demo_order(session, date.today())
+            seed_radar_searches(session)  # Demand Radar's searches that found nothing this week
             print(f"Demo order {DEMO_ORDER_ID}: {len(order.parts)} makers, ${order.total_usd:,.2f}")
     print(f"Seeded: {report.sellers} sellers, {report.products} products, {report.passports} passports.")
     return 0

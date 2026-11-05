@@ -44,6 +44,7 @@ UI_LABELS = [
     "Approve the top-up",
     "Try to break it",
     "Try every attack",
+    "Demand Radar tip",
     "Order complete",
     "API online",
     "API offline",

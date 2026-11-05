@@ -10,6 +10,7 @@ from openstall_api import __version__
 from openstall_api.adapters import get_registry
 from openstall_api.catalog_api import router as catalog_router
 from openstall_api.chat_api import router as chat_router
+from openstall_api.dashboard_api import router as dashboard_router
 from openstall_api.db import REPO_ROOT, migrate
 from openstall_api.demo_api import router as demo_router
 from openstall_api.dev_api import router as dev_router
@@ -76,6 +77,7 @@ app.include_router(catalog_router)
 app.include_router(search_router)
 app.include_router(demo_router)
 app.include_router(guardrails_router)
+app.include_router(dashboard_router)
 app.include_router(offers_router)
 app.include_router(quotes_router)
 app.include_router(orders_router)

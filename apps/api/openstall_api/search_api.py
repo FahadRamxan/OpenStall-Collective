@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from openstall_api.db import get_session
@@ -43,5 +43,11 @@ def recent_searches(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[SearchOut]:
     """The most recent searches, newest first. New ones arrive on the event stream as search.logged events."""
-    rows = session.scalars(select(Search).order_by(Search.created_at.desc(), Search.id.desc()).limit(limit))
+    seeded = Search.filters_json["data_source"].as_string()
+    rows = session.scalars(
+        select(Search)
+        .where(or_(seeded.is_(None), seeded != "seeded_demo"))  # Demand Radar's seeded searches are not agents'
+        .order_by(Search.created_at.desc(), Search.id.desc())
+        .limit(limit)
+    )
     return [SearchOut.of(row) for row in rows]
