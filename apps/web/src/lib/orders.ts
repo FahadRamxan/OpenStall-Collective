@@ -151,12 +151,15 @@ export async function getLatestOrder(init: RequestInit = {}): Promise<Order | nu
 }
 
 /**
- * Events after which the latest order may read differently: an order or one of its shares changed, or a maker was
- * told about her share (or could not be).
+ * Events after which the latest order may read differently: an order or one of its shares changed, a maker was
+ * told about her share (or could not be), or her proof of shipping moved on (read, confirmed, on PayPal).
  */
 export function changesOrders(event: FeedEvent): boolean {
   return (
-    event.type.startsWith("order.") || event.type.startsWith("part.") || event.type.startsWith("message.order_notice")
+    event.type.startsWith("order.") ||
+    event.type.startsWith("part.") ||
+    event.type.startsWith("message.order_notice") ||
+    event.type.startsWith("tracking.")
   );
 }
 

@@ -27,8 +27,11 @@ export const CATEGORIES: Record<string, Category> = {
   demo: { label: "Demo", tone: "warning" },
 };
 
-/** The /demo page's live feed: everything the agents, the sellers and PayPal do, newest first. */
-export function LiveActivity() {
+/**
+ * The /demo page's live feed: everything the agents, the sellers and PayPal do, newest first. `scroll`: the list
+ * scrolls inside its own box (the page's sidebar), so a long feed never pushes the rest of the page down.
+ */
+export function LiveActivity({ scroll = false }: { scroll?: boolean }) {
   const { events, connected, error } = useEventStream();
   return (
     <section aria-labelledby="activity-heading" className="mt-10">
@@ -51,10 +54,15 @@ export function LiveActivity() {
       ) : (
         <ol
           aria-label="Activity, newest first"
-          className="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface"
+          tabIndex={scroll ? 0 : undefined}
+          className={`mt-4 divide-y divide-border rounded-xl border border-border bg-surface ${
+            scroll
+              ? "max-h-[28rem] overflow-y-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent xl:max-h-[calc(100vh-9rem)]"
+              : "overflow-hidden"
+          }`}
         >
           {events.map((event) => (
-            <ActivityItem key={event.id} event={event} />
+            <ActivityItem key={event.id} event={event} stacked={scroll} />
           ))}
         </ol>
       )}
@@ -81,8 +89,22 @@ export function categoryOf(event: FeedEvent): Category {
   return CATEGORIES[name] ?? { label: name, tone: "neutral" };
 }
 
-function ActivityItem({ event }: { event: FeedEvent }) {
+/** One event. `stacked`, in a narrow sidebar: the time and the label on one line, the summary below at full width. */
+function ActivityItem({ event, stacked = false }: { event: FeedEvent; stacked?: boolean }) {
   const category = categoryOf(event);
+  if (stacked) {
+    return (
+      <li className="px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <time dateTime={event.created_at} className="font-mono text-xs text-muted tabular-nums">
+            {clockTime(event.created_at)}
+          </time>
+          <Badge tone={category.tone}>{category.label}</Badge>
+        </div>
+        <p className="mt-1 text-sm leading-6 break-words">{event.summary}</p>
+      </li>
+    );
+  }
   return (
     <li className="flex items-start gap-3 px-4 py-3 sm:gap-4 sm:px-5">
       <time dateTime={event.created_at} className="shrink-0 pt-0.5 font-mono text-xs text-muted tabular-nums">

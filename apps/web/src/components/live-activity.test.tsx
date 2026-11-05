@@ -72,6 +72,19 @@ describe("LiveActivity", () => {
     expect(within(items[1]).getByText("WhatsApp")).toBeInTheDocument();
   });
 
+  it("in a sidebar, scrolls in its own box and puts each summary under its time and label", () => {
+    state.events = [event({ id: 2, type: "part.captured", summary: "Priya was paid $176.00 on proof of shipping" })];
+
+    render(<LiveActivity scroll />);
+
+    const list = screen.getByRole("list", { name: "Activity, newest first" });
+    expect(list).toHaveAttribute("tabindex", "0");
+    expect(list.className).toContain("overflow-y-auto");
+    const [item] = within(list).getAllByRole("listitem");
+    expect(item).toHaveTextContent("Payment");
+    expect(within(item).getByText("Priya was paid $176.00 on proof of shipping").tagName).toBe("P");
+  });
+
   it("shows an unknown category as its raw name", () => {
     state.events = [event({ type: "mystery.thing", summary: "Something new" })];
 

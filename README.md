@@ -25,12 +25,13 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Each maker is told about her share, in her language.** Once PayPal holds the order, each maker whose share is reserved gets one message in Urdu, Hindi, Spanish or English: the order, the item, how many, her price, the date to ship by, where it goes and how she is paid. Code writes it from a template, so every number is the order's own. It goes on WhatsApp when she has a number, and otherwise to her chat on `/seller-chat` (where the seeded makers' messages appear). A maker no payout rail can reach yet, such as Amina in Pakistan, is asked to wait for us before she ships, rather than promised payment. The receipt says who was told, where and in which language, with a link to her chat; `get_order_status` gives the agent the same; and nobody is told twice. The address is only the buyer's city for now: collecting the street address is still to come.
 - **Snap the receipt, get paid.** A maker whose share PayPal holds sends a photo of her courier receipt, on WhatsApp or in the web chat. The model reads the courier and the tracking number, and she is asked in her language to confirm them; a number it cannot read, she types. Only her "yes" moves money: her share is then captured from the order's one PayPal authorization and paid out, and she is told she is paid. Her tracking then goes on that payment at PayPal, with PayPal's own code for her courier, so the buyer sees it on their PayPal order. A maker no payout rail reaches yet keeps her confirmed tracking and is told she is paid once it does. The receipt page shows each maker's tracking with her receipt photo, and `get_order_status` gives the agent the tracking. In test mode, `/seller-chat` plays a seeded maker: send her receipt photo and reply as her.
 - **A buyer agent you can run.** `python scripts/run_demo_request.py` plays the story through the MCP storefront (search, quote, draft order, approval link) and prints each step; add `--pause` to step through it for a recording, and `--url` to point it at the hosted demo. On `/demo`, "Run the demo request" does the same on the server, a stepper follows it from Search to Approval, and "Reset demo" puts the seeded world back. In sandbox mode both buttons need the `DEMO_RUN_TOKEN`.
-- **A live feed** on `/demo` of everything that happens, and a status page at `/status`: the mode, the database, PayPal's token and the SDK in use.
+- **The whole story on `/demo`, live.** In the story's order: the buyer agent's request, the offer rules and every checked offer, the split, the order and its one PayPal approval, each maker's payment (reserved, told, paid on proof, tracking on PayPal), and the makers' own phones, each showing her order in her language, her courier receipt and her payment as they happen. The live feed of everything that happens sits beside it. In test mode you can play a seeded maker from her phone: send her courier receipt, then say yes in her language.
+- **A status page** at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **28 done, 3 partly done, 27 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **29 done, 3 partly done, 26 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -42,11 +43,11 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | After payment | 31, 32, 33 | | 34 delivery and the end of an order |
 | Trust passports | | 35: signing works, but there is no public key or verify endpoint yet | 36 updates after delivery, 37 materials advance, 38 the tamper check |
 | The order heals itself; guardrails | | | 39, 40 |
-| Pages and design | | | 41 home page, 42 PayPal buttons on stalls, 43 the full demo page, 44 the AG Grid dashboard, 45 design pass |
+| Pages and design | 43 | | 41 home page, 42 PayPal buttons on stalls, 44 the AG Grid dashboard, 45 design pass |
 | Hardening and submission | | | 46–50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the full demo page (43), the judges' README (49) and the hosted deploy, then delivery and the end of an order (34).
+Next: the judges' README (49) and the hosted deploy, then delivery and the end of an order (34).
 
 ## Run it locally
 
