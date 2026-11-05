@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 
 type Recording = { recorder: MediaRecorder; started: number };
 
 /** True when this browser can record from the microphone. Without it, a voice note can still be uploaded. */
 function canRecord(): boolean {
   return typeof window !== "undefined" && "MediaRecorder" in window && !!navigator.mediaDevices?.getUserMedia;
+}
+
+/** Nothing to follow: whether the browser can record does not change while the page is open. */
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
+/**
+ * Whether this browser can record. False on the server, which cannot know, and while the page hydrates, so the
+ * browser's first render matches the server's HTML; the browser's own answer right after.
+ */
+function useCanRecord(): boolean {
+  return useSyncExternalStore(subscribeToNothing, canRecord, () => false);
 }
 
 const BUTTON =
@@ -28,7 +41,7 @@ export function ChatComposer({
   const [recording, setRecording] = useState<Recording | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
-  const [recordable] = useState(canRecord);
+  const recordable = useCanRecord();
   const form = useRef<HTMLFormElement>(null);
 
   useEffect(() => {

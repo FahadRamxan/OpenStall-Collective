@@ -54,6 +54,30 @@ test("events from before the page opened are shown too, newest first", async ({ 
   await expect(items.nth(1)).toContainText(`Earlier event ${stamp}`);
 });
 
+test("back on /demo from another page, the feed shows each event once, and the one missed meanwhile", async ({
+  page,
+  request,
+}) => {
+  // Next.js keeps /demo while the visitor is on another page and shows it again as it was (React's Activity). The
+  // feed used to load its latest events again on top of the same ones: every event twice.
+  const stamp = Date.now();
+  await openLive(page);
+  await recordEvent(request, `Before leaving ${stamp}`);
+  await expect(feed(page).getByText(`Before leaving ${stamp}`)).toBeVisible({ timeout: 3_000 });
+  const before = await feed(page).getByRole("listitem").count();
+  const nav = page.getByRole("navigation", { name: "Main" });
+
+  await nav.getByRole("link", { name: "Seller chat", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Seller chat" })).toBeVisible();
+  await recordEvent(request, `While away ${stamp}`);
+  await nav.getByRole("link", { name: "Demo", exact: true }).click();
+
+  await expect(page.getByRole("status").filter({ hasText: /^Live$/ })).toBeVisible();
+  await expect(feed(page).getByRole("listitem").first()).toContainText(`While away ${stamp}`, { timeout: 3_000 });
+  await expect(feed(page).getByText(`Before leaving ${stamp}`)).toHaveCount(1);
+  await expect(feed(page).getByRole("listitem")).toHaveCount(before + 1);
+});
+
 test("the feed fits a phone and a laptop screen", async ({ page, request }) => {
   const stamp = Date.now();
   for (const summary of [

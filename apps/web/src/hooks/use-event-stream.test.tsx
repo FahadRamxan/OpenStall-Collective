@@ -1,7 +1,8 @@
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { Activity } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EventStreamProvider, MAX_EVENTS, RETRY_MS, useEventStream } from "@/hooks/use-event-stream";
+import { EventStreamProvider, MAX_EVENTS, mergeEvents, RETRY_MS, useEventStream } from "@/hooks/use-event-stream";
 import type { FeedEvent } from "@/lib/events";
 
 /** Stands in for the browser's EventSource, which jsdom lacks. Tests drive it by hand. */
@@ -190,5 +191,66 @@ describe("useEventStream", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     unmount();
     expect(latestStream().readyState).toBe(FakeEventSource.CLOSED);
+  });
+
+  it("back on a page Next.js kept, shows each event once and follows the stream on from the newest", async () => {
+    // Next.js keeps a page the visitor left inside React's <Activity>: hidden, its effects stop and its state stays;
+    // shown again, the effects run again. Loading the latest events again here showed every one of them twice.
+    mockPastEvents([event(1), event(2)]);
+    function Feed() {
+      const { events, connected } = useEventStream();
+      return (
+        <p>
+          feed: {events.map((item) => item.id).join(",")} {connected ? "live" : "connecting"}
+        </p>
+      );
+    }
+    const page = (mode: "visible" | "hidden") => (
+      <Activity mode={mode}>
+        <Feed />
+      </Activity>
+    );
+    const { rerender } = render(page("visible"));
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    act(() => latestStream().open());
+    act(() => latestStream().send(event(3)));
+
+    rerender(page("hidden"));
+    expect(latestStream().readyState).toBe(FakeEventSource.CLOSED);
+    rerender(page("visible"));
+
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
+    expect(latestStream().url).toBe("http://api.test/api/events/stream?after_id=3");
+    expect(screen.getByText("feed: 3,2,1 connecting")).toBeInTheDocument();
+    act(() => latestStream().open());
+    act(() => latestStream().send(event(3)));
+    act(() => latestStream().send(event(4)));
+    expect(screen.getByText("feed: 4,3,2,1 live")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mergeEvents", () => {
+  it("adds the new events newest first, each once", () => {
+    const merged = mergeEvents([event(5), event(2)], [event(3), event(6), event(6), event(2)]);
+
+    expect(merged.map((item) => item.id)).toEqual([6, 5, 3, 2]);
+  });
+
+  it("gives back the same list when nothing is new, so nothing renders again", () => {
+    const current = [event(2), event(1)];
+
+    expect(mergeEvents(current, [event(1), event(2)])).toBe(current);
+    expect(mergeEvents(current, [])).toBe(current);
+  });
+
+  it(`keeps the newest ${MAX_EVENTS}`, () => {
+    const current = Array.from({ length: MAX_EVENTS }, (_, index) => event(MAX_EVENTS - index));
+
+    const merged = mergeEvents(current, [event(MAX_EVENTS + 1)]);
+
+    expect(merged).toHaveLength(MAX_EVENTS);
+    expect(merged[0].id).toBe(MAX_EVENTS + 1);
+    expect(merged.at(-1)?.id).toBe(2);
   });
 });

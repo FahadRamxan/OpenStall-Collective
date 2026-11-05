@@ -39,6 +39,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 - **Line endings are LF** (`.gitattributes`). On Windows write files with the Write or Edit tools, or `write_bytes`, never text-mode writes that produce CRLF.
 - **Never pipe Playwright into `head` or `tail`**: it kills Playwright before it stops its servers on ports 8100 and 3100. If a port is left busy, stop only that uvicorn or next process, by PID, after checking its command line.
 - **Migrations:** a model change needs an Alembic migration (`alembic revision --autogenerate`), and `test_db_migrations` checks they match exactly.
+- **Kept pages:** with Cache Components, Next hides a page the visitor left (React's `<Activity>`) instead of unmounting it: its effects clean up, then run again with the same state when they come back. An effect that adds to state must merge by id (`mergeEvents` in `use-event-stream.ts`). The first render must match the server's HTML: read a browser-only fact (a microphone, `window`) with `useSyncExternalStore` and a server value, as `chat-composer.tsx` does. Each broke once and filled the dev badge with issues.
 
 ## Status (2026-11-05)
 
@@ -104,7 +105,7 @@ Of the 58 build prompts in `../prompt.md`: **29 done, 4 partly done, 25 not star
 | 46 | Security and abuse limits | Not started | |
 | 47 | The whole story, tested end to end, twice | Not started | |
 | 48 | Dress rehearsal on the hosted demo | Not started | |
-| 49 | README and testing instructions for judges | Partly done (first pass, from spec section 9): README "Try it", `docs/judges.md`, docs tests (`scripts/tests/test_docs.py`); the quick start was run from a fresh clone. The hosted demo's address and the sandbox buyer login are added at submission (12, 50) | |
+| 49 | README and testing instructions for judges | Partly done (first pass, from spec section 9): README "Try it", `docs/judges.md`, docs tests (`scripts/tests/test_docs.py`); the quick start was run from a fresh clone. The hosted demo's address and the sandbox buyer login are added at submission (12, 50) | d92a9dd |
 | 50 | Submission kit and release | Not started | |
 | **K** | **More of PayPal** | | |
 | 51 | Fake mode follows the payouts path; a payout rail per maker | Done | cdcf013 |
