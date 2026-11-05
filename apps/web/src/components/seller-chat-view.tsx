@@ -239,7 +239,11 @@ function SellerPicker({
                 <Badge tone={chat.channel === "whatsapp" ? "success" : "accent"}>{CHANNEL_LABELS[chat.channel]}</Badge>
               </span>
               {where ? <span className="mt-0.5 block text-xs text-muted">{where}</span> : null}
-              {chat.last_text ? <span className="mt-1 block truncate text-sm text-muted">{chat.last_text}</span> : null}
+              {chat.last_text ? (
+                <span dir="auto" className="mt-1 block truncate text-sm text-muted">
+                  {chat.last_text}
+                </span>
+              ) : null}
             </Link>
           </li>
         );
@@ -332,7 +336,12 @@ function Bubble({
         {message.media.map((item, index) => (
           <Media key={index} item={item} />
         ))}
-        {message.text ? <p className="break-words whitespace-pre-line">{message.text}</p> : null}
+        {/* dir="auto": a message in Urdu reads right to left, as on her phone, and English left to right. */}
+        {message.text ? (
+          <p dir="auto" className="break-words whitespace-pre-line">
+            {message.text}
+          </p>
+        ) : null}
       </div>
       <time dateTime={message.created_at} className="mt-1 px-1 text-xs text-muted">
         {messageTime(message.created_at)} · {CHANNEL_LABELS[message.channel]}

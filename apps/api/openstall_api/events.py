@@ -54,6 +54,9 @@ class EventType(StrEnum):
     MESSAGE_RECEIVED = "message.received"
     MESSAGE_SENT = "message.sent"
     MESSAGE_TRANSCRIBED = "message.transcribed"
+    # A maker told about her reserved share (notices.py), or why she could not be. The entity is her share.
+    ORDER_NOTICE_SENT = "message.order_notice"
+    ORDER_NOTICE_FAILED = "message.order_notice_failed"
     TRACKING_READ = "tracking.read"
     TRACKING_CONFIRMED = "tracking.confirmed"
     DELIVERY_CONFIRMED = "delivery.confirmed"

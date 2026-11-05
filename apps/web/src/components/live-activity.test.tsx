@@ -54,6 +54,24 @@ describe("LiveActivity", () => {
     expect(items[0].querySelector("time")).toHaveAttribute("datetime", "2026-11-01T10:15:30Z");
   });
 
+  it("labels a message by where it went: the web chat, or WhatsApp", () => {
+    state.events = [
+      event({
+        id: 2,
+        type: "message.order_notice",
+        summary: "Priya was told about her share in the web chat, in Hindi: 11 to ship by November 30",
+        payload: { channel: "web" },
+      }),
+      event({ id: 1, type: "message.received", summary: "Amina sent a photo on WhatsApp", payload: { channel: "whatsapp" } }),
+    ];
+
+    render(<LiveActivity />);
+
+    const items = within(screen.getByRole("list", { name: "Activity, newest first" })).getAllByRole("listitem");
+    expect(within(items[0]).getByText("Web chat")).toBeInTheDocument();
+    expect(within(items[1]).getByText("WhatsApp")).toBeInTheDocument();
+  });
+
   it("shows an unknown category as its raw name", () => {
     state.events = [event({ type: "mystery.thing", summary: "Something new" })];
 

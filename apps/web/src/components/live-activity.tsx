@@ -74,9 +74,15 @@ function LiveDot({ connected }: { connected: boolean }) {
   );
 }
 
-function ActivityItem({ event }: { event: FeedEvent }) {
+/** An event's label. A message in the web chat (a demo phone on /seller-chat) says so rather than "WhatsApp". */
+export function categoryOf(event: FeedEvent): Category {
   const name = eventCategory(event.type);
-  const category = CATEGORIES[name] ?? { label: name, tone: "neutral" };
+  if (name === "message" && event.payload.channel === "web") return { label: "Web chat", tone: "neutral" };
+  return CATEGORIES[name] ?? { label: name, tone: "neutral" };
+}
+
+function ActivityItem({ event }: { event: FeedEvent }) {
+  const category = categoryOf(event);
   return (
     <li className="flex items-start gap-3 px-4 py-3 sm:gap-4 sm:px-5">
       <time dateTime={event.created_at} className="shrink-0 pt-0.5 font-mono text-xs text-muted tabular-nums">

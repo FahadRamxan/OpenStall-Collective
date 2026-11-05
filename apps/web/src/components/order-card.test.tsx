@@ -94,6 +94,48 @@ describe("OrderCard", () => {
     );
   });
 
+  it("once PayPal holds the order, says how many makers have been told, with a link to their chats", async () => {
+    const notice = { state: "sent", channel: "web", language: "ur", at: "2026-11-10T10:06:00Z" };
+    mockOrders([
+      {
+        ...DRAFT,
+        status: "authorized",
+        approved_at: "2026-11-10T10:05:00Z",
+        parts: [
+          { status: "authorized", notice },
+          { status: "captured", notice },
+          { status: "authorized", notice: null },
+          { status: "released", notice: null }, // released before she could be told: not counted
+        ],
+      } as unknown as Order,
+    ]);
+
+    render(<OrderCard />);
+
+    expect(await screen.findByText("Makers told: 2 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See their chats" })).toHaveAttribute("href", "/seller-chat");
+  });
+
+  it("says nothing about makers being told while the order is a draft", async () => {
+    mockOrders([{ ...DRAFT, parts: [{ status: "pending", notice: null }] } as unknown as Order]);
+
+    render(<OrderCard />);
+
+    expect(await screen.findByText("ord_7f3a")).toBeInTheDocument();
+    expect(screen.queryByText(/Makers told/)).not.toBeInTheDocument();
+  });
+
+  it("loads again when a maker is told about her share", async () => {
+    const fetch = mockOrders([DRAFT], [DRAFT]);
+    const view = render(<OrderCard />);
+    expect(await screen.findByText("ord_7f3a")).toBeInTheDocument();
+
+    stream.events = [event(7, "message.order_notice")];
+    view.rerender(<OrderCard />);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
+
   it("says when the latest order cannot be loaded", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 

@@ -18,6 +18,7 @@ from openstall_api.claims import ClaimHeld
 from openstall_api.collective import link_issued
 from openstall_api.db import get_session
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
+from openstall_api.notices import NoticeState, notice_states, notify_order, ship_by
 from openstall_api.orders import server_total
 from openstall_api.payments import OrderNotFound, WrongStatus, reserve_order, seller_rail, start_checkout
 from openstall_api.settings import Settings, get_settings
@@ -38,6 +39,23 @@ class SellerBrief(BaseModel):
     country: str | None
 
 
+class NoticeOut(BaseModel):
+    """Whether the maker was told about her share once PayPal held the order (notices.py)."""
+
+    # sent; sending (on its way to WhatsApp); failed (WhatsApp refused it: tried again when the order is reserved again)
+    state: Literal["sent", "sending", "failed"]
+    channel: Literal["whatsapp", "web"] | None  # where she was told: WhatsApp, or the web chat on /seller-chat
+    language: str | None  # the language she was told in, ISO 639-1
+    at: datetime
+    reason: str | None = None  # why it failed, in words
+
+    @classmethod
+    def of(cls, notice: NoticeState) -> "NoticeOut":
+        return cls(
+            state=notice.state, channel=notice.channel, language=notice.language, at=_utc(notice.at), reason=notice.reason
+        )
+
+
 class PartOut(BaseModel):
     id: str
     reference_id: str
@@ -47,8 +65,10 @@ class PartOut(BaseModel):
     quantity: int
     unit_price_usd: Decimal
     amount_usd: Decimal
-    delivery_date: date | None
+    delivery_date: date | None  # when her share must reach the buyer
+    ship_by: date | None  # when it must leave her: the delivery date less her listing's ship days
     status: PartStatus
+    notice: NoticeOut | None  # whether she was told about her share; None until the order is reserved
     confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
     attention: str | None  # PayPal reported a problem with it, such as a denied payment
     # Who confirms it: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. The page must
@@ -122,7 +142,9 @@ def payout_words(part: OrderPart, settings: Settings) -> tuple[PayoutRail, str, 
     return rail.kind, words, True
 
 
-def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation, settings: Settings) -> PartOut:
+def _part(
+    session: Session, part: OrderPart, paypal: PayPalConfirmation, notice: NoticeState | None, settings: Settings
+) -> PartOut:
     passport = session.get(Passport, part.seller_id)
     payout_rail, payout_label, payout_via_paypal = payout_words(part, settings)
     metrics = passport.metrics_json if passport else None
@@ -139,7 +161,9 @@ def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation, setting
         unit_price_usd=part.unit_price_usd,
         amount_usd=part.amount_usd,
         delivery_date=part.delivery_date,
+        ship_by=ship_by(part),
         status=part.status,
+        notice=NoticeOut.of(notice) if notice else None,
         confirmed_by_paypal=paypal.confirmed,
         attention=paypal.attention,
         confirmation_source="simulated" if settings.OPENSTALL_MODE == "fake" else "paypal_sandbox",
@@ -160,6 +184,7 @@ def _part(session: Session, part: OrderPart, paypal: PayPalConfirmation, setting
 def order_out(session: Session, order: Order) -> OrderOut:
     settings = get_settings()
     paypal = confirmations(session, order.parts)
+    notices = notice_states(session, order.parts)
     issued = link_issued(session, order.id)
     request = order.request
     items = request.items_json if request else []
@@ -192,7 +217,7 @@ def order_out(session: Session, order: Order) -> OrderOut:
             if issued is not None
             else None
         ),
-        parts=[_part(session, part, paypal[part.id], settings) for part in order.parts],
+        parts=[_part(session, part, paypal[part.id], notices.get(part.id), settings) for part in order.parts],
     )
 
 
@@ -297,10 +322,14 @@ def checkout(order_id: str, session: SessionDep, registry: RegistryDep) -> Check
 
 @router.post("/orders/{order_id}/reserve")
 def reserve(order_id: str, session: SessionDep, registry: RegistryDep, background: BackgroundTasks) -> OrderOut:
-    """The human is back from PayPal: reserve the whole order, once. Safe to call again; it changes nothing then."""
+    """The human is back from PayPal: reserve the whole order, once. Safe to call again; it changes nothing then.
+
+    Once it is reserved, each maker is told about her share (notices.py), after the answer is sent, so WhatsApp never
+    slows the receipt. Calling it again tells any maker who could not be reached before, and nobody twice."""
     with payment_errors():
         reserve_order(session, order_id, registry.payment_gateway)
     session.commit()
+    background.add_task(notify_order, order_id, lambda: registry.messenger)
     background.add_task(deliver_fake_webhooks)  # fake mode: PayPal's confirmations follow, as they would for real
     return order_out(session, _load(session, order_id))
 

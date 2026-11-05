@@ -8,7 +8,7 @@ plans the split (quotes.py); create_collective_order turns the plan into a draft
 can reserve, capture or pay out money, and none takes a price or a total from an agent: checkout gives the link a person approves on, and get_order_status only reads (tests/test_no_tool_moves_money.py calls every tool).
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from functools import partial
 from typing import Annotated
@@ -30,6 +30,7 @@ from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_
 from openstall_api.collective import DraftOrder
 from openstall_api.db import new_session, session_scope
 from openstall_api.models import OrderStatus, Passport
+from openstall_api.notices import notice_states, ship_by
 from openstall_api.orders import server_total
 from openstall_api.orders_api import payout_words
 from openstall_api.passports import TrustCard, trust_card
@@ -363,6 +364,11 @@ class ShareStatus(BaseModel):
     quantity: int
     status: str = Field(description="pending, authorized (reserved at PayPal), captured (paid), delivered or released.")
     status_words: str
+    ship_by: date | None = Field(description="When her share must leave her to arrive by its delivery date.")
+    told_at: datetime | None = Field(
+        description="When OpenStall told her about her share, in her language, on WhatsApp or in the web chat. "
+        "None until the order is approved, or while she cannot be reached."
+    )
     carrier: str | None = Field(description="Her courier, once she has sent the tracking.")
     tracking_number: str | None
     payout_rail: str = Field(description="How she is paid: paypal, venmo, hyperwallet, or unavailable.")
@@ -424,8 +430,9 @@ def get_order_status(
     """An order's status and each maker's share. It only reads: it never spends money and changes no order.
 
     For each share: her units, where her payment stands (reserved at PayPal, captured when she proved she shipped,
-    or released if she could not deliver), her courier and tracking number once she has sent them, and how she is
-    paid. In test mode PayPal is simulated, and the answer says so.
+    or released if she could not deliver), when it must leave her and when she was told about it, her courier and
+    tracking number once she has sent them, and how she is paid. In test mode PayPal is simulated, and the answer
+    says so.
     """
     settings = get_settings()
     with new_session() as session:
@@ -433,9 +440,11 @@ def get_order_status(
             order = collective.load_order(session, order_id)
         except collective.DraftError as error:
             raise ToolError(str(error)) from None
+        notices = notice_states(session, order.parts)
         shares = []
         for part in order.parts:
             rail, words, via_paypal = payout_words(part, settings)
+            notice = notices.get(part.id)
             shares.append(
                 ShareStatus(
                     seller_id=part.seller_id,
@@ -443,6 +452,8 @@ def get_order_status(
                     quantity=part.quantity,
                     status=part.status.value,
                     status_words=collective.PART_STATUS_WORDS[part.status],
+                    ship_by=ship_by(part),
+                    told_at=_utc(notice.at) if notice and notice.state == "sent" else None,
                     carrier=part.carrier,
                     tracking_number=part.tracking_number,
                     payout_rail=rail,
@@ -460,6 +471,11 @@ def get_order_status(
             shares=shares,
             simulated=settings.OPENSTALL_MODE == "fake",
         )
+
+
+def _utc(moment: datetime) -> datetime:
+    """SQLite drops the zone; we always store UTC, so say so."""
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 def storefront_http_app(settings: Settings) -> Starlette:

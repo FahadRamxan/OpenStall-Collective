@@ -7,14 +7,16 @@ import { useEffect, useState } from "react";
 import { Badge, type BadgeTone } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
 import { ApiError, errorMessage } from "@/lib/api";
-import { formatUsd, place } from "@/lib/catalog";
+import { formatUsd, languageName, place } from "@/lib/catalog";
 import {
   PART_STATUS_LABELS,
   authorizationSentence,
+  awaitingNotices,
   confirmedWords,
   formatDay,
   getOrder,
   isSimulated,
+  noticeChannel,
   reserveOrder,
   simulateProof,
   type Order,
@@ -83,9 +85,11 @@ export function ReturnView() {
     return () => controller.abort();
   }, [orderId, attempt]);
 
-  // PayPal confirms each share with a webhook a moment later: look again until every one has arrived.
+  // PayPal confirms each share with a webhook a moment later, and each maker is told about her share just after the
+  // reservation: look again until every confirmation and every message is in.
   useEffect(() => {
-    if (load.state !== "reserved" || !awaitingPayPal(load.order) || polls >= MAX_POLLS) return;
+    if (load.state !== "reserved" || polls >= MAX_POLLS) return;
+    if (!awaitingPayPal(load.order) && !awaitingNotices(load.order)) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       getOrder(orderId, { signal: controller.signal })
@@ -216,6 +220,7 @@ function Receipt({
           </span>
         )}
       </p>
+      <MakersTold order={order} />
 
       <section aria-labelledby="receipt-heading" className="mt-8">
         <h2 id="receipt-heading" className="text-xl font-semibold tracking-tight">
@@ -236,11 +241,12 @@ function Receipt({
                   </p>
                   <p className="mt-0.5 text-sm text-muted">
                     {part.quantity} × {formatUsd(part.unit_price_usd)}
-                    {part.delivery_date ? ` · ships by ${formatDay(part.delivery_date)}` : null}
+                    {shipDates(part)}
                   </p>
                   <div className="mt-2">
                     <RailChip part={part} />
                   </div>
+                  <NoticeLine part={part} />
                   {simulated && part.status === "authorized" ? (
                     <SimulateProof part={part} onOrder={onOrder} />
                   ) : null}
@@ -276,6 +282,84 @@ function Receipt({
         {backToOrder}
       </div>
     </div>
+  );
+}
+
+/**
+ * " · ships by December 1, 2026, arrives by December 10, 2026": when her share must leave her, and when it must reach
+ * the buyer. Without a ship-by date from the API, the delivery date alone.
+ */
+function shipDates(part: OrderPart): string {
+  const leaves = part.ship_by ?? part.delivery_date;
+  if (!leaves) return "";
+  const arrives =
+    part.delivery_date && part.ship_by && part.ship_by !== part.delivery_date
+      ? `, arrives by ${formatDay(part.delivery_date)}`
+      : "";
+  return ` · ships by ${formatDay(leaves)}${arrives}`;
+}
+
+/** Under the PayPal line: whether every maker has been told about her share yet. */
+function MakersTold({ order }: { order: Order }) {
+  // Only shares PayPal holds or paid are told; and only an API that reports notices says anything here.
+  const shares = order.parts.filter(
+    (part) => part.notice !== undefined && part.status !== "pending" && part.status !== "released",
+  );
+  if (shares.length === 0) return null;
+  const told = shares.filter((part) => part.notice?.state === "sent").length;
+  const unreachable = shares.filter((part) => part.notice?.state === "failed").map((part) => part.seller.name);
+  if (told === shares.length) {
+    return (
+      <p role="status" className="mt-1 text-sm font-medium text-success">
+        Each maker has been told about her share, in her own language.
+      </p>
+    );
+  }
+  return (
+    <p role="status" className="mt-1 text-sm font-medium text-muted">
+      {unreachable.length > 0
+        ? `${told} of ${shares.length} makers told. Not reached yet: ${unreachable.join(", ")}.`
+        : "Telling each maker about her share…"}
+    </p>
+  );
+}
+
+/** Whether she was told about her share: where, in which language, and a link to her chat. */
+function NoticeLine({ part }: { part: OrderPart }) {
+  const notice = part.notice;
+  if (!notice) {
+    return part.notice === null && part.status === "authorized" ? (
+      <p className="mt-2 text-xs text-muted">Telling her about her share…</p>
+    ) : null;
+  }
+  if (notice.state === "sending") {
+    return <p className="mt-2 text-xs text-muted">Telling her about her share {noticeChannel(notice)}…</p>;
+  }
+  if (notice.state === "failed") {
+    return (
+      <p className="mt-2 text-xs font-semibold text-danger">
+        Not told yet: {notice.reason ?? "WhatsApp did not take the message"}. OpenStall tries again when this page is
+        opened again.
+      </p>
+    );
+  }
+  const language = languageName(notice.language);
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs">
+      <span className="inline-flex items-center gap-1 font-semibold text-success">
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.5" className="size-3.5">
+          <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Told {noticeChannel(notice)}
+        {language ? `, in ${language}` : null}
+      </span>
+      <Link
+        href={`/seller-chat?seller=${encodeURIComponent(part.seller.id)}`}
+        className="font-semibold text-accent underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        See {part.seller.name}&apos;s chat
+      </Link>
+    </p>
   );
 }
 

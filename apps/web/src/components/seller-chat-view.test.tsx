@@ -163,6 +163,45 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(await screen.findByText("Mirror work too")).toBeInTheDocument();
   });
 
+  it("her order, told in Urdu, reads right to left, and arrives without reloading", async () => {
+    const urdu = "السلام علیکم Amina! OpenStall سے آپ کے لیے ایک نیا آرڈر آیا ہے۔\n\nآرڈر: ord_demo\nتعداد: 12";
+    const told: Conversation = {
+      ...CONVERSATION,
+      messages: [
+        ...CONVERSATION.messages,
+        { id: "cm_4", direction: "outbound", channel: "web", text: urdu, media: [], created_at: "2026-11-10T10:06:00Z" },
+      ],
+    };
+    const conversations = [CONVERSATION, told];
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json(CHATS),
+        "GET /api/chats/s_amina": () => Response.json(conversations.length > 1 ? conversations.shift() : conversations[0]),
+      }),
+    );
+    const { rerender } = render(<SellerChatView />);
+    await screen.findByRole("list", { name: "Messages with Amina" });
+
+    // The notice event is a message.* event, so the chat looks again.
+    stream.events = [
+      {
+        id: 8,
+        type: "message.order_notice",
+        entity_id: "op_001",
+        summary: "Amina was told about her share in the web chat, in Urdu: 12 to ship by December 1",
+        payload: { channel: "web" },
+        created_at: "2026-11-10T10:06:00Z",
+      },
+    ];
+    rerender(<SellerChatView />);
+
+    const text = await screen.findByText(/آرڈر: ord_demo/);
+    expect(text).toHaveAttribute("dir", "auto");
+    // Her own words too, in the bubble and in the sellers list's preview.
+    for (const words of screen.getAllByText("Here is my cushion")) expect(words).toHaveAttribute("dir", "auto");
+  });
+
   it("an unknown seller says so", async () => {
     search.params = new URLSearchParams("seller=s_nobody");
     vi.stubGlobal("fetch", api({ "GET /api/chats": () => Response.json(CHATS) }));

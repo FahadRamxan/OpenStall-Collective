@@ -23,8 +23,13 @@ export type OrderPart = {
   quantity: number;
   unit_price_usd: string;
   amount_usd: string;
+  /** When her share must reach the buyer. */
   delivery_date: string | null;
+  /** When it must leave her: the delivery date less her listing's ship days. */
+  ship_by?: string | null;
   status: PartStatus;
+  /** Whether she was told about her share once PayPal held the order; null until then. */
+  notice?: PartNotice | null;
   /** A verified PayPal webhook confirmed this share's status. */
   confirmed_by_paypal: boolean;
   /** PayPal reported a problem with this share, such as a denied payment. */
@@ -50,6 +55,39 @@ export type OrderPart = {
 
 /** How a maker is paid once her share is captured (spec 3.5a). "unavailable": no rail can reach her yet. */
 export type PayoutRail = "paypal" | "venmo" | "hyperwallet" | "unavailable";
+
+/**
+ * The message telling a maker about her share: sent (in her language, on WhatsApp or in the web chat), sending (on its
+ * way to WhatsApp), or failed (WhatsApp refused it; OpenStall tries again when the order is reserved again).
+ */
+export type PartNotice = {
+  state: "sent" | "sending" | "failed";
+  channel: "whatsapp" | "web" | null;
+  /** The language she was told in, such as "ur". */
+  language: string | null;
+  at: string;
+  reason?: string | null;
+};
+
+const NOTICE_CHANNELS = { whatsapp: "on WhatsApp", web: "in the web chat" } as const;
+
+/** Where she was told, in words: "on WhatsApp" or "in the web chat". */
+export function noticeChannel(notice: PartNotice): string {
+  return notice.channel ? NOTICE_CHANNELS[notice.channel] : "on WhatsApp";
+}
+
+/**
+ * Shares whose maker is still to be told: reserved, and with no notice yet or one on its way. Only once the API says
+ * (an order from an API without notices waits for nothing).
+ */
+export function awaitingNotices(order: Order): boolean {
+  return order.parts.some(
+    (part) =>
+      part.status === "authorized" &&
+      part.notice !== undefined &&
+      (part.notice === null || part.notice.state === "sending"),
+  );
+}
 
 export type ConfirmationSource = "paypal_sandbox" | "simulated";
 
@@ -89,9 +127,14 @@ export async function getLatestOrder(init: RequestInit = {}): Promise<Order | nu
   return latest ?? null;
 }
 
-/** Events after which the latest order may read differently: an order or one of its shares changed. */
+/**
+ * Events after which the latest order may read differently: an order or one of its shares changed, or a maker was
+ * told about her share (or could not be).
+ */
 export function changesOrders(event: FeedEvent): boolean {
-  return event.type.startsWith("order.") || event.type.startsWith("part.");
+  return (
+    event.type.startsWith("order.") || event.type.startsWith("part.") || event.type.startsWith("message.order_notice")
+  );
 }
 
 export function getOrder(id: string, init: RequestInit = {}): Promise<Order> {

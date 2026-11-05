@@ -235,6 +235,96 @@ describe("ReturnView", () => {
     expect(screen.getByText("PayPal confirmed every share.")).toBeInTheDocument();
   });
 
+  it("says each maker was told about her share, where and in which language, with a link to her chat", async () => {
+    const told: Order = {
+      ...RESERVED,
+      parts: [
+        {
+          ...RESERVED.parts[0],
+          ship_by: "2026-12-01",
+          notice: { state: "sent", channel: "web", language: "ur", at: "2026-11-10T10:06:00Z" },
+        },
+        {
+          ...RESERVED.parts[1],
+          ship_by: "2026-11-30",
+          notice: { state: "sent", channel: "whatsapp", language: "hi", at: "2026-11-10T10:06:01Z" },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(told)));
+
+    render(<ReturnView />);
+
+    expect(
+      await screen.findByText("Each maker has been told about her share, in her own language."),
+    ).toBeInTheDocument();
+    const rows = within(screen.getByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("12 × $18.00 · ships by December 1, 2026, arrives by December 10, 2026");
+    expect(rows[0]).toHaveTextContent("Told in the web chat, in Urdu");
+    expect(within(rows[0]).getByRole("link", { name: "See Amina's chat" })).toHaveAttribute(
+      "href",
+      "/seller-chat?seller=s_amina",
+    );
+    expect(rows[1]).toHaveTextContent("ships by November 30, 2026, arrives by December 10, 2026");
+    expect(rows[1]).toHaveTextContent("Told on WhatsApp, in Hindi");
+  });
+
+  it("looks again until each maker has been told", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const waiting: Order = { ...RESERVED, parts: RESERVED.parts.map((part) => ({ ...part, notice: null })) };
+    const told: Order = {
+      ...RESERVED,
+      parts: RESERVED.parts.map((part) => ({
+        ...part,
+        notice: { state: "sent" as const, channel: "web" as const, language: "ur", at: "2026-11-10T10:06:00Z" },
+      })),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => Promise.resolve(Response.json(waiting)))
+      .mockImplementation(() => Promise.resolve(Response.json(told)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReturnView />);
+
+    expect(await screen.findByText("Telling each maker about her share…")).toBeInTheDocument();
+    expect(screen.getAllByText("Telling her about her share…")).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(RECEIPT_POLL_MS);
+
+    expect(
+      await screen.findByText("Each maker has been told about her share, in her own language."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Told in the web chat, in Urdu/)).toHaveLength(2);
+    expect(fetchMock.mock.calls[1][0]).toBe("http://api.test/api/orders/ord_demo");
+    vi.useRealTimers();
+  });
+
+  it("says which maker WhatsApp could not reach yet, and that OpenStall tries again", async () => {
+    const reason = "Twilio refused the message (400): not a WhatsApp number";
+    const failed: Order = {
+      ...RESERVED,
+      parts: [
+        {
+          ...RESERVED.parts[0],
+          notice: { state: "sent", channel: "web", language: "ur", at: "2026-11-10T10:06:00Z" },
+        },
+        {
+          ...RESERVED.parts[1],
+          notice: { state: "failed", channel: "whatsapp", language: null, at: "2026-11-10T10:06:01Z", reason },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(failed)));
+
+    render(<ReturnView />);
+
+    expect(await screen.findByText("1 of 2 makers told. Not reached yet: Priya.")).toBeInTheDocument();
+    const rows = within(screen.getByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(rows[1]).toHaveTextContent(
+      `Not told yet: ${reason}. OpenStall tries again when this page is opened again.`,
+    );
+    expect(within(rows[1]).queryByRole("link", { name: /chat/ })).not.toBeInTheDocument();
+  });
+
   it("says there is no order when the API does not know the id", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "No." }, { status: 404 })));
 

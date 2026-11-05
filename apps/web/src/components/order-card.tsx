@@ -61,6 +61,7 @@ export function OrderCard() {
               ? "A person approves it before anything is reserved: PayPal then holds the total, and each maker is paid when she ships."
               : "Approved. Each maker's share is paid when she proves she shipped."}
           </p>
+          <MakersTold order={order} />
           {order.approval_link ? (
             <p className="mt-3 rounded-lg bg-accent-soft px-3 py-2 text-sm leading-6">
               <span className="font-semibold">Approval link sent to the human:</span>{" "}
@@ -86,5 +87,28 @@ export function OrderCard() {
         </p>
       )}
     </section>
+  );
+}
+
+/** Once PayPal holds the order: how many makers have been told about their share, with a link to their chats. */
+function MakersTold({ order }: { order: Order }) {
+  const shares = order.parts.filter(
+    (part) => part.notice !== undefined && part.status !== "pending" && part.status !== "released",
+  );
+  if (shares.length === 0) return null;
+  const told = shares.filter((part) => part.notice?.state === "sent").length;
+  return (
+    <p className="mt-3 text-sm leading-6">
+      <span className="font-semibold">
+        Makers told: {told} of {shares.length}
+      </span>
+      , each in her own language, on WhatsApp or in the web chat.{" "}
+      <Link
+        href="/seller-chat"
+        className="font-semibold text-accent underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        See their chats
+      </Link>
+    </p>
   );
 }
