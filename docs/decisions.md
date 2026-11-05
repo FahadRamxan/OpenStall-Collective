@@ -610,3 +610,12 @@ Code: `apps/api/openstall_api/radar.py`, `dashboard_api.py`, and `apps/web/src/c
 - **Matched by craft, not by the item.** The last word of a search is usually the item ("mug", "runner"), which no maker sells, or Radar would not have it; the words before it say how it is made ("embroidered"). So a group goes to the maker whose listing shares the most of those, the most trusted on a tie: for the seeded "embroidered table runner", all five makers embroider, and Noor's trust score is the highest. A group no maker shares a word with has no one to tip: "Nobody sells them."
 - **Seeded searches, marked.** The demo world seeds 37 searches that found nothing over the last six days (23 for ceramic mugs, story step 13), with `filters_json.data_source` `seeded_demo`; the dashboard says how many of a group are seeded, and `GET /api/searches` leaves them out, as they are not agents' searches.
 - **A tip once a week, in her language.** Sent where she chats (WhatsApp or the web chat) from a template in her language, the searched words as agents typed them; `radar.tip_sent` marks it, so the same group is not sent again that week. In sandbox mode it needs the demo token, as it messages a real maker.
+
+## November 6: the home page (prompt 41)
+
+Code: `apps/web/src/app/page.tsx`, `src/components/home-numbers.tsx`, and `GET /api/overview` in `apps/api/openstall_api/dashboard_api.py`.
+
+- **Built from spec 3.9: prompt.md was not on hand.** "/: What OpenStall is, and a link to the live demo." The page from prompts 02 and 06 already had both, with the makers and who it is for; it now leads a judge into each part.
+- **How it works, each step where it can be seen.** Six steps of the story, each linking to the panel that shows it working (`/seller-chat`, the panels of `/demo` by their headings, `/dashboard`), so the page is a map of the demo rather than a promise.
+- **Numbers, not claims.** A row of stat tiles from `GET /api/overview`: makers with a live listing, orders approved, what makers were paid on proof (exact, summed in `Decimal`), parcels delivered, and agents' searches this week (Demand Radar's seeded searches left out). Test mode says the payments are simulated and the seeded makers are demo data. Labels in sentence case, values in the same sans, no tabular figures.
+- **For AI agents and built on PayPal.** The MCP address with a copy button, `catalog.json`, `llms.txt` and the passports' public key; the PayPal pieces in one line each, and the code on GitHub (`src/lib/links.ts`, shared with the status page).

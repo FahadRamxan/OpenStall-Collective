@@ -48,3 +48,28 @@ test("the footer shows the browser can reach the API", { tag: "@smoke" }, async 
   // Proves NEXT_PUBLIC_API_BASE_URL and the API's CORS setting (WEB_BASE_URL) fit together.
   await expect(page.getByRole("contentinfo").getByRole("status")).toHaveText("API online");
 });
+
+test("the numbers right now, and how it works, each step linking to where it can be seen", async ({ page }) => {
+  const numbers = page.getByRole("region", { name: "Right now on OpenStall" });
+  await expect(numbers.getByText("Makers with a live listing")).toBeVisible();
+  await expect(numbers.getByText("Paid to makers on proof")).toBeVisible();
+  await expect(numbers.getByText(/Test mode: PayPal is simulated/)).toBeVisible();
+
+  const steps = page.getByRole("region", { name: "How it works" }).getByRole("listitem");
+  await expect(steps).toHaveCount(6);
+  await steps.filter({ hasText: "Each maker is paid on proof" }).getByRole("link", { name: "See the payments" }).click();
+
+  await expect(page).toHaveURL(/\/demo#payments-heading$/);
+  await expect(page.getByRole("heading", { level: 2, name: "Payments" })).toBeVisible();
+});
+
+test("AI agents get the MCP address and the feeds, and the PayPal pieces are named", async ({ page }) => {
+  const agents = page.getByRole("region", { name: "For AI agents" });
+  await expect(agents.getByText(/\/mcp$/)).toBeVisible();
+  await expect(agents.getByRole("link", { name: "catalog.json" })).toHaveAttribute("href", /\/catalog\.json$/);
+  await expect(agents.getByRole("link", { name: "llms.txt" })).toHaveAttribute("href", /\/llms\.txt$/);
+
+  const paypal = page.getByRole("region", { name: "Built on PayPal" });
+  await expect(paypal.getByText("Orders v2, intent AUTHORIZE")).toBeVisible();
+  await expect(paypal.getByRole("link", { name: "Read the code on GitHub" })).toBeVisible();
+});

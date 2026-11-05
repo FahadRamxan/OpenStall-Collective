@@ -12,8 +12,7 @@ import {
   type PaymentState,
   type StatusReport,
 } from "@/lib/api";
-
-const REPO_URL = "https://github.com/FahadRamxan/OpenStall-Collective";
+import { REPO_URL } from "@/lib/links";
 
 /** How long to wait for /api/status, so a hung API or a slow cold start cannot leave the page loading. */
 export const STATUS_TIMEOUT_MS = 10_000;
