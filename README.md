@@ -4,6 +4,63 @@ OpenStall Collective lets small sellers who only use WhatsApp sell to AI shoppin
 
 Built for the PayPal AI Hackathon. Everything runs in the PayPal sandbox, or in test mode on a simulated PayPal; no real money moves. It is still being built: [What works today](#what-works-today) and [Build progress](#build-progress) say what runs now and what does not yet, such as turning a seller's photos and voice notes into a listing.
 
+## Try it (for judges)
+
+**The hosted demo is not live yet.** It will be at https://openstall-collective.onrender.com, on PayPal's sandbox, before judging; this section will say so when it is. Until then, run it on your machine in test mode, which needs no keys and no accounts.
+
+### Run it in test mode (about five minutes)
+
+You need Python 3.11 or newer, Node 24.15 or newer (or 26; not 25), and git. In a terminal:
+
+```bash
+git clone https://github.com/FahadRamxan/OpenStall-Collective.git
+cd OpenStall-Collective
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+python scripts/seed_demo.py --reset --with-amina --demo-order
+uvicorn openstall_api.main:app --port 8000
+```
+
+On Windows PowerShell, activate the virtual environment with `.venv\Scripts\Activate.ps1` and copy the settings with `copy .env.example .env`. The `.env` starts in test mode (`OPENSTALL_MODE=fake`): a simulated PayPal, WhatsApp and AI model stand in for the real ones, the same on every run, and every page says so.
+
+Leave the API running, and in a second terminal, from the same folder:
+
+```bash
+cd apps/web
+npm ci
+npm run dev
+```
+
+Then open **http://localhost:3000/demo**.
+
+### Walk the story
+
+[docs/judges.md](docs/judges.md) walks you through it step by step, with what you should see at each one. In short, on `/demo`:
+
+1. **Run the demo request.** A scripted buyer agent asks OpenStall's MCP storefront for 40 hand-embroidered cushion covers at most $30 each. Five makers' agents make offers; code refuses two prices over the buyer's maximum and the agents come back under it; plain code splits the order 12 / 11 / 10 / 7 across four makers, $815.00.
+2. **Open its approval page**, and approve it on the simulated PayPal page. PayPal only holds the $815.00: nothing is taken yet.
+3. **Back on `/demo`**, each maker's phone shows her order in her own language: Urdu, Hindi, Spanish, English.
+4. **Play Priya from her phone:** send her courier receipt, then reply "हाँ" when OpenStall reads the tracking number back to her. Her share is captured and paid out, and her tracking goes on the PayPal order. Amina, in Pakistan, is told to wait instead: no payout rail reaches Pakistan yet.
+
+The same walkthrough runs as an automated browser test on every change (`apps/web/e2e/live-demo.spec.ts`).
+
+### Use your own AI agent
+
+The API's MCP storefront is at **http://localhost:8000/mcp** (Streamable HTTP). Point any MCP client at it, or use the two included ones, from the repo folder with the virtual environment active:
+
+```bash
+python scripts/try_mcp.py "cushion covers"
+python scripts/run_demo_request.py
+```
+
+The first searches the listings. The second plays the buyer agent's whole request (search, quote, draft order, approval link) and prints each step; open the link it prints to approve the order. No tool can approve, reserve, capture, refund or pay out: a person approves every order.
+
+### On PayPal's sandbox
+
+Set `OPENSTALL_MODE=sandbox` in `.env`, with a PayPal sandbox REST app's `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` (and `ANTHROPIC_API_KEY` for the AI agents). Approving an order then goes to PayPal's sandbox checkout, where you sign in as a sandbox personal account from your PayPal Developer Dashboard. `/status` shows which services are connected and names any missing key. In sandbox mode the seeded makers cannot be played from `/demo` (test-mode controls are off); a maker proves she shipped from her own WhatsApp or web chat.
+
 ## What works today
 
 Being built step by step; each step is tested, wired into the web app, tested in a browser, then pushed.
@@ -29,9 +86,35 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **A status page** at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
+## How it uses PayPal
+
+Pay-on-proof, on the payouts path (one platform order, each maker paid separately), proven step by step on PayPal's real sandbox ([docs/day-one-checks.md](docs/day-one-checks.md)):
+
+- **Orders v2, intent AUTHORIZE:** one PayPal order for the whole collective order, with each maker's share as an item, so approving it only reserves the money.
+- **Payments:** a partial capture of each maker's share when she proves she shipped (`final_capture` on the last), and a void of whatever is left when a share is released.
+- **Payouts:** each maker paid on her payout rail, PayPal or, for a US maker, Venmo (simulated on the sandbox, which refuses Venmo payouts).
+- **Order tracking:** each maker's tracking number and courier attached to her capture on the PayPal order.
+- **Webhooks:** every event verified with PayPal (`verify-webhook-signature`) and applied exactly once.
+- **APIMatic's PayPal Python SDK** for every Orders and Payments call ([below](#built-with-apimatics-paypal-context-plugin)). Every write carries an idempotency key made from our own ids, and is never resent blindly.
+
+## How it uses AI, and where code decides
+
+- **Buyer agents** shop through an MCP storefront: search, product and trust cards, quotes, a draft collective order, an approval link, and order status. None of the tools can move money.
+- **Seller agents** (Claude in sandbox mode) propose each maker's price and a sentence to the buyer. Code checks every price against her limits and the buyer's maximum, and refuses one that breaks a limit, whatever the buyer wrote.
+- **The split** is plain code: cheapest valid offers first, each maker up to what she can make by the deadline. Claude explains it in two or three sentences, and code checks every number in them against the plan.
+- **Courier receipts** are read by Claude with vision: the courier and the tracking number. Code checks the number, and the maker confirms it before anything is paid.
+- **Messages to makers** are written by code from templates in her language, because they carry the numbers she acts on.
+
+## What is simulated, and what is not built yet
+
+- **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
+- **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
+- **Not connected yet:** payouts to Pakistan (Amina's share stays reserved), and a buyer's street address (makers are told the buyer's city).
+- **Not built yet:** turning a seller's photos and voice notes into a listing over WhatsApp, a real AI agent as the buyer, delivery and passports that update, the order that heals itself when a maker drops out, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
+
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **29 done, 3 partly done, 26 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 5: **29 done, 4 partly done, 25 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -44,14 +127,14 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Trust passports | | 35: signing works, but there is no public key or verify endpoint yet | 36 updates after delivery, 37 materials advance, 38 the tamper check |
 | The order heals itself; guardrails | | | 39, 40 |
 | Pages and design | 43 | | 41 home page, 42 PayPal buttons on stalls, 44 the AG Grid dashboard, 45 design pass |
-| Hardening and submission | | | 46–50 |
+| Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the judges' README (49) and the hosted deploy, then delivery and the end of an order (34).
+Next: the hosted demo, then delivery and the end of an order (34).
 
-## Run it locally
+## Run it locally, in more detail
 
-You need Python 3.11 or newer.
+[Try it](#try-it-for-judges) has the quickest way in. This section is for working on the code. You need Python 3.11 or newer.
 
 ```bash
 python -m venv .venv
@@ -118,7 +201,7 @@ It runs `pytest`, then `mypy --strict` on the PayPal package, then, in `apps/web
 - Web app: https://openstall-collective.onrender.com
 - API: https://openstall-collective-api.onrender.com (its health check is `/health`)
 
-These addresses work once the blueprint is created. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false`; leave the ones you do not have yet empty. The API starts in fake mode. Once the PayPal sandbox keys are set, change `OPENSTALL_MODE` to `sandbox` in the dashboard. If Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` to match.
+These addresses work once the blueprint is created; it is not created yet. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false`; leave the ones you do not have yet empty. The API starts in fake mode. Once the PayPal sandbox keys are set, change `OPENSTALL_MODE` to `sandbox` in the dashboard. If Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` to match.
 
 Both services run on Starter and the database on basic-256mb. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](docs/decisions.md)).
 

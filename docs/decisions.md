@@ -458,3 +458,13 @@ Code: `apps/web/src/app/demo/page.tsx`, `components/payments-panel.tsx`, `maker-
 - **The makers' phones.** Each maker of the latest order, as she sees OpenStall on her own phone: her messages on the right, OpenStall's on the left, in her language, right to left for Urdu. A phone shows her latest 8 messages and scrolls itself, never the page; her whole chat is one link away. In test mode a seeded maker can be played from her phone: "Send her courier receipt" while her share waits for proof, and "Reply" with yes in her language (ہاں, हाँ, Sí, Yes) while OpenStall asks her to confirm. Both take the path a real message takes (prompt 32).
 - **One copy of the latest order.** Payments and the phones share it (`LatestOrderProvider`), loaded again when the event stream says an order, a share, a notice or a tracking changed; the phones also look again on any message.
 - **Not on the page yet:** the trust passports' tamper check (prompt 38) and Demand Radar. They are not built, so the page does not pretend they are.
+
+## November 5: the README and a walkthrough for judges (prompt 49, a first pass)
+
+Code: `README.md` ("Try it", "How it uses PayPal", "How it uses AI, and where code decides", "What is simulated, and what is not built yet"), `docs/judges.md`, the page table in `apps/web/README.md`, and `scripts/tests/test_docs.py`.
+
+- **Built from the spec: prompt.md was not on hand.** Spec section 9: "A judge can open the hosted demo, or run the repo from the README"; and the plan's submission checklist.
+- **Test mode first.** The hosted demo is not up yet (it waits for a Render account), so the README says so plainly and leads with a five-minute run in test mode, which needs no keys and no accounts. Its commands were followed word for word from a fresh clone of `main` on November 5 (Python 3.13, Node 26.13, on Windows): install, seed, both servers, and both MCP scripts.
+- **One walkthrough, tested two ways.** `docs/judges.md` takes a judge through the story on /demo, with what to expect at each step. `apps/web/e2e/live-demo.spec.ts` follows the same steps in a browser on every change, and `scripts/tests/test_docs.py` checks the docs against the code: every link and anchor resolves, every script and flag a judge runs exists, the Python and Node versions are the project's own, and every button the walkthrough names is in the web app.
+- **Honest about limits.** The README says what test mode simulates, which data is seeded, and what is not built yet; the walkthrough shows Amina's unpaid share as it is.
+- **Left for submission (prompts 12 and 50):** the hosted demo's address once it is live, and the sandbox buyer login, which goes in the README only then (CLAUDE.md, Secrets).

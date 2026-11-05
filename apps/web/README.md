@@ -1,6 +1,19 @@
 # Web app
 
-The Next.js site for OpenStall Collective (spec section 3.9). So far it has the shared layout, the home page `/`, a system status page `/status` (the API's mode, fake or sandbox, and the state of each outside service, linked from the footer), placeholder pages for `/demo`, `/seller-chat` and `/dashboard`, and a "Page not found" page for every other address. The stall and approval pages come in later build steps.
+The Next.js site for OpenStall Collective (spec section 3.9):
+
+| Page | What it is |
+|---|---|
+| `/` | What OpenStall is, the makers' stalls, and the way to the live demo |
+| `/demo` | The whole story, live: the buyer agent's request, the offers and how code checks them, the split, the order and its approval, each maker's payment, the makers' phones, and the live feed |
+| `/stall/{id}` | A maker's stall: her listing, photos, trust record, and links for AI agents |
+| `/approve/{order}` | Where a person approves an order an agent drafted, then the receipt (`/approve/{order}/return`) |
+| `/seller-chat` | The sellers' side: each maker's chat, and a demo phone to chat as a seller |
+| `/status` | The API's mode (test or sandbox) and the state of each outside service |
+| `/fake-paypal` | Test mode only: the simulated PayPal page |
+| `/dashboard` | A placeholder for the AG Grid dashboard, not built yet |
+
+Judges: the [walkthrough](../../docs/judges.md) shows the story step by step.
 
 Built with Next.js 16 (App Router, TypeScript, Tailwind CSS 4), Vitest with React Testing Library for components, and Playwright for UI tests.
 

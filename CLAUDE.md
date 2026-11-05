@@ -42,7 +42,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 
 ## Status (2026-11-05)
 
-Of the 58 build prompts in `../prompt.md`: **29 done, 3 partly done, 26 not started.** Each row was checked against the commits; "done" means built, tested, wired into the UI, tested in a browser and pushed. Update this table, the README's "Build progress" and `../prompt.md`'s status table with every prompt.
+Of the 58 build prompts in `../prompt.md`: **29 done, 4 partly done, 25 not started.** Each row was checked against the commits; "done" means built, tested, wired into the UI, tested in a browser and pushed. Update this table, the README's "Build progress" and `../prompt.md`'s status table with every prompt.
 
 | Prompt | What | State | Commit |
 |---|---|---|---|
@@ -97,14 +97,14 @@ Of the 58 build prompts in `../prompt.md`: **29 done, 3 partly done, 26 not star
 | **I** | **Pages and design** | | |
 | 41 | The home page | Not started (a basic home page exists from 02 and 06) | |
 | 42 | PayPal buttons on the stall page | Not started | |
-| 43 | The complete live demo page | Done, built from spec 3.9 because `../prompt.md` was not on hand: check it against the prompt. The passports' tamper check (38) and Demand Radar are not on it, since they are not built | |
+| 43 | The complete live demo page | Done, built from spec 3.9 because `../prompt.md` was not on hand: check it against the prompt. The passports' tamper check (38) and Demand Radar are not on it, since they are not built | 446f621 |
 | 44 | The AG Grid dashboard | Not started (`/dashboard` is a placeholder) | |
 | 45 | Design and accessibility pass | Not started | |
 | **J** | **Hardening and submission** | | |
 | 46 | Security and abuse limits | Not started | |
 | 47 | The whole story, tested end to end, twice | Not started | |
 | 48 | Dress rehearsal on the hosted demo | Not started | |
-| 49 | README and testing instructions for judges | Not started | |
+| 49 | README and testing instructions for judges | Partly done (first pass, from spec section 9): README "Try it", `docs/judges.md`, docs tests (`scripts/tests/test_docs.py`); the quick start was run from a fresh clone. The hosted demo's address and the sandbox buyer login are added at submission (12, 50) | |
 | 50 | Submission kit and release | Not started | |
 | **K** | **More of PayPal** | | |
 | 51 | Fake mode follows the payouts path; a payout rail per maker | Done | cdcf013 |
@@ -116,4 +116,4 @@ Of the 58 build prompts in `../prompt.md`: **29 done, 3 partly done, 26 not star
 | 57 | Venmo, and Pay Later if proven, at the approval | Not started | |
 | 58 | Orders and payments on APIMatic's PayPal SDK | Done, proven on the real sandbox | 027960f |
 
-Next on the path to the November 5 draft: a first pass of 49, the hosted deploy (12, needs a Render account), and the Devpost draft; then 34.
+Next on the path to the November 5 draft: the hosted deploy (12, needs a Render account) and the Devpost draft; then 34. Keep `docs/judges.md` in step with the pages: `scripts/tests/test_docs.py` fails when a button it names is renamed.
