@@ -12,7 +12,7 @@ transaction stays open while the agents wait for the model.
 """
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -67,9 +67,13 @@ def create_quote_request(
     deadline: date,
     ship_to: str,
     today: date,
+    *,
+    exclude: Collection[str] = (),
+    asker: str = "A buyer agent",
 ) -> tuple[QuoteRequestRow, list[Product]]:
-    """Store the request and find the makers to ask: each matching maker once, with her best-matching listing.
-    Raises QuoteError for a request that cannot be quoted. The caller commits."""
+    """Store the request and find the makers to ask: each matching maker once, with her best-matching listing,
+    leaving out the sellers in `exclude` (a maker who dropped out of the order being re-planned, healing.py).
+    `asker` starts the feed's line. Raises QuoteError for a request that cannot be quoted. The caller commits."""
     wanted = [query.strip() for query in queries if query.strip()]
     if not wanted:
         raise QuoteError("Say what you want: give at least one item, such as 'embroidered cushion covers'.")
@@ -89,6 +93,8 @@ def create_quote_request(
         raise QuoteError(str(error)) from error
     products: list[Product] = []
     for result in found:
+        if result.seller_id in exclude:
+            continue
         if all(product.seller_id != result.seller_id for product in products):
             product = session.get(Product, result.product_id)
             assert product is not None
@@ -108,7 +114,7 @@ def create_quote_request(
     record_event(
         session,
         EventType.QUOTE_REQUESTED,
-        f"A buyer agent asked for {quantity} × “{'; '.join(wanted)}” at most ${max_unit_price:,.2f} each by "
+        f"{asker} asked for {quantity} × “{'; '.join(wanted)}” at most ${max_unit_price:,.2f} each by "
         f"{deadline:%B} {deadline.day}, to {request.ship_to}: {makers}",
         entity_id=request.id,
         payload={

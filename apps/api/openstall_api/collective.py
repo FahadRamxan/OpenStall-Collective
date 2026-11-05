@@ -39,15 +39,26 @@ class DraftOrder(BaseModel):
 
 
 def draft_from_plan(
-    session: Session, request_id: str, *, accept_partial: bool = False, source: str | None = None
+    session: Session,
+    request_id: str,
+    *,
+    accept_partial: bool = False,
+    source: str | None = None,
+    parent_order_id: str | None = None,
 ) -> Order:
-    """The request's draft order, made from its plan, or the one already made. Raises DraftError in words."""
+    """The request's draft order, made from its plan, or the one already made. With `parent_order_id`, a top-up
+    order that repairs that order (healing.py). Raises DraftError in words."""
     request = session.get(QuoteRequestRow, request_id) if ID_PATTERN.fullmatch(request_id) else None
     if request is None:
         raise DraftError(f"There is no quote request called {request_id!r}. request_quote gives each request's id.")
     existing = session.scalars(
         select(Order)
-        .where(Order.request_id == request.id, Order.parent_order_id.is_(None))
+        .where(
+            Order.request_id == request.id,
+            Order.parent_order_id.is_(None)
+            if parent_order_id is None
+            else Order.parent_order_id == parent_order_id,
+        )
         .order_by(Order.created_at, Order.id)
     ).first()
     if existing is not None:
@@ -77,7 +88,7 @@ def draft_from_plan(
         )
         for line in plan.lines
     ]
-    order = create_draft_order(session, parts, request_id=request.id)
+    order = create_draft_order(session, parts, request_id=request.id, parent_order_id=parent_order_id)
     order.source = source
     return order
 
@@ -149,10 +160,15 @@ def load_order(session: Session, order_id: str) -> Order:
     return order
 
 
+def approval_url(order_id: str) -> str:
+    """The order's approval page on OpenStall's web app, as a full address."""
+    return f"{get_settings().WEB_BASE_URL}/approve/{quote(order_id, safe='')}"
+
+
 def approval_link(session: Session, order: Order) -> str:
     """The order's approval page on OpenStall's web app. The first time it is given out, checkout.link_issued says
     so in the feed; after that the same link is given and nothing more is recorded. The caller commits."""
-    url = f"{get_settings().WEB_BASE_URL}/approve/{quote(order.id, safe='')}"
+    url = approval_url(order.id)
     if link_issued(session, order.id) is None:
         record_event(
             session,

@@ -58,7 +58,7 @@ describe("OrderCard", () => {
     expect(screen.getByText("40 units from 4 makers, $815.00")).toBeInTheDocument();
     expect(screen.getByText("Waiting for your approval")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open the approval page" })).toHaveAttribute("href", "/approve/ord_7f3a");
-    expect(fetch).toHaveBeenCalledWith("http://api.test/api/orders?limit=1", expect.anything());
+    expect(fetch).toHaveBeenCalledWith("http://api.test/api/orders?limit=1&top_ups=false", expect.anything());
   });
 
   it("loads again when an order is drafted or changes, and not for other events", async () => {

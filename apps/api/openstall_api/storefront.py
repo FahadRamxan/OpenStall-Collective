@@ -30,7 +30,8 @@ from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_
 from openstall_api.collective import DraftOrder
 from openstall_api.db import new_session, session_scope
 from openstall_api.delivery import delivered_utc, on_time
-from openstall_api.models import OrderStatus, Passport
+from openstall_api.healing import DROPPED
+from openstall_api.models import Order, OrderStatus, Passport
 from openstall_api.notices import notice_states, ship_by
 from openstall_api.orders import server_total
 from openstall_api.orders_api import payout_words
@@ -385,7 +386,29 @@ class ShareStatus(BaseModel):
     )
     payout_rail: str = Field(description="How she is paid: paypal, venmo, hyperwallet, or unavailable.")
     payout_words: str
+    dropped_out: bool = Field(
+        default=False,
+        description="She told OpenStall she could not make it and confirmed: her share was released, never "
+        "charged, and her units were asked of the other makers (see top_ups).",
+    )
     paid_through_paypal: bool = Field(description="Whether her payout goes through PayPal Payouts.")
+
+
+class TopUpStatus(BaseModel):
+    """A top-up order that repairs this one: other makers' units for a share that was dropped."""
+
+    order_id: str
+    status: str
+    status_words: str
+    total_usd: Decimal
+    units: int
+    makers: list[str]
+    replaces: str | None = Field(description="The dropped share it replaces, in words.")
+    approved: bool
+    approval_link: str = Field(
+        description="Where a person approves it, like any order: nothing is charged for it before. Send it "
+        "to your human, or call checkout with its order_id."
+    )
 
 
 class OrderStatusOut(BaseModel):
@@ -399,6 +422,14 @@ class OrderStatusOut(BaseModel):
     approved: bool = Field(description="Whether a person has approved it and PayPal holds the money.")
     shares: list[ShareStatus]
     simulated: bool = Field(description="True in test mode, where PayPal is simulated and no payment is real.")
+    top_ups: list[TopUpStatus] = Field(
+        default_factory=list,
+        description="When a maker drops out, OpenStall asks the other makers for her units and drafts them as a "
+        "top-up order, which a person approves like any order. Oldest first.",
+    )
+    replaces: str | None = Field(
+        default=None, description="On a top-up order: the dropped share of the first order that it replaces."
+    )
 
 
 @storefront.tool(annotations=GIVES_THE_APPROVAL_LINK)
@@ -474,8 +505,13 @@ def get_order_status(
                     payout_rail=rail,
                     payout_words=words,
                     paid_through_paypal=via_paypal,
+                    dropped_out=(part.drop_json or {}).get("state") == DROPPED,
                 )
             )
+        top_ups = session.scalars(
+            select(Order).where(Order.parent_order_id == order.id).order_by(Order.created_at, Order.id)
+        ).all()
+        parent = session.get(Order, order.parent_order_id) if order.parent_order_id else None
         return OrderStatusOut(
             order_id=order.id,
             status=order.status.value,
@@ -485,7 +521,32 @@ def get_order_status(
             approved=order.approved_at is not None,
             shares=shares,
             simulated=settings.OPENSTALL_MODE == "fake",
+            top_ups=[
+                TopUpStatus(
+                    order_id=top_up.id,
+                    status=top_up.status.value,
+                    status_words=collective.ORDER_STATUS_WORDS[top_up.status],
+                    total_usd=server_total(top_up),
+                    units=sum(line.quantity for line in top_up.parts),
+                    makers=[line.seller.name for line in top_up.parts],
+                    replaces=_replaced(order, top_up),
+                    approved=top_up.approved_at is not None,
+                    approval_link=collective.approval_url(top_up.id),
+                )
+                for top_up in top_ups
+            ],
+            replaces=_replaced(parent, order),
         )
+
+
+def _replaced(parent: Order | None, top_up: Order) -> str | None:
+    """The dropped share of `parent` that `top_up` replaces, in words."""
+    if parent is None or top_up.request_id is None:
+        return None
+    for part in parent.parts:
+        if (part.drop_json or {}).get("request_id") == top_up.request_id:
+            return f"{part.seller.name}'s {part.quantity} units of order {parent.id}, which she could not make"
+    return None
 
 
 def _utc(moment: datetime) -> datetime:

@@ -85,6 +85,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **One order split across makers by plain code.** When a quote's rounds are done, the allocator fills the quantity from the cheapest valid offers first: for the story, 12 from Amina, 11 from Priya, 10 from Lucía and 7 from Grace, $815.00. `/demo` shows each maker's share as a bar and the plan as a table with its total, or says how many are possible when the offers fall short. The split is also explained in two or three plain sentences, on `/demo` and at the top of the approval page; code checks every number in them against the plan, and a template stands in for words that fail the check. The agents run on Claude in sandbox mode and on deterministic stand-ins in test mode.
 - **Each maker is told about her share, in her language.** Once PayPal holds the order, each maker whose share is reserved gets one message in Urdu, Hindi, Spanish or English: the order, the item, how many, her price, the date to ship by, where it goes and how she is paid. Code writes it from a template, so every number is the order's own. It goes on WhatsApp when she has a number, and otherwise to her chat on `/seller-chat` (where the seeded makers' messages appear). A maker no payout rail can reach yet, such as Amina in Pakistan, is asked to wait for us before she ships, rather than promised payment. The receipt says who was told, where and in which language, with a link to her chat; `get_order_status` gives the agent the same; and nobody is told twice. The address is only the buyer's city for now: collecting the street address is still to come.
 - **Snap the receipt, get paid.** A maker whose share PayPal holds sends a photo of her courier receipt, on WhatsApp or in the web chat. The model reads the courier and the tracking number, and she is asked in her language to confirm them; a number it cannot read, she types. Only her "yes" moves money: her share is then captured from the order's one PayPal authorization and paid out, and she is told she is paid. Her tracking then goes on that payment at PayPal, with PayPal's own code for her courier, so the buyer sees it on their PayPal order. A maker no payout rail reaches yet keeps her confirmed tracking and is told she is paid once it does. The receipt page shows each maker's tracking with her receipt photo, and `get_order_status` gives the agent the tracking. In test mode, `/seller-chat` plays a seeded maker: send her receipt photo and reply as her.
+- **The order heals itself.** A maker who cannot make her share says so in her chat, in her language ("I can't make this order"), and is asked to confirm: nothing moves on her words alone. Her yes sends her share back to the buyer, never charged, and OpenStall asks every other matching maker's agent for her units, by the same deadline and at most the buyer's price. What they offer becomes a top-up order that points at the first; the buyer approves it on its own page, like any order, and its makers are told then. The receipt, `/demo`'s Payments panel and `get_order_status` show the top-up and its approval link. In test mode, **Grace can't make it** on her phone on `/demo` plays it.
 - **Delivery and the end of an order.** PayPal's order trackers only say a parcel shipped, so the buyer, who receives the parcels, confirms each one on the receipt (**Confirm delivery**). Her share is then delivered, with the day it arrived and whether by its delivery date (for her trust passport); she is told in her language; no money moves, since she was paid when she shipped. Once every parcel that shipped has arrived and the rest were released, the order is complete, and the receipt shows what was paid to the makers and what came back to the buyer. `get_order_status` and the live feed follow it.
 - **Signed trust passports anyone can check.** A maker's trust card (`/passport/{seller_id}`, the same as the MCP tool `get_trust_card`) is her signed passport itself: OpenStall signs exactly its fields with Ed25519. The public key is at `/passport/public-key`; `/passport/{seller_id}/verify` checks her stored card, and `POST /passport/verify` checks any card sent to it, so a card with one number changed fails. Her stall's For AI agents box links **Check its signature**. Test mode signs with a fixed test key, and says so.
 - **The tamper check, live on `/demo`.** **Check a trust passport** loads a maker's signed trust card and checks its signature twice: in your browser, with OpenStall's public key and the browser's own Ed25519 (Web Crypto), and by OpenStall's `POST /passport/verify`. Change any number and press **Check the signature**: both say it no longer matches. **Put it back**, and it checks out again.
@@ -121,11 +122,11 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 - **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
 - **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
 - **Not connected yet:** payouts to Pakistan (Amina's share stays reserved), and a buyer's street address (makers are told the buyer's city).
-- **Not built yet:** changing a listing once it is live, a real AI agent as the buyer, the order that heals itself when a maker drops out, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
+- **Not built yet:** changing a listing once it is live, a real AI agent as the buyer, the AG Grid dashboard, and Demand Radar. [Build progress](#build-progress) lists every step.
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **37 done, 3 partly done, 18 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **38 done, 3 partly done, 17 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -136,12 +137,12 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Negotiation and the collective | 22–29 | | 30 a real AI agent as the buyer |
 | After payment | 31–34 | | |
 | Trust passports | 35, 36, 38 | | 37 materials advance |
-| The order heals itself; guardrails | | | 39, 40 |
+| The order heals itself; guardrails | 39 | | 40 |
 | Pages and design | 43 | | 41 home page, 42 PayPal buttons on stalls, 44 the AG Grid dashboard, 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account; then the order that heals itself (39), the guardrail panel (40) and the dashboard (44).
+Next: the hosted demo once there is a Render account; then the guardrail panel (40) and the dashboard (44).
 
 ## Run it locally, in more detail
 

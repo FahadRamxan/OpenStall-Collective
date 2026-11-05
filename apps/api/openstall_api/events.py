@@ -46,6 +46,8 @@ class EventType(StrEnum):
     PART_RESERVED = "part.reserved"
     PART_CAPTURED = "part.captured"
     PART_RELEASED = "part.released"
+    PART_DROP_ASKED = "part.drop_asked"  # she said she cannot make her share; asked to confirm (healing.py)
+    PART_KEPT = "part.kept"  # asked, she kept her share after all
     PART_DROPPED = "part.dropped"
     TOPUP_CREATED = "topup.created"
     ADVANCE_REQUESTED = "advance.requested"

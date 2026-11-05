@@ -3,6 +3,7 @@
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
 import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import { TopUps } from "@/components/top-ups";
 import { useLatestOrder } from "@/hooks/use-latest-order";
 import { formatUsd, place } from "@/lib/catalog";
 import { PART_STATUS_LABELS, isSimulated, type Order, type OrderPart } from "@/lib/orders";
@@ -154,6 +155,7 @@ function Payments({ order }: { order: Order }) {
           );
         })}
       </ul>
+      <TopUps order={order} />
     </div>
   );
 }

@@ -136,6 +136,17 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
         </p>
       ) : null}
 
+      {order.replaces ? (
+        <p className="mt-3 rounded-lg bg-warning-soft px-4 py-2 leading-7">
+          <span className="font-semibold">
+            A top-up for order <span className="font-mono">{order.replaces.order_id}</span>.
+          </span>{" "}
+          {order.replaces.seller_name} could not make her {order.replaces.quantity} units, so OpenStall asked the
+          other makers&apos; agents for them. Her share went back to you, never charged. Approve this to have them
+          made.
+        </p>
+      ) : null}
+
       {order.request?.explanation ? (
         <section aria-labelledby="why-heading" className="mt-6 border-l-2 border-accent pl-4">
           <h2 id="why-heading" className="text-sm font-semibold text-muted">

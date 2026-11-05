@@ -12,6 +12,8 @@ playing a seeded maker. One path, so every channel behaves the same.
    the replies are sent through the Messenger, each spoken one after them as a voice note at its public address;
    the web chat shows them from the answer.
 4. Any share she proved she shipped is captured and paid (proof.pay_on_proof), now or as a background task.
+5. Any share she dropped out of is released and her units re-planned as a top-up order (healing.heal_after),
+   now or as a background task.
 """
 
 import logging
@@ -36,6 +38,7 @@ from openstall_api.db import session_scope
 from openstall_api.feeds import clear_catalog_cache
 from openstall_api.media import get_media_store
 from openstall_api.models import Channel
+from openstall_api.healing import heal_after
 from openstall_api.proof import pay_on_proof
 
 log = logging.getLogger(__name__)
@@ -77,6 +80,12 @@ def receive(
             later(pay_on_proof, *args)
         else:
             pay_on_proof(*args)
+    for part_id in handled.heal_after:
+        heal = (part_id, lambda: registry.payment_gateway, lambda: registry.llm)
+        if later is not None:
+            later(heal_after, *heal)
+        else:
+            heal_after(*heal)
     return handled
 
 

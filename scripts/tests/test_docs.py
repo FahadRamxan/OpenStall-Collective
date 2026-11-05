@@ -40,6 +40,8 @@ UI_LABELS = [
     "Check a trust passport",
     "Check the signature",
     "Put it back",
+    "The order heals itself",
+    "Approve the top-up",
     "Order complete",
     "API online",
     "API offline",

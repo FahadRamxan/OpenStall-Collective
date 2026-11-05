@@ -111,10 +111,11 @@ def create_draft_order(
     session.flush()
     units = sum(part.quantity for part in parts)
     kind = "Top-up order" if parent_order_id else "Draft order"
+    makers = "1 maker" if len(parts) == 1 else f"{len(parts)} makers"
     record_event(
         session,
         EventType.ORDER_DRAFTED,
-        f"{kind} {order.id}: {units} units from {len(parts)} makers, ${total:,.2f}",
+        f"{kind} {order.id}: {units} units from {makers}, ${total:,.2f}",
         entity_id=order.id,
         payload={"total_usd": total, "units": units, "sellers": sellers},
     )

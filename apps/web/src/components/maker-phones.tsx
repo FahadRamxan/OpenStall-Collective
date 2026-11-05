@@ -10,7 +10,7 @@ import { useLatestOrder } from "@/hooks/use-latest-order";
 import { errorMessage } from "@/lib/api";
 import { languageName, mediaUrl, place } from "@/lib/catalog";
 import { CHANNEL_LABELS, getConversation, messageTime, playSeller, type ChatMessage, type Conversation } from "@/lib/chats";
-import type { OrderPart } from "@/lib/orders";
+import type { Order, OrderPart } from "@/lib/orders";
 
 /** The most recent messages each phone shows. Her whole chat is one link away. */
 export const PHONE_MESSAGES = 8;
@@ -18,11 +18,33 @@ export const PHONE_MESSAGES = 8;
 /** "Yes" as each maker types it, for answering OpenStall's question about her tracking in test mode. */
 export const YES_WORDS: Record<string, string> = { ur: "ہاں", hi: "हाँ", es: "Sí", en: "Yes" };
 
+/** "Sorry, I can't make this order" as each maker writes it: in test mode, a maker dropping out of her share. */
+export const CANT_WORDS: Record<string, string> = {
+  ur: "معاف کیجیے، میں یہ آرڈر نہیں بنا سکتی۔",
+  hi: "माफ़ कीजिए, मैं यह ऑर्डर नहीं बना सकती।",
+  es: "Lo siento, no puedo hacer este pedido.",
+  en: "Sorry, I can't make this order.",
+};
+
+/**
+ * One phone per maker of the order and of its top-ups (prompt 39): her share still waiting on her if one is, else
+ * her first. A maker who dropped out keeps her phone, so her words and OpenStall's answer stay in view.
+ */
+export function phoneParts(order: Order | null | undefined): OrderPart[] {
+  const bySeller = new Map<string, OrderPart>();
+  for (const part of [...(order?.parts ?? []), ...(order?.top_ups ?? []).flatMap((topUp) => topUp.parts)]) {
+    const kept = bySeller.get(part.seller.id);
+    if (!kept || (kept.status !== "authorized" && part.status === "authorized")) bySeller.set(part.seller.id, part);
+  }
+  return [...bySeller.values()];
+}
+
 /**
  * The /demo page's phones: each maker of the latest order, as she sees OpenStall on her own phone. Her order arrives
  * in her language once PayPal holds it; then her courier receipt, OpenStall's question, and her payment. They follow
  * the event stream live. In test mode a maker with no phone of her own (the seeded makers) can be played from here:
- * send her courier receipt, then answer "yes" in her language.
+ * send her courier receipt, then answer "yes" in her language; or say she can't make it, and "yes" to drop out.
+ * A top-up's makers get phones too, once one is drafted for a maker who dropped out.
  */
 export function MakerPhones() {
   const { order } = useLatestOrder();
@@ -30,7 +52,7 @@ export function MakerPhones() {
   // The newest event about a chat or a tracking: when it changes, someone wrote, so look again.
   const lastMessage =
     events.find((event) => event.type.startsWith("message.") || event.type.startsWith("tracking."))?.id ?? 0;
-  const parts = order?.parts ?? [];
+  const parts = phoneParts(order);
   const sellerKey = parts.map((part) => part.seller.id).join(",");
   const [conversations, setConversations] = useState<Record<string, Conversation>>({});
   const [version, setVersion] = useState(0);
@@ -202,15 +224,17 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
 }
 
 /**
- * Test mode: answer as her. Her courier receipt while her share waits for proof; "yes" in her language while
- * OpenStall asks her to confirm what it read. Each takes the path a real message takes.
+ * Test mode: answer as her. Her courier receipt, or "I can't make it", while her share waits for proof; "yes" in
+ * her language while OpenStall asks her to confirm what it read, or that she gives up her share. Each takes the
+ * path a real message takes.
  */
 function PlayButtons({ part, onPlayed }: { part: OrderPart; onPlayed: () => void }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const asked = part.proof?.state === "awaiting_confirmation";
+  const asked = part.proof?.state === "awaiting_confirmation" || part.drop?.state === "asked";
   const canSend = part.status === "authorized" && !part.tracking_number && !asked;
   const yes = YES_WORDS[part.notice?.language ?? "en"] ?? YES_WORDS.en;
+  const cant = CANT_WORDS[part.notice?.language ?? "en"] ?? CANT_WORDS.en;
   if (!canSend && !asked) return null;
 
   async function play(text: string, receipt: boolean) {
@@ -237,6 +261,18 @@ function PlayButtons({ part, onPlayed }: { part: OrderPart; onPlayed: () => void
             className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-xs font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
           >
             Send {part.seller.name}&apos;s courier receipt
+            <span className="rounded-full bg-warning-soft px-2 py-0.5 text-warning">Simulated</span>
+          </button>
+        ) : null}
+        {canSend ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => play(cant, false)}
+            title={cant}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-xs font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          >
+            {part.seller.name} can&apos;t make it
             <span className="rounded-full bg-warning-soft px-2 py-0.5 text-warning">Simulated</span>
           </button>
         ) : null}

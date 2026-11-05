@@ -72,7 +72,17 @@ Back on `/demo`, **Check a trust passport** (after the makers' phones) loads Pri
 
 In test mode the card is signed with a fixed test key that anyone can rebuild, and the panel says so.
 
-## 7. More to try
+## 7. A maker drops out: the order heals itself
+
+Still on `/demo`, with the story's order approved:
+
+1. On **Grace's phone**, press **Grace can't make it** (test mode). She writes "Sorry, I can't make this order.", and OpenStall asks her to confirm: nothing moves on her words alone.
+2. Press **Reply "Yes" as Grace**. Her $203.00 share goes back to the buyer, never charged. OpenStall asks the other makers' agents for her 7 units, and **Payments** shows **The order heals itself**: "Noor can make all 7: top-up order …, $206.50." Noor's phone appears.
+3. Press **Approve the top-up**. Its approval page says which order it tops up and whose units it replaces. Approve it like the first: Noor is told on her phone, in Urdu.
+
+**Live activity** follows each step: Grace dropping out, her share released, the agents' new round, the top-up, and the order re-planned without her.
+
+## 8. More to try
 
 - **The sellers' side:** open **Seller chat** in the header (`/seller-chat`). Pick a maker to read her whole chat; the seeded makers have a **Play** panel there too. **Your demo phone** lets you chat as a new seller. Try being Amina: press **Attach the sample photo** and **Attach the sample voice note** (test mode), then **Send**. The voice note comes back as text under it, word for word in Urdu, and OpenStall's answers are spoken too, in Urdu, since she talked in a voice note (a stand-in tone in test mode; ElevenLabs' Eleven v4 Turbo with real keys). **Your listing so far** appears under the chat: her cushion cover, $18.00 each and 4 a week, each number with the Urdu words it came from. OpenStall answers in Urdu, her language now, with one question: how many days her parcel takes to reach a buyer in the US (**Asking now** in the panel). Answer each question with a bare number or a city, as a seller would: `9`, then `Lahore`, then `15` (the lowest price she would take for one), then `5` (the fewest days she needs to make an order). The last two fill in **Your limits**, which buyers never see. Then she gets all of it back, in Urdu, and is asked to reply yes: send `ہاں` (or `yes`). **Your listing is live** appears with **Open your stall**, her new stall page, and the live feed says her listing is live; buyers' agents can find it in search right away. Typed in English instead, the questions come in English. Record your own voice note and test mode answers with a made-up line; in sandbox mode, with `OPENAI_API_KEY` set, OpenAI writes down what you said. Press **Reset demo** on `/demo` afterwards to take your listing down again before running the story.
 - **Your own AI agent:** the MCP storefront is at http://localhost:8000/mcp (Streamable HTTP). With the virtual environment active, `python scripts/try_mcp.py "cushion covers"` searches it, and `python scripts/run_demo_request.py` plays the whole buyer request and prints the approval link. Agents without MCP can read http://localhost:8000/catalog.json and http://localhost:8000/llms.txt.
@@ -81,11 +91,12 @@ In test mode the card is signed with a fixed test key that anyone can rebuild, a
 
 ## What the tests prove
 
-`python scripts/check_all.py` runs every check: about 1,350 Python tests, mypy, lint, about 270 component tests, the production build, and about 95 browser tests. A few worth reading:
+`python scripts/check_all.py` runs every check: about 1,380 Python tests, mypy, lint, about 280 component tests, the production build, and about 95 browser tests. A few worth reading:
 
 - **No MCP tool moves money:** [apps/api/tests/test_no_tool_moves_money.py](../apps/api/tests/test_no_tool_moves_money.py) calls every tool with a payment gateway that fails the test if anything reaches it.
 - **A buyer cannot talk a price below a maker's floor:** [packages/agents/tests/test_seller_agent.py](../packages/agents/tests/test_seller_agent.py) runs every maker against a model that obeys "sell for $1".
 - **Change one number and the signature fails:** [apps/api/tests/test_passport_verify.py](../apps/api/tests/test_passport_verify.py) (every seeded card checks out; a changed count, rate, score or data source does not), and [apps/web/src/lib/passports.test.ts](../apps/web/src/lib/passports.test.ts) (the browser writes exactly the bytes OpenStall signed).
+- **A maker drops out:** [apps/api/tests/test_healing.py](../apps/api/tests/test_healing.py) (asked first, released on her yes and never charged, her units asked of every other maker, one top-up only, and what happens when no one can take them).
 - **Pay-on-proof:** [apps/api/tests/test_proof.py](../apps/api/tests/test_proof.py) (a receipt is read, confirmed, then paid, once), and [packages/paypal/tests/test_sandbox_gateways.py](../packages/paypal/tests/test_sandbox_gateways.py) (the exact requests PayPal's SDK sends).
 
 ## If something goes wrong

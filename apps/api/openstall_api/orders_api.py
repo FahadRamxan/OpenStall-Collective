@@ -18,6 +18,7 @@ from openstall_api.claims import ClaimHeld
 from openstall_api.collective import link_issued
 from openstall_api.db import get_session
 from openstall_api.delivery import confirm_delivery, delivered_utc, on_time, tell_maker_delivered
+from openstall_api.healing import drop_out
 from openstall_api.models import DataSource, Order, OrderPart, OrderStatus, PartStatus, Passport
 from openstall_api.notices import NoticeState, notice_states, notify_order, ship_by
 from openstall_api.orders import server_total
@@ -82,6 +83,22 @@ class ProofOut(BaseModel):
         )
 
 
+class DropOut(BaseModel):
+    """She said she cannot make her share (healing.py): asked to confirm, kept after all, or dropped; and the
+    top-up order that took her units, once there is one."""
+
+    state: Literal["asked", "kept", "dropped"]
+    asked_at: datetime | None
+    dropped_at: datetime | None
+    top_up_order_id: str | None
+    replan_failed: str | None = None  # why her units could not be re-planned
+
+    @classmethod
+    def of(cls, drop: dict[str, Any] | None) -> "DropOut | None":
+        shown = drop_out(drop)
+        return cls.model_validate(shown) if shown else None
+
+
 class PartOut(BaseModel):
     id: str
     reference_id: str
@@ -98,6 +115,7 @@ class PartOut(BaseModel):
     carrier: str | None  # her courier, once she confirmed her tracking
     tracking_number: str | None  # set only once she confirmed it: she is paid on it
     proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
+    drop: DropOut | None = None  # she said she cannot make it (healing.py); None while she has not
     tracking_on_paypal: bool  # her tracking is on her capture at PayPal (simulated PayPal in fake mode)
     # When the buyer confirmed her parcel arrived (prompt 34), and whether by its delivery date. None before.
     delivered_at: datetime | None = None
@@ -137,6 +155,29 @@ class ApprovalLinkOut(BaseModel):
     issued_at: datetime
 
 
+class ReplacesOut(BaseModel):
+    """The dropped share a top-up order replaces: the order she left, and her units."""
+
+    order_id: str
+    part_id: str
+    seller_name: str
+    quantity: int
+
+
+class TopUpOut(BaseModel):
+    """A top-up order that repairs this order (healing.py): other makers' units for a share that was dropped.
+    The buyer approves it on its own approval page, like any order."""
+
+    id: str
+    status: OrderStatus
+    total_usd: Decimal
+    units: int
+    created_at: datetime
+    approved_at: datetime | None
+    replaces: ReplacesOut | None
+    parts: list[PartOut]
+
+
 class OrderOut(BaseModel):
     id: str
     status: OrderStatus
@@ -155,6 +196,9 @@ class OrderOut(BaseModel):
     requested_by_agent: bool = False
     # The approval link a buyer agent was given to send its human, once it was (MCP checkout).
     approval_link: ApprovalLinkOut | None = None
+    # Top-up orders that repair this one, oldest first (healing.py); on a top-up, the dropped share it replaces.
+    top_ups: list[TopUpOut] = []
+    replaces: ReplacesOut | None = None
 
 
 SANDBOX_VENMO = "simulated: Venmo payouts don't run in PayPal's sandbox"
@@ -203,6 +247,7 @@ def _part(
         carrier=part.carrier,
         tracking_number=part.tracking_number,
         proof=ProofOut.of(part.proof_json),
+        drop=DropOut.of(part.drop_json),
         tracking_on_paypal=part.paypal_tracker_id is not None,
         delivered_at=delivered_utc(part),
         on_time=on_time(part),
@@ -264,7 +309,50 @@ def order_out(session: Session, order: Order) -> OrderOut:
             else None
         ),
         parts=[_part(session, part, paypal[part.id], notices.get(part.id), settings) for part in order.parts],
+        top_ups=_top_ups(session, order, settings),
+        replaces=_replaces(session.get(Order, order.parent_order_id) if order.parent_order_id else None, order),
     )
+
+
+def _top_ups(session: Session, order: Order, settings: Settings) -> list[TopUpOut]:
+    """The top-up orders that repair this order, oldest first, each with its makers' shares."""
+    rows = session.scalars(
+        select(Order)
+        .where(Order.parent_order_id == order.id)
+        .options(selectinload(Order.parts).selectinload(OrderPart.seller))
+        .order_by(Order.created_at, Order.id)
+    ).all()
+    top_ups = []
+    for top_up in rows:
+        paypal = confirmations(session, top_up.parts)
+        notices = notice_states(session, top_up.parts)
+        top_ups.append(
+            TopUpOut(
+                id=top_up.id,
+                status=top_up.status,
+                total_usd=server_total(top_up),
+                units=sum(part.quantity for part in top_up.parts),
+                created_at=top_up.created_at,
+                approved_at=top_up.approved_at,
+                replaces=_replaces(order, top_up),
+                parts=[
+                    _part(session, part, paypal[part.id], notices.get(part.id), settings) for part in top_up.parts
+                ],
+            )
+        )
+    return top_ups
+
+
+def _replaces(parent: Order | None, top_up: Order) -> ReplacesOut | None:
+    """The dropped share of `parent` whose re-plan drafted `top_up`: the share that asked for its quote."""
+    if parent is None or top_up.request_id is None:
+        return None
+    for part in parent.parts:
+        if (part.drop_json or {}).get("request_id") == top_up.request_id:
+            return ReplacesOut(
+                order_id=parent.id, part_id=part.id, seller_name=part.seller.name, quantity=part.quantity
+            )
+    return None
 
 
 def _load(session: Session, order_id: str) -> Order:
@@ -279,14 +367,19 @@ def _load(session: Session, order_id: str) -> Order:
 
 
 @router.get("/orders")
-def recent_orders(session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10) -> list[OrderOut]:
-    """The most recent orders, newest first. A new draft arrives on the event stream as order.drafted."""
-    rows = session.scalars(
+def recent_orders(
+    session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10, top_ups: bool = True
+) -> list[OrderOut]:
+    """The most recent orders, newest first. A new draft arrives on the event stream as order.drafted. With
+    top_ups=false, top-up orders are left out: /demo follows the order a top-up repairs, which lists its top-ups
+    (healing.py)."""
+    query = (
         select(Order)
         .options(selectinload(Order.parts).selectinload(OrderPart.seller), selectinload(Order.request))
         .order_by(Order.created_at.desc(), Order.id.desc())
         .limit(limit)
     )
+    rows = session.scalars(query if top_ups else query.where(Order.parent_order_id.is_(None)))
     return [order_out(session, order) for order in rows]
 
 

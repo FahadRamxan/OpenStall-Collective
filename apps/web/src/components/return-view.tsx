@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
 import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import { TopUps } from "@/components/top-ups";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, place } from "@/lib/catalog";
 import {
@@ -259,6 +260,7 @@ function Receipt({
             );
           })}
         </ul>
+        <TopUps order={order} you />
         {complete && order.paid_usd !== undefined ? (
           <dl aria-label="Where the total went" className="mt-4 space-y-1 px-1">
             <div className="flex flex-wrap items-baseline justify-between gap-2">

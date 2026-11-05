@@ -13,6 +13,32 @@ export type OrderStatus =
 
 export type PartStatus = "pending" | "authorized" | "captured" | "delivered" | "released";
 
+/** She said she cannot make her share: asked to confirm, kept after all, or dropped (prompt 39). */
+export type PartDrop = {
+  state: "asked" | "kept" | "dropped";
+  asked_at: string | null;
+  dropped_at: string | null;
+  /** The top-up order that took her units, once there is one. */
+  top_up_order_id: string | null;
+  /** Why her units could not be asked for again, when they could not. */
+  replan_failed?: string | null;
+};
+
+/** The dropped share a top-up order replaces: the order she left, and her units. */
+export type Replaces = { order_id: string; part_id: string; seller_name: string; quantity: number };
+
+/** A top-up order that repairs an order: other makers' units for a dropped share, approved like any order. */
+export type TopUp = {
+  id: string;
+  status: OrderStatus;
+  total_usd: string;
+  units: number;
+  created_at: string;
+  approved_at: string | null;
+  replaces: Replaces | null;
+  parts: OrderPart[];
+};
+
 /** One maker's share of an order. Money is exact, as strings such as "216.00". */
 export type OrderPart = {
   id: string;
@@ -36,6 +62,8 @@ export type OrderPart = {
   tracking_number?: string | null;
   /** Her courier receipt photo and what was read from it, from the moment she sends it. */
   proof?: PartProof | null;
+  /** She said she cannot make it: null while she has said nothing of the kind. */
+  drop?: PartDrop | null;
   /** Her tracking is on her payment on the PayPal order (simulated PayPal in test mode). */
   tracking_on_paypal?: boolean;
   /** When the buyer confirmed her parcel arrived: null until then. */
@@ -149,22 +177,31 @@ export type Order = {
   /** The approval link a buyer agent was given to send its human (MCP checkout), once it was. */
   approval_link?: { url: string; issued_at: string } | null;
   parts: OrderPart[];
+  /** Top-up orders that repair this one, oldest first: a dropped share's units, from other makers. */
+  top_ups?: TopUp[];
+  /** On a top-up order: the dropped share it replaces. */
+  replaces?: Replaces | null;
 };
 
-/** The latest order, or null when there is none yet. */
+/**
+ * The latest order, or null when there is none yet. Top-up orders are left out: /demo follows the order a top-up
+ * repairs, which lists its top-ups (`top_ups`).
+ */
 export async function getLatestOrder(init: RequestInit = {}): Promise<Order | null> {
-  const [latest] = await apiGet<Order[]>("/api/orders?limit=1", init);
+  const [latest] = await apiGet<Order[]>("/api/orders?limit=1&top_ups=false", init);
   return latest ?? null;
 }
 
 /**
  * Events after which the latest order may read differently: an order or one of its shares changed, a maker was
- * told about her share (or could not be), or her proof of shipping moved on (read, confirmed, on PayPal).
+ * told about her share (or could not be), her proof of shipping moved on (read, confirmed, on PayPal), or a top-up
+ * was drafted for a maker who dropped out.
  */
 export function changesOrders(event: FeedEvent): boolean {
   return (
     event.type.startsWith("order.") ||
     event.type.startsWith("part.") ||
+    event.type.startsWith("topup.") ||
     event.type.startsWith("message.order_notice") ||
     event.type.startsWith("tracking.")
   );
