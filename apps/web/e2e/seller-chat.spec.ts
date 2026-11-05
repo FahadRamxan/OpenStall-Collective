@@ -84,7 +84,10 @@ test("from your demo phone, a photo and a message get OpenStall's welcome, and y
 
   await page.getByRole("textbox", { name: "Message" }).fill("$18 each, 4 a week.");
   await page.getByRole("textbox", { name: "Message" }).press("Enter");
-  await expect(thread).toContainText("Thank you, I have your message.");
+  await expect(thread).toContainText(
+    "Thank you. Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week. How many days does your " +
+      "parcel take to reach a buyer in the US?",
+  );
   await expect(page.getByRole("list", { name: "Sellers who have chatted" })).toContainText("(you)");
   await page.screenshot({ path: path.join(SCREENSHOTS, "seller-chat-phone-1280.png"), fullPage: true });
 

@@ -17,12 +17,19 @@ export const FIELD_LABELS = {
   photos: "Photos",
 } as const;
 
-type Field = keyof typeof FIELD_LABELS;
+/** Her limits (spec 3.3), asked once the listing is whole: only her own seller agent uses them. */
+export const LIMIT_LABELS = {
+  floor_price_usd: "Lowest price",
+  min_lead_days: "Days to make an order",
+} as const;
+
+type Field = keyof typeof FIELD_LABELS | keyof typeof LIMIT_LABELS;
 
 /**
  * A seller's listing as far as her chat has told it, before she confirms it: each field read so far, the words she
- * used for each number (so a wrong reading can be traced), and what OpenStall still has to ask. Nothing here is live
- * for buyers yet. `mine`: on your own demo phone, so it says "your".
+ * used for each number (so a wrong reading can be traced), and what OpenStall still has to ask, one question at a
+ * time ("Asking now"); then her limits. Nothing here is live for buyers yet. `mine`: on your own demo phone, so it
+ * says "your".
  */
 export function ListingDraftCard({ draft, mine }: { draft: ListingDraft; mine: boolean }) {
   const whose = mine ? "your" : "her";
@@ -46,7 +53,33 @@ export function ListingDraftCard({ draft, mine }: { draft: ListingDraft; mine: b
         ))}
       </ul>
     ) : null,
+    floor_price_usd: draft.floor_price_usd ? `${formatUsd(draft.floor_price_usd)} each, for a big order` : null,
+    min_lead_days: typeof draft.min_lead_days === "number" ? `${draft.min_lead_days} days at least` : null,
   };
+
+  function rows(labels: Partial<Record<Field, string>>) {
+    return (Object.entries(labels) as [Field, string][]).map(([field, label]) => {
+      const words = draft.words[field];
+      return (
+        <div key={field} className="contents">
+          <dt className="font-medium text-muted">{label}</dt>
+          <dd className="min-w-0 break-words">
+            {missing.has(field) ? (
+              <span className="font-medium text-warning">{draft.asked === field ? "Asking now" : "Still to ask"}</span>
+            ) : (
+              value[field]
+            )}
+            {!missing.has(field) && words ? (
+              <span className="mt-0.5 block text-xs text-muted">
+                In {whose} words: <q dir="auto">{words}</q>
+              </span>
+            ) : null}
+          </dd>
+        </div>
+      );
+    });
+  }
+
   return (
     <section
       aria-labelledby="draft-heading"
@@ -56,26 +89,16 @@ export function ListingDraftCard({ draft, mine }: { draft: ListingDraft; mine: b
         {mine ? "Your listing so far" : "Her listing so far"} <Badge tone="neutral">Draft, not live yet</Badge>
       </h3>
       <p className="mt-1 text-sm leading-6 text-muted">
-        Read from {whose} photos and words. A price or a number is only taken from what was said.
+        Read from {whose} photos and words. A price or a number is only taken from what was said. OpenStall asks for
+        what is missing, one question at a time, in {whose} language.
       </p>
-      <dl className="mt-4 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[9rem_1fr]">
-        {(Object.keys(FIELD_LABELS) as Field[]).map((field) => {
-          const words = draft.words[field];
-          return (
-            <div key={field} className="contents">
-              <dt className="font-medium text-muted">{FIELD_LABELS[field]}</dt>
-              <dd className="min-w-0 break-words">
-                {missing.has(field) ? <span className="font-medium text-warning">Still to ask</span> : value[field]}
-                {!missing.has(field) && words ? (
-                  <span className="mt-0.5 block text-xs text-muted">
-                    In {whose} words: <q dir="auto">{words}</q>
-                  </span>
-                ) : null}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      <dl className="mt-4 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[9rem_1fr]">{rows(FIELD_LABELS)}</dl>
+      <h4 className="mt-5 font-semibold">{mine ? "Your limits" : "Her limits"}</h4>
+      <p className="mt-1 text-sm leading-6 text-muted">
+        Not shown to buyers: {whose} seller agent never offers less than this price, or a delivery sooner than these
+        days allow.
+      </p>
+      <dl className="mt-3 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[9rem_1fr]">{rows(LIMIT_LABELS)}</dl>
     </section>
   );
 }

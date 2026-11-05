@@ -62,9 +62,11 @@ class ChatSummary(BaseModel):
 
 
 class ListingDraftOut(BaseModel):
-    """Her listing as far as her chat has told it (spec 3.1 step 3), before she confirms it: not live for buyers.
-    `words`: the words she used for each number and her city, so a wrong reading can be traced. `missing`: the fields
-    still to ask her for, in the spec's order."""
+    """Her listing as far as her chat has told it (spec 3.1 steps 3 and 4), before she confirms it: not live for
+    buyers. Her limits (spec 3.3) are only for her own seller agent: the lowest price she would take for one and the
+    fewest days she needs to make an order. `words`: the words she used for each number and her city, so a wrong
+    reading can be traced. `missing`: the fields still to ask her for, in the spec's order, then her limits. `asked`:
+    the one she was asked last, which her next message answers."""
 
     title: str | None = None
     description: str | None = None
@@ -75,8 +77,11 @@ class ListingDraftOut(BaseModel):
     ship_days: int | None = None
     ship_from_city: str | None = None
     photos: list[str] = Field(default_factory=list)
+    floor_price_usd: str | None = None
+    min_lead_days: int | None = None
     words: dict[str, str] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
+    asked: str | None = None
 
 
 class Conversation(BaseModel):

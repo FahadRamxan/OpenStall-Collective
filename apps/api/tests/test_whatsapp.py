@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from openstall_api.adapters import AdapterRegistry
-from openstall_api.chat.handler import WELCOME
+from openstall_api.chat.handler import WELCOME, WELCOMES
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
@@ -236,11 +236,12 @@ def test_a_played_message_with_a_photo_and_a_voice_note_shows_in_the_chat(db):
 
     assert response.status_code == 201
     seller_id = response.json()["seller_id"]
+    # Her voice note is in Urdu, so she is welcomed and asked in Urdu.
     listing = (
-        "Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week. Still needed: how many days "
-        "delivery takes and the city it ships from."
+        "آپ کی لسٹنگ اب تک: Hand-embroidered cushion cover، 18.00 ڈالر فی عدد، ہفتے میں 4۔ آپ کا پارسل امریکہ میں "
+        "خریدار تک کتنے دن میں پہنچتا ہے؟"
     )
-    assert response.json()["replies"] == [WELCOME, listing]
+    assert response.json()["replies"] == [WELCOMES["ur"], listing]
     [chat] = client.get("/api/chats").json()
     assert (chat["seller"]["name"], chat["channel"], chat["last_text"], chat["messages"]) == (
         "Amina",

@@ -8,6 +8,7 @@ import respx
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from openstall_agents.listing_reader import QUESTIONS
 from openstall_api.chat.handler import WELCOME
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
@@ -84,12 +85,12 @@ def test_same_input_through_whatsapp_and_the_web_gives_the_same_messages_and_rep
     on_the_web = conversation_of(twilio, web_chat_id=DEMO_PHONE)
 
     assert on_whatsapp == on_the_web
+    # Answered in English until her Urdu voice note saves her language, then in Urdu.
     assert [text for direction, text, _ in on_the_web if direction == "outbound"] == [
         WELCOME,
-        "Thank you, I have your photo. Your listing so far: Hand-embroidered cushion cover. Still needed: the price, "
-        "how many a week, how many days delivery takes and the city it ships from.",
-        "Thank you, I have your voice note and your message. Your listing so far: Hand-embroidered cushion cover, "
-        "$18.00 each, 4 a week, from Lahore. Still needed: how many days delivery takes.",
+        f"Thank you. Your listing so far: Hand-embroidered cushion cover. {QUESTIONS['price_usd']}",
+        "شکریہ۔ آپ کی لسٹنگ اب تک: Hand-embroidered cushion cover، 18.00 ڈالر فی عدد، ہفتے میں 4، Lahore سے۔ آپ کا "
+        "پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
     ]
 
 
@@ -109,10 +110,11 @@ def test_same_listing_from_both_channels(twilio):
         for by in ({"whatsapp_number": "+923001234567"}, {"web_chat_id": DEMO_PHONE})
     ]
     assert drafts[0] == drafts[1]
-    assert (drafts[0]["title"], drafts[0]["price_usd"], drafts[0]["missing"]) == (
+    assert (drafts[0]["title"], drafts[0]["price_usd"], drafts[0]["missing"], drafts[0]["asked"]) == (
         "Hand-embroidered cushion cover",
         "18.00",
-        ["ship_days"],
+        ["ship_days", "floor_price_usd", "min_lead_days"],
+        "ship_days",
     )
 
 
@@ -123,8 +125,7 @@ def test_a_web_seller_is_known_by_her_demo_phone_and_labelled_web_chat(db):
     assert first.status_code == second.status_code == 200
     assert first.json()["replies"] == [WELCOME]
     assert second.json()["replies"] == [
-        "Thank you, I have your photo and your message. Your listing so far: Hand-embroidered cushion cover. Still "
-        "needed: the price, how many a week, how many days delivery takes and the city it ships from."
+        f"Thank you. Your listing so far: Hand-embroidered cushion cover. {QUESTIONS['price_usd']}"
     ]
     assert first.json()["seller_id"] == second.json()["seller_id"]
     [chat] = client.get("/api/chats").json()

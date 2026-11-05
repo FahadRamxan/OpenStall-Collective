@@ -5,13 +5,14 @@ and the same replies. It finds or creates the seller and her chat, stores her me
 both in the event log, so pages showing the chat update live. The caller delivers the replies: the WhatsApp webhook
 sends them through the Messenger, and the web chat shows them.
 
-The chat moves through the states collecting, asking, awaiting_confirmation and live. Later steps give each state its
-own turn (asking what is missing, publishing); for now a turn welcomes a new seller, and tells her the listing so far.
+The chat moves through the states collecting, asking, awaiting_confirmation and live. A new seller is welcomed; while
+her listing is drafted (collecting, then asking), each answer tells her the listing so far and asks one question, in
+her language (chat/asking.py); confirming and publishing are prompt 19.
 
 Her voice notes are turned into text before the message is stored (listen_to_voice_notes, outside any transaction;
 chat/voice.py): the words go on her message as she said them, and their language on her profile if she has none yet.
-Then, while she has no live listing, her whole chat is read into a draft listing (read_listing_from, chat/listing.py):
-kept on her chat, and told back to her with what it still needs.
+Then, while she has no live listing, her whole chat is read into a draft listing (read_listing_from, chat/listing.py),
+kept on her chat. Her language decides the templates she is answered in: the welcome and the questions.
 
 A maker whose share waits for proof of shipping is answered by the receipt flow first (proof.py): her courier receipt
 photo is read before the message is stored (look_at_photos, outside any transaction), she confirms the number, and the
@@ -27,23 +28,35 @@ from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import LLM, Media, SpeechToText
 from openstall_agents.listing_reader import ListingReading
-from openstall_api.chat.listing import DRAFTING, listing_reply, read_her_listing, update_draft
+from openstall_api.chat.asking import asking_reply
+from openstall_api.chat.listing import DRAFTING, read_her_listing, update_draft
 from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
 from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
 from openstall_api.models import Channel, ChatMessage, ChatSession, DataSource, Direction, Seller
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
+from openstall_api.wording import LOCALES, template_language
 
 # The countries in the demo, by dialing code. Other numbers leave the country empty until the seller says.
 DIALING_CODES = {"92": "PK", "91": "IN", "52": "MX", "44": "GB", "1": "US"}
 __all__ = ["CHANNEL_WORDS", "find_chat", "save_message"]  # kept here too: they moved to chat/store.py
 
 
-WELCOME = (
-    "Welcome to OpenStall! Send photos of what you make and tell me about it, by text or a voice note. I will "
-    "turn it into a listing that AI shopping agents can find, and you are paid through PayPal when you ship."
-)
+# The first answer a seller gets, in her language when it is known (from her first voice note, or her profile).
+WELCOMES = {
+    "en": "Welcome to OpenStall! Send photos of what you make and tell me about it, by text or a voice note. I will "
+    "turn it into a listing that AI shopping agents can find, and you are paid through PayPal when you ship.",
+    "ur": "OpenStall میں خوش آمدید! جو آپ بناتی ہیں اس کی تصویریں بھیجیں اور اس کے بارے میں لکھ کر یا وائس نوٹ میں "
+    "بتائیں۔ اس سے ایک لسٹنگ بنے گی جسے AI شاپنگ ایجنٹ ڈھونڈ سکیں گے، اور سامان بھیجنے پر آپ کو PayPal سے ادائیگی "
+    "ہو گی۔",
+    "hi": "OpenStall में आपका स्वागत है! आप जो बनाती हैं उसकी फ़ोटो भेजें और उसके बारे में लिखकर या वॉइस नोट में "
+    "बताएँ। इससे एक लिस्टिंग बनेगी जिसे AI शॉपिंग एजेंट ढूँढ सकेंगे, और सामान भेजने पर आपको PayPal से भुगतान होगा।",
+    "es": "¡Bienvenida a OpenStall! Mándame fotos de lo que haces y cuéntame de ello, por mensaje o nota de voz. Con "
+    "eso armo un anuncio que los agentes de compra con IA pueden encontrar, y PayPal te paga cuando envías.",
+}
+assert WELCOMES.keys() == LOCALES.keys(), "every template language welcomes her in its own words"
+WELCOME = WELCOMES["en"]
 NUDGE = "Send more photos, or tell me the price and how many you can make each week."
 
 
@@ -183,17 +196,17 @@ def turn(
     media: list[dict[str, Any]],
     heard: Heard,
     draft: dict[str, Any] | None = None,
+    language: str = "en",
 ) -> list[Reply]:
     """The chat's answer to one message, from its state. Files that could not be kept, then voice notes that could not
-    be heard, are always said first. When her listing was read, she is told the listing so far and what it still
-    needs (`draft`)."""
+    be heard, are always said first. While her listing is drafted (`draft`), she is told the listing so far and asked
+    the one question open now, in her template language."""
     replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
     if first:
-        replies.append(Reply(WELCOME))
+        replies.append(Reply(WELCOMES[language]))
     if draft is not None:
-        thanks = f"Thank you, I have {what}. " if what and not first else ""
-        replies.append(Reply(thanks + listing_reply(draft)))
+        replies.append(Reply(asking_reply(draft, language, thanks=bool(what) and not first)))
     elif what and not first:
         replies.append(Reply(f"Thank you, I have {what}. {NUDGE}"))
     return replies
@@ -303,10 +316,12 @@ def handle_inbound(
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]
     else:
-        # A draft starts once something for a listing is read; once there is one, every reading keeps it current.
-        drafting = reading is not None and chat.state in DRAFTING and (not reading.empty or chat.draft_json)
-        draft = update_draft(session, chat, seller, reading) if drafting and reading is not None else None
-        replies = turn(chat, first, text, media, heard, draft)
+        # A draft starts once something for a listing is read; once there is one, every message of hers counts, even
+        # one the model could not read, so the question open is asked again.
+        started = bool(chat.draft_json) or (reading is not None and not reading.empty)
+        drafting = chat.state in DRAFTING and started
+        draft = update_draft(session, chat, seller, reading, message.id) if drafting else None
+        replies = turn(chat, first, text, media, heard, draft, template_language(seller.language))
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(

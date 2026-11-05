@@ -31,6 +31,8 @@ UI_LABELS = [
     "Attach the sample voice note",
     "Attach the sample photo",
     "Your listing so far",
+    "Asking now",
+    "Your limits",
     "API online",
     "API offline",
 ]

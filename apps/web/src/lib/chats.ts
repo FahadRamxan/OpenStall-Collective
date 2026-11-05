@@ -45,8 +45,14 @@ export type ListingDraft = {
   ship_days: number | null;
   ship_from_city: string | null;
   photos: string[];
+  /** Her limits, only for her own seller agent: the lowest price she would take for one, and her fewest days. */
+  floor_price_usd?: string | null;
+  min_lead_days?: number | null;
   words: Partial<Record<string, string>>;
+  /** What is still to ask her: the listing's fields in the spec's order, then her limits. */
   missing: string[];
+  /** The field she was asked about last, which her next message answers. */
+  asked?: string | null;
 };
 
 export type Conversation = {

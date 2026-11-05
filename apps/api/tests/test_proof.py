@@ -11,7 +11,7 @@ from mcp import Client
 from sqlalchemy import select
 
 from openstall_agents.adapters import LLMError
-from openstall_api.chat.handler import WELCOME
+from openstall_api.chat.handler import WELCOMES
 from openstall_api.events import EventType
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt
 from openstall_api.main import app
@@ -259,7 +259,7 @@ def test_a_photo_that_is_not_a_receipt_gets_the_chats_usual_answer(story, fakes)
         "/api/dev/inbound", json={"sender": PRIYA_PHONE, "profile_name": "Priya", "photo": True}
     )
 
-    assert response.json()["replies"] == [WELCOME]  # her first WhatsApp message: the chat's usual welcome
+    assert response.json()["replies"] == [WELCOMES["hi"]]  # her first WhatsApp message: the usual welcome, in Hindi
     assert [call for call in fakes.llm.calls if "courier_receipt" in call.prompt]  # the model was asked, and said no
     assert part_of(story, "Priya").proof_json is None
     assert events(story, EventType.TRACKING_READ) == []

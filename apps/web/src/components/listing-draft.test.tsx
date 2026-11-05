@@ -14,8 +14,11 @@ const DRAFT: ListingDraft = {
   ship_days: null,
   ship_from_city: null,
   photos: ["/media/uploads/abc.png"],
+  floor_price_usd: null,
+  min_lead_days: null,
   words: { price_usd: "اٹھارہ ڈالر", capacity_per_week: "ہفتے میں چار" },
-  missing: ["ship_days", "ship_from_city"],
+  missing: ["ship_days", "ship_from_city", "floor_price_usd", "min_lead_days"],
+  asked: "ship_days",
 };
 
 function field(name: string): HTMLElement {
@@ -44,17 +47,52 @@ describe("ListingDraftCard", () => {
     );
   });
 
-  it("says what is still to ask, and never shows a number for it", () => {
+  it("marks the one question asked now, says what is still to ask, and never shows a number for it", () => {
     render(<ListingDraftCard draft={DRAFT} mine={false} />);
 
-    expect(field("Delivery time")).toHaveTextContent("Still to ask");
+    expect(field("Delivery time")).toHaveTextContent("Asking now");
     expect(field("Ships from")).toHaveTextContent("Still to ask");
+    expect(field("Lowest price")).toHaveTextContent("Still to ask");
+    expect(field("Days to make an order")).toHaveTextContent("Still to ask");
+    expect(screen.getAllByText("Asking now")).toHaveLength(1);
+  });
+
+  it("shows her limits apart from the listing, as not shown to buyers", () => {
+    render(
+      <ListingDraftCard
+        draft={{
+          ...DRAFT,
+          ship_days: 9,
+          ship_from_city: "Lahore",
+          floor_price_usd: "15.00",
+          min_lead_days: 5,
+          words: { ...DRAFT.words, floor_price_usd: "15", min_lead_days: "5" },
+          missing: [],
+          asked: null,
+        }}
+        mine={false}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Her limits" })).toBeInTheDocument();
+    expect(screen.getByText(/Not shown to buyers/)).toBeInTheDocument();
+    expect(field("Lowest price")).toHaveTextContent("$15.00 each, for a big order");
+    expect(field("Lowest price")).toHaveTextContent("In her words: 15");
+    expect(field("Days to make an order")).toHaveTextContent("5 days at least");
+    expect(screen.queryByText("Still to ask")).not.toBeInTheDocument();
+    expect(screen.queryByText("Asking now")).not.toBeInTheDocument();
   });
 
   it("on your own phone it says your", () => {
-    render(<ListingDraftCard draft={{ ...DRAFT, ship_days: 9, missing: ["ship_from_city"] }} mine />);
+    render(
+      <ListingDraftCard
+        draft={{ ...DRAFT, ship_days: 9, missing: ["ship_from_city", "floor_price_usd", "min_lead_days"] }}
+        mine
+      />,
+    );
 
     expect(screen.getByRole("heading", { name: /Your listing so far/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your limits" })).toBeInTheDocument();
     expect(field("Price")).toHaveTextContent("In your words");
     expect(field("Delivery time")).toHaveTextContent("9 days to arrive");
   });

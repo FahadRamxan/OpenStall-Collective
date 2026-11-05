@@ -1,5 +1,6 @@
-"""Reading a listing from a seller's chat (spec 3.1, step 3): the model reads her photos and words; code keeps a price,
-a capacity, a shipping time and a city only with her own words for them, so nothing she did not say is ever listed."""
+"""Reading a listing from a seller's chat (spec 3.1, steps 3 and 4): the model reads her photos and words; code keeps a
+price, a capacity, a shipping time, a city and her limits only with her own words for them, so nothing she did not
+say is ever listed."""
 
 from decimal import Decimal
 
@@ -12,6 +13,7 @@ from openstall_agents.listing_reader import (
     FACTS_OPEN,
     LISTING_SCHEMA,
     MAX_PHOTOS_READ,
+    QUESTIONS,
     ListingReading,
     Said,
     draft_from,
@@ -46,6 +48,10 @@ def answer(**fields):
         "ship_days_words": "",
         "ship_from_city": "",
         "ship_from_city_words": "",
+        "floor_price_usd": 0,
+        "floor_price_words": "",
+        "min_lead_days": 0,
+        "min_lead_days_words": "",
     }
     return {**empty, **fields}
 
@@ -199,3 +205,115 @@ def test_fake_mode_finds_plain_english_facts():
 def test_the_fake_listing_reader_answers_only_listing_requests():
     assert fake_listing_reply(LLMCall("json", "Is this a courier receipt?", None, (), {})) is None
     assert fake_listing_reply(LLMCall("text", f"{FACTS_OPEN}{{}}</facts>", None, (), None)) is None
+
+
+# Prompt 18: her words must name what a number counts, unless they answer its question; and her limits.
+
+
+def test_words_that_name_nothing_never_carry_a_number():
+    said = [Said("Cushion covers, embroidered by hand. Price is 18 dollars.")]
+
+    assert draft_from(answer(price_usd=18, price_words="Cushion covers"), said).price_usd is None
+    assert draft_from(answer(price_usd=18, price_words="18 dollars"), said).price_usd == Decimal("18.00")
+
+
+@pytest.mark.parametrize(
+    ("said", "fields", "kept"),
+    [
+        ("I make 15 a week", {"capacity_per_week": 15, "capacity_words": "15 a week"}, 15),
+        ("Main hafte mein 15 banati hun", {"capacity_per_week": 15, "capacity_words": "hafte mein 15"}, 15),
+        ("Hago 15 por semana", {"capacity_per_week": 15, "capacity_words": "15 por semana"}, 15),
+        ("मैं हफ़्ते में 15 बनाती हूँ", {"capacity_per_week": 15, "capacity_words": "हफ़्ते में 15"}, 15),
+        ("I can make 15", {"capacity_per_week": 15, "capacity_words": "make 15"}, None),
+        ("Parcel 9 din mein pohanchta hai", {"ship_days": 9, "ship_days_words": "9 din"}, 9),
+        ("It takes 9 days from today", {"ship_days": 9, "ship_days_words": "9 days"}, 9),
+        ("It goes out today, 9", {"ship_days": 9, "ship_days_words": "today, 9"}, None),
+        ("US$18 cada uno", {"price_usd": 18, "price_words": "US$18"}, Decimal("18.00")),
+        ("Price 18 each", {"price_usd": 18, "price_words": "18 each"}, None),  # rupees, or dollars? Ask.
+    ],
+)
+def test_her_words_for_a_number_name_what_it_counts_in_her_language(said, fields, kept):
+    reading = draft_from(answer(**fields), [Said(said)])
+
+    fact = next(name for name in ("price_usd", "capacity_per_week", "ship_days") if name in fields)
+    assert getattr(reading, fact) == kept
+
+
+def test_a_bare_number_counts_only_as_the_answer_to_its_own_question():
+    said = [Said("Cushion covers, $18"), Said("9", asked="ship_days")]
+
+    as_asked = draft_from(answer(ship_days=9, ship_days_words="9"), said)
+    misplaced = draft_from(answer(capacity_per_week=9, capacity_words="9"), said)
+
+    assert (as_asked.ship_days, as_asked.words) == (9, {"ship_days": "9"})
+    assert misplaced.capacity_per_week is None
+
+
+def test_a_number_is_matched_as_a_whole_number_not_part_of_another():
+    said = [Said("19", asked="ship_days"), Said("18.50", asked="price_usd")]
+
+    assert draft_from(answer(ship_days=9, ship_days_words="9"), said).ship_days is None
+    assert draft_from(answer(price_usd=18, price_words="18"), said).price_usd is None
+    assert draft_from(answer(price_usd=18.5, price_words="18.50"), said).price_usd == Decimal("18.50")
+
+
+def test_a_number_written_out_counts_as_the_answer_to_its_question():
+    said = [Said("نو", voice_note=True, language="ur", asked="min_lead_days")]
+
+    assert draft_from(answer(min_lead_days=9, min_lead_days_words="نو"), said).min_lead_days == 9
+
+
+def test_her_lowest_price_is_never_above_her_price():
+    said = [Said("$18 each. For a big order my lowest is 15 dollars, or 20 dollars.")]
+
+    kept = draft_from(answer(price_usd=18, price_words="$18", floor_price_usd=15, floor_price_words="15 dollars"), said)
+    above = draft_from(answer(price_usd=18, price_words="$18", floor_price_usd=20, floor_price_words="20 dollars"), said)
+
+    assert (kept.floor_price_usd, kept.words["floor_price_usd"]) == (Decimal("15.00"), "15 dollars")
+    assert above.floor_price_usd is None
+    assert "floor_price_usd" not in above.words
+
+
+@pytest.mark.parametrize(("days", "kept"), [(1, 1), (5, 5), (90, 90), (0, None), (91, None)])
+def test_the_fewest_days_to_make_an_order_is_1_to_90(days, kept):
+    said = [Said(f"I need {days} days to make an order.")]
+
+    assert draft_from(answer(min_lead_days=days, min_lead_days_words=f"{days} days"), said).min_lead_days == kept
+
+
+def test_the_model_is_told_which_question_each_answer_answers():
+    llm = FakeLLM(replies=[answer()])
+
+    read_listing(llm, [Said("Cushion covers"), Said("9", asked="ship_days")], [], maker="Amina")
+
+    prompt = llm.calls[0].prompt
+    assert '"words": "Cushion covers", "answering": null' in prompt
+    assert f'"words": "9", "answering": "{QUESTIONS["ship_days"]}"' in prompt
+    assert QUESTIONS["ship_days"] == "How many days does your parcel take to reach a buyer in the US?"
+    assert "answering" in (llm.calls[0].system or "")
+
+
+def test_fake_mode_reads_a_bare_answer_as_the_answer_to_its_question():
+    llm = FakeLLM(responder=fake_answer)
+    answers = [
+        Said("9", asked="ship_days"),
+        Said("Lahore", asked="ship_from_city"),
+        Said("15", asked="floor_price_usd"),
+        Said("5.", asked="min_lead_days"),
+    ]
+
+    reading = read_listing(llm, [Said(URDU, True, "ur"), *answers], [SAMPLE_PHOTO], maker="Amina")
+
+    assert (reading.price_usd, reading.capacity_per_week) == (Decimal("18.00"), 4)
+    assert (reading.ship_days, reading.ship_from_city) == (9, "Lahore")
+    assert (reading.floor_price_usd, reading.min_lead_days) == (Decimal("15.00"), 5)
+    assert reading.words["min_lead_days"] == "5"
+
+
+def test_fake_mode_finds_her_limits_in_plain_english_and_keeps_them_apart_from_her_price():
+    llm = FakeLLM(responder=fake_answer)
+    said = [Said("Quilts, 45 dollars."), Said("My lowest is 40 dollars, and I need 6 days to make an order.")]
+
+    reading = read_listing(llm, said, [], maker="Priya")
+
+    assert (reading.price_usd, reading.floor_price_usd, reading.min_lead_days) == (Decimal("45.00"), Decimal("40.00"), 6)
