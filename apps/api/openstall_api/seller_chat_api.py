@@ -21,8 +21,9 @@ router = APIRouter(prefix="/api/seller-chat", tags=["seller chat"])
 DEMO_PHONE = r"^[A-Za-z0-9_-]{8,32}$"
 MAX_FILES = 5
 READ_CHUNK = 1024 * 1024
-# Fake mode's sample voice note (dev_api.sample_voice_note), which fake mode hears as Amina's words in Urdu.
+# Fake mode's samples (dev_api): a voice note it hears as Amina's words in Urdu, and a photo of her cushion cover.
 SAMPLE_VOICE_NOTE = "/api/dev/samples/voice-note.wav"
+SAMPLE_PHOTO = "/api/dev/samples/photo.png"
 
 
 class WebChatReply(BaseModel):
@@ -35,13 +36,16 @@ class Samples(BaseModel):
     """Sample files the web chat can attach, as paths on this API. None where this mode has none."""
 
     voice_note: str | None
+    photo: str | None
 
 
 @router.get("/samples")
 def samples() -> Samples:
-    """In fake mode, the sample voice note /seller-chat offers to attach. None in sandbox mode, where a voice note goes
-    to OpenAI, which would hear no words in the sample's hum. Always answers, so the page never logs a failed request."""
-    return Samples(voice_note=SAMPLE_VOICE_NOTE if get_settings().OPENSTALL_MODE == "fake" else None)
+    """In fake mode, the samples /seller-chat offers to attach. None in sandbox mode, where they would go to the real
+    models: OpenAI would hear no words in the sample's hum, and Claude would see a drawn pattern. Always answers, so the
+    page never logs a failed request."""
+    fake = get_settings().OPENSTALL_MODE == "fake"
+    return Samples(voice_note=SAMPLE_VOICE_NOTE if fake else None, photo=SAMPLE_PHOTO if fake else None)
 
 
 async def read_upload(upload: UploadFile) -> InboundFile | Refused:

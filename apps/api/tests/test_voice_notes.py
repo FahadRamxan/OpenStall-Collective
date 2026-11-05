@@ -196,18 +196,21 @@ def test_a_text_message_in_sandbox_mode_without_an_openai_key_is_not_apologised_
 def test_the_web_chat_offers_the_sample_voice_note_in_fake_mode(db):
     samples = client.get("/api/seller-chat/samples").json()
 
-    assert samples == {"voice_note": "/api/dev/samples/voice-note.wav"}
+    assert samples == {"voice_note": "/api/dev/samples/voice-note.wav", "photo": "/api/dev/samples/photo.png"}
     sample = client.get(samples["voice_note"])
     assert sample.status_code == 200
     assert sample.headers["content-type"] == "audio/wav"
     assert sample.content == fixture_voice_note()
+    photo = client.get(samples["photo"])
+    assert (photo.headers["content-type"], photo.content) == ("image/png", fixture_photo())
 
 
 def test_in_sandbox_mode_there_is_no_sample_voice_note(use_settings):
     use_settings(OPENSTALL_MODE="sandbox")
 
-    assert client.get("/api/seller-chat/samples").json() == {"voice_note": None}
+    assert client.get("/api/seller-chat/samples").json() == {"voice_note": None, "photo": None}
     assert client.get("/api/dev/samples/voice-note.wav").status_code == 404
+    assert client.get("/api/dev/samples/photo.png").status_code == 404
 
 
 @pytest.mark.parametrize("words", ["", "   "])

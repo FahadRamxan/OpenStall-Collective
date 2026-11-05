@@ -236,15 +236,19 @@ def test_a_played_message_with_a_photo_and_a_voice_note_shows_in_the_chat(db):
 
     assert response.status_code == 201
     seller_id = response.json()["seller_id"]
-    assert response.json()["replies"] == [WELCOME]
+    listing = (
+        "Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week. Still needed: how many days "
+        "delivery takes and the city it ships from."
+    )
+    assert response.json()["replies"] == [WELCOME, listing]
     [chat] = client.get("/api/chats").json()
     assert (chat["seller"]["name"], chat["channel"], chat["last_text"], chat["messages"]) == (
         "Amina",
         "whatsapp",
-        WELCOME,
-        2,
+        listing,
+        3,
     )
-    played, _ = client.get(f"/api/chats/{seller_id}").json()["messages"]
+    played, _, _ = client.get(f"/api/chats/{seller_id}").json()["messages"]
     assert [item["content_type"] for item in played["media"]] == ["image/png", "audio/wav"]
     assert client.get(played["media"][1]["url"]).content == fixture_voice_note()
 

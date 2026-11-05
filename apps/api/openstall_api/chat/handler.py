@@ -6,11 +6,12 @@ both in the event log, so pages showing the chat update live. The caller deliver
 sends them through the Messenger, and the web chat shows them.
 
 The chat moves through the states collecting, asking, awaiting_confirmation and live. Later steps give each state its
-own turn (drafting the listing, asking what is missing, publishing); for now every turn welcomes a new seller, or says
-what arrived.
+own turn (asking what is missing, publishing); for now a turn welcomes a new seller, and tells her the listing so far.
 
 Her voice notes are turned into text before the message is stored (listen_to_voice_notes, outside any transaction;
 chat/voice.py): the words go on her message as she said them, and their language on her profile if she has none yet.
+Then, while she has no live listing, her whole chat is read into a draft listing (read_listing_from, chat/listing.py):
+kept on her chat, and told back to her with what it still needs.
 
 A maker whose share waits for proof of shipping is answered by the receipt flow first (proof.py): her courier receipt
 photo is read before the message is stored (look_at_photos, outside any transaction), she confirms the number, and the
@@ -25,6 +26,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import LLM, Media, SpeechToText
+from openstall_agents.listing_reader import ListingReading
+from openstall_api.chat.listing import DRAFTING, listing_reply, read_her_listing, update_draft
 from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
 from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
 from openstall_api.events import EventType, record_event
@@ -173,14 +176,25 @@ def refusals(media: list[dict[str, Any]]) -> list[Reply]:
     ]
 
 
-def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]], heard: Heard) -> list[Reply]:
+def turn(
+    chat: ChatSession,
+    first: bool,
+    text: str,
+    media: list[dict[str, Any]],
+    heard: Heard,
+    draft: dict[str, Any] | None = None,
+) -> list[Reply]:
     """The chat's answer to one message, from its state. Files that could not be kept, then voice notes that could not
-    be heard, are always said first."""
+    be heard, are always said first. When her listing was read, she is told the listing so far and what it still
+    needs (`draft`)."""
     replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
     if first:
         replies.append(Reply(WELCOME))
-    elif what:
+    if draft is not None:
+        thanks = f"Thank you, I have {what}. " if what and not first else ""
+        replies.append(Reply(thanks + listing_reply(draft)))
+    elif what and not first:
         replies.append(Reply(f"Thank you, I have {what}. {NUDGE}"))
     return replies
 
@@ -200,18 +214,45 @@ def look_at_photos(
     return look_at_photo(sender.channel, sender.address, sender.seller_id, photos[0], llm)
 
 
-def listen_to_voice_notes(files: Sequence[InboundFile | Refused], speech: Callable[[], SpeechToText]) -> Heard:
-    """Before her message is stored: what each voice note she sent says (voice.listen). Only voice notes the media store
-    will keep are sent anywhere; the adapter is not even made when there are none."""
-    notes = [
+def keepable(files: Sequence[InboundFile | Refused], kind: str) -> list[Media]:
+    """Her files of one kind ("image/" or "audio/") that the media store will keep: only these are sent anywhere."""
+    return [
         Media(item.data, item.content_type)
         for item in files
         if isinstance(item, InboundFile)
-        and item.content_type.startswith("audio/")
+        and item.content_type.startswith(kind)
         and item.content_type in ALLOWED_TYPES
         and len(item.data) <= MAX_BYTES
     ]
-    return listen(notes, speech)
+
+
+def listen_to_voice_notes(files: Sequence[InboundFile | Refused], speech: Callable[[], SpeechToText]) -> Heard:
+    """Before her message is stored: what each voice note she sent says (voice.listen). The adapter is not even made
+    when there are none."""
+    return listen(keepable(files, "audio/"), speech)
+
+
+def read_listing_from(
+    sender: Sender,
+    text: str,
+    files: Sequence[InboundFile | Refused],
+    heard: Heard,
+    store: MediaStore,
+    llm: Callable[[], LLM],
+) -> ListingReading | None:
+    """Before her message is stored: her listing as her whole chat tells it, with this message (listing.py). None
+    when there is nothing new to read, or she is not drafting a listing."""
+    return read_her_listing(
+        sender.channel,
+        sender.address,
+        sender.seller_id,
+        sender.name_guess,
+        text,
+        keepable(files, "image/"),
+        heard,
+        store,
+        llm,
+    )
 
 
 def handle_inbound(
@@ -222,10 +263,11 @@ def handle_inbound(
     files: Sequence[InboundFile | Refused],
     photo: PhotoReading | None = None,
     heard: Heard | None = None,
+    reading: ListingReading | None = None,
 ) -> HandledMessage:
     """Store a seller's message and work out the replies. The caller commits, then delivers the replies, then pays
-    any share in `pay_after`. `photo` is what look_at_photos read on her photo, and `heard` what listen_to_voice_notes
-    heard in her voice notes, both before this transaction."""
+    any share in `pay_after`. `photo` is what look_at_photos read on her photo, `heard` what listen_to_voice_notes
+    heard in her voice notes, and `reading` her listing as read_listing_from read it, all before this transaction."""
     heard = heard or Heard()
     seller = find_seller(session, sender)
     chat = find_chat(session, seller, sender.channel)
@@ -261,7 +303,10 @@ def handle_inbound(
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]
     else:
-        replies = turn(chat, first, text, media, heard)
+        # A draft starts once something for a listing is read; once there is one, every reading keeps it current.
+        drafting = reading is not None and chat.state in DRAFTING and (not reading.empty or chat.draft_json)
+        draft = update_draft(session, chat, seller, reading) if drafting and reading is not None else None
+        replies = turn(chat, first, text, media, heard, draft)
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(

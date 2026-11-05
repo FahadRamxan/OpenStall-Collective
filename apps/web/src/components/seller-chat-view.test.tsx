@@ -146,6 +146,33 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(within(reply).queryByText(/as text/)).not.toBeInTheDocument();
   });
 
+  it("shows her listing so far under her chat while she is making one", async () => {
+    const drafting: Conversation = {
+      ...CONVERSATION,
+      draft: {
+        title: "Hand-embroidered cushion cover",
+        description: null,
+        category: "home textiles",
+        variants: [],
+        price_usd: "18.00",
+        capacity_per_week: null,
+        ship_days: null,
+        ship_from_city: null,
+        photos: [],
+        words: { price_usd: "$18" },
+        missing: ["description", "variants", "capacity_per_week", "ship_days", "ship_from_city", "photos"],
+      },
+    };
+    vi.stubGlobal("fetch", api({ ...BROWSING, "GET /api/chats/s_amina": () => Response.json(drafting) }));
+
+    render(<SellerChatView />);
+
+    const draft = await screen.findByRole("region", { name: /Her listing so far/ });
+    expect(draft).toHaveTextContent("Hand-embroidered cushion cover");
+    expect(draft).toHaveTextContent("$18.00 each");
+    expect(within(draft).getAllByText("Still to ask")).toHaveLength(6);
+  });
+
   it("a new message appears without reloading", async () => {
     const later: Conversation = {
       ...CONVERSATION,
@@ -361,7 +388,8 @@ describe("SellerChatView, your own demo phone", () => {
       "fetch",
       api({
         "GET /api/chats": () => Response.json([]),
-        "GET /api/seller-chat/samples": () => Response.json({ voice_note: "/api/dev/samples/voice-note.wav" }),
+        "GET /api/seller-chat/samples": () =>
+          Response.json({ voice_note: "/api/dev/samples/voice-note.wav", photo: "/api/dev/samples/photo.png" }),
         "GET /api/dev/samples/voice-note.wav": () => new Response("RIFF", { headers: { "Content-Type": "audio/wav" } }),
         "POST /api/seller-chat/messages": (init) => {
           sent = init?.body as FormData;
@@ -386,7 +414,7 @@ describe("SellerChatView, your own demo phone", () => {
       "fetch",
       api({
         "GET /api/chats": () => Response.json([]),
-        "GET /api/seller-chat/samples": () => Response.json({ voice_note: null }),
+        "GET /api/seller-chat/samples": () => Response.json({ voice_note: null, photo: null }),
       }),
     );
 

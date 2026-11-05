@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type
 
 import { Badge } from "@/components/badge";
 import { errorMessage } from "@/lib/api";
-import { fetchSample } from "@/lib/chats";
+import { fetchSample, type ChatSamples } from "@/lib/chats";
 
 type Recording = { recorder: MediaRecorder; started: number };
 
@@ -32,20 +32,26 @@ function useCanRecord(): boolean {
 const BUTTON =
   "inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-border bg-surface px-4 text-sm font-semibold hover:bg-background focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
+/** The test-mode samples, each with its button's words and the name its file is sent under. */
+const SAMPLES = [
+  { key: "photo", label: "Attach the sample photo", file: "sample-photo.png", what: "photo" },
+  { key: "voice_note", label: "Attach the sample voice note", file: "sample-voice-note.wav", what: "voice note" },
+] as const;
+
 /**
  * The seller's side of the web chat: a message, photos, and a voice note recorded in the browser (or uploaded, where
  * the browser cannot record). `onSend` says whether it went; on failure everything stays, ready to send again.
- * `sampleVoiceNote`, in test mode: the API path of a sample voice note to attach, so a voice note can be tried without
- * a microphone (test mode hears it as Amina's words in Urdu).
+ * `samples`, in test mode: the API paths of a sample photo and voice note to attach, so a listing can be tried without
+ * a camera or a microphone (test mode reads them as Amina's cushion cover, and her words in Urdu).
  */
 export function ChatComposer({
   onSend,
   busy,
-  sampleVoiceNote = null,
+  samples = null,
 }: {
   onSend: (text: string, files: File[]) => Promise<boolean>;
   busy: boolean;
-  sampleVoiceNote?: string | null;
+  samples?: ChatSamples | null;
 }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -69,19 +75,22 @@ export function ChatComposer({
     setFiles((current) => [...current, ...chosen].slice(0, MAX_FILES));
   }
 
-  async function attachSample() {
-    if (!sampleVoiceNote) return;
+  async function attachSample(path: string, name: string, what: string) {
     setSampleProblem(null);
     setFetchingSample(true);
     try {
-      const sample = await fetchSample(sampleVoiceNote, "sample-voice-note.wav");
+      const sample = await fetchSample(path, name);
       setFiles((current) => [...current, sample].slice(0, MAX_FILES));
     } catch (error) {
-      setSampleProblem(`The sample voice note could not be attached: ${errorMessage(error)}`);
+      setSampleProblem(`The sample ${what} could not be attached: ${errorMessage(error)}`);
     } finally {
       setFetchingSample(false);
     }
   }
+  const offered = SAMPLES.flatMap((sample) => {
+    const path = samples?.[sample.key];
+    return path ? [{ ...sample, path }] : [];
+  });
 
   async function startRecording() {
     setProblem(null);
@@ -196,16 +205,6 @@ export function ChatComposer({
             Upload a voice note
           </label>
         )}
-        {sampleVoiceNote ? (
-          <button
-            type="button"
-            onClick={attachSample}
-            disabled={fetchingSample || !!recording || files.length >= MAX_FILES}
-            className={`${BUTTON} disabled:cursor-not-allowed disabled:opacity-60`}
-          >
-            Attach the sample voice note <Badge tone="warning">Test mode</Badge>
-          </button>
-        ) : null}
         <button
           type="submit"
           disabled={busy || !!recording || (!text.trim() && files.length === 0)}
@@ -214,6 +213,22 @@ export function ChatComposer({
           {busy ? "Sending…" : "Send"}
         </button>
       </div>
+      {offered.length ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-dashed border-border pt-3">
+          <Badge tone="warning">Test mode</Badge>
+          {offered.map((sample) => (
+            <button
+              key={sample.key}
+              type="button"
+              onClick={() => attachSample(sample.path, sample.file, sample.what)}
+              disabled={fetchingSample || !!recording || files.length >= MAX_FILES}
+              className={`${BUTTON} disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              {sample.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {problem ? (
         <p role="status" className="mt-2 text-sm text-muted">
           {problem}

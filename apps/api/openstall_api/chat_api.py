@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -61,9 +61,29 @@ class ChatSummary(BaseModel):
     messages: int
 
 
+class ListingDraftOut(BaseModel):
+    """Her listing as far as her chat has told it (spec 3.1 step 3), before she confirms it: not live for buyers.
+    `words`: the words she used for each number and her city, so a wrong reading can be traced. `missing`: the fields
+    still to ask her for, in the spec's order."""
+
+    title: str | None = None
+    description: str | None = None
+    category: str | None = None
+    variants: list[str] = Field(default_factory=list)
+    price_usd: str | None = None
+    capacity_per_week: int | None = None
+    ship_days: int | None = None
+    ship_from_city: str | None = None
+    photos: list[str] = Field(default_factory=list)
+    words: dict[str, str] = Field(default_factory=dict)
+    missing: list[str] = Field(default_factory=list)
+
+
 class Conversation(BaseModel):
     seller: ChatSeller
     messages: list[MessageOut]
+    # Her listing draft, while she is making one (prompt 17); None otherwise.
+    draft: ListingDraftOut | None = None
     # Fake mode only, for a maker with no phone of her own (the seeded makers): /seller-chat can play her, through
     # POST /api/dev/sellers/{id}/messages, to send her courier receipt and answer OpenStall.
     playable: bool = False
@@ -132,8 +152,15 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
             .limit(MAX_MESSAGES)
         )
     )
+    drafting = session.scalar(
+        select(ChatSession)
+        .where(ChatSession.seller_id == seller_id, ChatSession.draft_json.is_not(None))
+        .order_by(ChatSession.updated_at.desc())
+        .limit(1)
+    )
     return Conversation(
         seller=seller_out(seller),
+        draft=ListingDraftOut.model_validate(drafting.draft_json) if drafting and drafting.draft_json else None,
         playable=get_settings().OPENSTALL_MODE == "fake" and not seller.whatsapp_number and not seller.web_chat_id,
         messages=[
             MessageOut(

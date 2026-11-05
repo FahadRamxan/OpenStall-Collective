@@ -29,6 +29,8 @@ UI_LABELS = [
     "Reset demo",
     "Your demo phone",
     "Attach the sample voice note",
+    "Attach the sample photo",
+    "Your listing so far",
     "API online",
     "API offline",
 ]

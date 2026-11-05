@@ -16,7 +16,7 @@ from openstall_api.chat.inbox import receive
 from openstall_api.chat.store import channel_for
 from openstall_api.db import get_session, new_session
 from openstall_api.events_api import fake_mode_only
-from openstall_api.fixtures import demo_shipment, fixture_receipt, fixture_voice_note
+from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
 from openstall_api.models import Offer, OrderPart, PartStatus, Seller
 from openstall_api.offers import OfferOut
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
@@ -55,6 +55,13 @@ def sample_voice_note() -> Response:
     cushion covers in Urdu (fixtures.SAMPLE_VOICE_NOTE_SAYS). /seller-chat offers to attach it (GET
     /api/seller-chat/samples), so anyone can try a voice note without a microphone or an OpenAI key."""
     return Response(fixture_voice_note(), media_type="audio/wav")
+
+
+@router.get("/samples/photo.png")
+def sample_photo() -> Response:
+    """Fake mode's sample product photo: the seeded Amina's cushion cover, which fake mode's stand-in model reads as
+    fixtures.SAMPLE_PRODUCT. /seller-chat offers to attach it."""
+    return Response(fixture_photo(), media_type="image/png")
 
 
 @router.post("/story-orders", status_code=201)

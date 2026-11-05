@@ -12,14 +12,23 @@ import zlib
 from functools import cache
 
 from openstall_agents.adapters import Transcript
+from openstall_agents.listing_reader import fixture_product_text
 from openstall_agents.receipt_reader import fixture_receipt_text
 
 # What fake mode hears in fixture_voice_note(), the sample voice note: Amina's words from the story (spec section 2,
-# step 1) as she would say them in Urdu. "Embroidered cushion covers, in three colours, 18 dollars each. I can make
-# 15 a week."
+# step 1) as she would say them in Urdu, with the seeded Amina's own numbers (seed.AMINA.source_text). "Embroidered
+# cushion covers, in three colours, 18 dollars each. I can make four a week."
 SAMPLE_VOICE_NOTE_SAYS = Transcript(
-    "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں پندرہ بنا سکتی ہوں۔", "ur"
+    "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں چار بنا سکتی ہوں۔", "ur"
 )
+# What fake mode's stand-in model sees in fixture_photo(), the sample product photo: the seeded Amina's cushion cover.
+SAMPLE_PRODUCT = {
+    "title": "Hand-embroidered cushion cover",
+    "description": "A cotton cushion cover with a diamond lattice embroidered by hand in teal and mustard on cream, "
+    "inside a red border.",
+    "category": "home textiles",
+    "variants": ["red", "teal", "mustard"],
+}
 
 
 def known_voice_notes() -> dict[str, Transcript]:
@@ -102,7 +111,9 @@ def fixture_receipt(carrier: str, tracking_number: str) -> bytes:
 
 @cache
 def fixture_photo() -> bytes:
-    """A 240 × 240 cushion cover: a red border and a diamond lattice in teal and gold on cream."""
+    """A 240 × 240 cushion cover: a red border and a diamond lattice in teal and gold on cream. What it shows is in its
+    PNG text chunk (SAMPLE_PRODUCT), which fake mode's stand-in model reads; Claude in sandbox mode would look at a
+    real photo instead."""
     size = 240
     rows = []
     for y in range(size):
@@ -118,7 +129,7 @@ def fixture_photo() -> bytes:
                 colour = TEAL if u < 4 or v < 4 else GOLD if (u - 20) ** 2 + (v - 20) ** 2 < 30 else CREAM
             row += bytes(colour)
         rows.append(bytes(row))
-    return _png(size, size, rows)
+    return _png(size, size, rows, fixture_product_text(SAMPLE_PRODUCT))
 
 
 @cache

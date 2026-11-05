@@ -6,10 +6,11 @@ The adapter registry gives fake mode's FakeLLM this responder. Each agent adds i
 
 from openstall_agents.adapters.llm import LLMCall, Reply
 from openstall_agents.explain import fake_explanation_reply
+from openstall_agents.listing_reader import fake_listing_reply
 from openstall_agents.receipt_reader import fake_receipt_reply
 from openstall_agents.seller_agent import fake_seller_reply
 
-ANSWERS = (fake_seller_reply, fake_explanation_reply, fake_receipt_reply)
+ANSWERS = (fake_seller_reply, fake_explanation_reply, fake_receipt_reply, fake_listing_reply)
 
 
 def fake_answer(call: LLMCall) -> Reply:

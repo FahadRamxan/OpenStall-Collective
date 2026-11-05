@@ -2,10 +2,11 @@
 playing a seeded maker. One path, so every channel behaves the same.
 
 1. Her photo is looked at first, outside any transaction (the vision model may take seconds), if she has a share
-   waiting for proof of shipping (handler.look_at_photos); and her voice notes are turned into text, also outside it
-   (handler.listen_to_voice_notes).
-2. Her message, what her voice notes said, and the replies are stored in one transaction (handler.handle_inbound),
-   and committed.
+   waiting for proof of shipping (handler.look_at_photos); her voice notes are turned into text, also outside it
+   (handler.listen_to_voice_notes); and a seller drafting her listing has it read from her whole chat
+   (handler.read_listing_from, chat/listing.py).
+2. Her message, what her voice notes said, her listing draft and the replies are stored in one transaction
+   (handler.handle_inbound), and committed.
 3. On WhatsApp the replies are sent through the Messenger; the web chat shows them from the answer.
 4. Any share she proved she shipped is captured and paid (proof.pay_on_proof), now or as a background task.
 """
@@ -23,6 +24,7 @@ from openstall_api.chat.handler import (
     handle_inbound,
     listen_to_voice_notes,
     look_at_photos,
+    read_listing_from,
 )
 from openstall_api.db import session_scope
 from openstall_api.media import get_media_store
@@ -40,10 +42,12 @@ def receive(
 ) -> HandledMessage:
     """Handle one message from a seller, end to end. Without `later`, payments run before this returns."""
     registry = get_registry()
+    store = get_media_store()
     photo = look_at_photos(sender, files, lambda: registry.llm)
     heard = listen_to_voice_notes(files, lambda: registry.speech_to_text)
+    reading = read_listing_from(sender, text, files, heard, store, lambda: registry.llm)
     with session_scope() as session:
-        handled = handle_inbound(session, get_media_store(), sender, text, files, photo, heard)
+        handled = handle_inbound(session, store, sender, text, files, photo, heard, reading)
     if sender.channel == Channel.WHATSAPP:
         messenger = registry.messenger
         for reply in handled.replies:

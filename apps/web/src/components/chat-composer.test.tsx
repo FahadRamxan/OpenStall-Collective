@@ -31,7 +31,7 @@ describe("ChatComposer, the sample voice note (test mode)", () => {
       .mockResolvedValue(new Response("RIFF a made-up wav", { headers: { "Content-Type": "audio/wav" } }));
     vi.stubGlobal("fetch", fetch);
     const onSend = vi.fn().mockResolvedValue(true);
-    render(<ChatComposer onSend={onSend} busy={false} sampleVoiceNote={SAMPLE} />);
+    render(<ChatComposer onSend={onSend} busy={false} samples={{ voice_note: SAMPLE, photo: null }} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Attach the sample voice note/ }));
 
@@ -46,7 +46,7 @@ describe("ChatComposer, the sample voice note (test mode)", () => {
 
   it("says so when the sample cannot be loaded, and keeps everything else as it was", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("gone", { status: 404 })));
-    render(<ChatComposer onSend={vi.fn()} busy={false} sampleVoiceNote={SAMPLE} />);
+    render(<ChatComposer onSend={vi.fn()} busy={false} samples={{ voice_note: SAMPLE, photo: null }} />);
 
     fireEvent.click(screen.getByRole("button", { name: /Attach the sample voice note/ }));
 
@@ -54,8 +54,27 @@ describe("ChatComposer, the sample voice note (test mode)", () => {
     expect(screen.queryByRole("list", { name: "Attached" })).not.toBeInTheDocument();
   });
 
+  it("offers the sample photo too, under one test mode label", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("\x89PNG made-up", { headers: { "Content-Type": "image/png" } })),
+    );
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        busy={false}
+        samples={{ voice_note: SAMPLE, photo: "/api/dev/samples/photo.png" }}
+      />,
+    );
+
+    expect(screen.getAllByText("Test mode")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Attach the sample photo" }));
+
+    expect(await screen.findByRole("button", { name: "Remove sample-photo.png" })).toBeInTheDocument();
+  });
+
   it("outside test mode there is no sample to attach", () => {
-    render(<ChatComposer onSend={vi.fn()} busy={false} sampleVoiceNote={null} />);
+    render(<ChatComposer onSend={vi.fn()} busy={false} samples={null} />);
 
     expect(screen.queryByRole("button", { name: /sample voice note/ })).not.toBeInTheDocument();
   });

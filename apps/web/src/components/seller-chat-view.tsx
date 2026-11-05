@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { ChatComposer } from "@/components/chat-composer";
+import { ListingDraftCard } from "@/components/listing-draft";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -159,29 +160,32 @@ export function SellerChatView() {
       </div>
       <section aria-label="Conversation" className="min-w-0">
         {mine ? (
-          <Phone
-            title={loaded?.seller.name ?? "You"}
-            subtitle="Web chat · your demo phone"
-            messages={sellerId ? (loaded?.messages ?? []) : []}
-            perspective="seller"
-            pending={pending}
-            loading={!!sellerId && !loaded && conversation?.state !== "failed"}
-            empty="Send a photo of something you make, or tell OpenStall about it, to start."
-            footer={
-              <>
-                {problem ? (
-                  <p role="alert" className="border-t border-border bg-danger-soft px-4 py-2 text-sm">
-                    {problem}
-                  </p>
-                ) : null}
-                <ChatComposer
-                  onSend={send}
-                  busy={pending.some((item) => item.messageId === null)}
-                  sampleVoiceNote={samples?.voice_note ?? null}
-                />
-              </>
-            }
-          />
+          <>
+            <Phone
+              title={loaded?.seller.name ?? "You"}
+              subtitle="Web chat · your demo phone"
+              messages={sellerId ? (loaded?.messages ?? []) : []}
+              perspective="seller"
+              pending={pending}
+              loading={!!sellerId && !loaded && conversation?.state !== "failed"}
+              empty="Send a photo of something you make, or tell OpenStall about it, to start."
+              footer={
+                <>
+                  {problem ? (
+                    <p role="alert" className="border-t border-border bg-danger-soft px-4 py-2 text-sm">
+                      {problem}
+                    </p>
+                  ) : null}
+                  <ChatComposer
+                    onSend={send}
+                    busy={pending.some((item) => item.messageId === null)}
+                    samples={samples}
+                  />
+                </>
+              }
+            />
+            {sellerId && loaded?.draft ? <ListingDraftCard draft={loaded.draft} mine /> : null}
+          </>
         ) : conversation?.state === "failed" ? (
           <p role="alert" className="rounded-2xl border border-border bg-surface p-5 text-muted">
             {conversation.message}
@@ -204,6 +208,7 @@ export function SellerChatView() {
                 </p>
               }
             />
+            {loaded.draft ? <ListingDraftCard draft={loaded.draft} mine={false} /> : null}
             {loaded.playable ? (
               <PlayPanel name={loaded.seller.name} sellerId={loaded.seller.id} onSent={() => setVersion((count) => count + 1)} />
             ) : null}

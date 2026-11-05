@@ -5,8 +5,8 @@ import { E2E_API_URL } from "../playwright.config";
 // Voice notes to text (prompt 16, spec 3.1 step 2): a seller's voice note becomes text before her message is stored,
 // kept word for word as she said it, and its language goes on her profile. Test mode hears its sample voice note as
 // Amina's words from the story, in Urdu: "Embroidered cushion covers, in three colours, 18 dollars each. I can make
-// 15 a week."
-const URDU = "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں پندرہ بنا سکتی ہوں۔";
+// four a week."
+const URDU = "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں چار بنا سکتی ہوں۔";
 
 test("in the web chat, the sample voice note comes back as her words in Urdu, and the live feed says so", async ({
   page,

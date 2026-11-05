@@ -31,9 +31,29 @@ export type ChatSummary = {
   messages: number;
 };
 
+/**
+ * A seller's listing as far as her chat has told it, before she confirms it: not live for buyers. `words`: the words
+ * she used for each number and her city. `missing`: the fields still to ask her for, in the spec's order.
+ */
+export type ListingDraft = {
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  variants: string[];
+  price_usd: string | null;
+  capacity_per_week: number | null;
+  ship_days: number | null;
+  ship_from_city: string | null;
+  photos: string[];
+  words: Partial<Record<string, string>>;
+  missing: string[];
+};
+
 export type Conversation = {
   seller: ChatSeller;
   messages: ChatMessage[];
+  /** Her listing draft, while she is making one. */
+  draft?: ListingDraft | null;
   /** Test mode only, for a maker with no phone of her own (the seeded makers): this page can play her. */
   playable?: boolean;
 };
@@ -61,7 +81,7 @@ export function sendWebMessage(sender: string, text: string, files: File[]): Pro
 }
 
 /** Sample files the web chat can attach, as paths on the API: in test mode only, null otherwise. */
-export type ChatSamples = { voice_note: string | null };
+export type ChatSamples = { voice_note: string | null; photo: string | null };
 
 export function getSamples(init: RequestInit = {}): Promise<ChatSamples> {
   return apiGet<ChatSamples>("/api/seller-chat/samples", init);
