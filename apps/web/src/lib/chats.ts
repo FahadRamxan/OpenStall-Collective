@@ -1,4 +1,4 @@
-import { apiFetch, apiGet } from "@/lib/api";
+import { apiFetch, apiGet, apiPost } from "@/lib/api";
 
 export type ChatChannel = "whatsapp" | "web";
 
@@ -25,7 +25,12 @@ export type ChatSummary = {
   messages: number;
 };
 
-export type Conversation = { seller: ChatSeller; messages: ChatMessage[] };
+export type Conversation = {
+  seller: ChatSeller;
+  messages: ChatMessage[];
+  /** Test mode only, for a maker with no phone of her own (the seeded makers): this page can play her. */
+  playable?: boolean;
+};
 
 /** Every conversation with at least one message, the most recent first. */
 export function getChats(init: RequestInit = {}): Promise<ChatSummary[]> {
@@ -47,6 +52,14 @@ export function sendWebMessage(sender: string, text: string, files: File[]): Pro
   form.set("text", text);
   for (const file of files) form.append("files", file);
   return apiFetch<WebChatReply>("/api/seller-chat/messages", { method: "POST", body: form });
+}
+
+/**
+ * Test mode only: a message as if this maker sent it, with fake mode's courier receipt photo if `receipt`. It takes the
+ * path a real message takes; the API refuses it (404) outside test mode.
+ */
+export function playSeller(sellerId: string, text: string, receipt: boolean): Promise<WebChatReply> {
+  return apiPost<WebChatReply>(`/api/dev/sellers/${encodeURIComponent(sellerId)}/messages`, { text, receipt });
 }
 
 export const CHANNEL_LABELS: Record<ChatChannel, string> = { whatsapp: "WhatsApp", web: "Web chat" };

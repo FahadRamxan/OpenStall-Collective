@@ -8,22 +8,29 @@ sends them through the Messenger, and the web chat shows them.
 The chat moves through the states collecting, asking, awaiting_confirmation and live. Later steps give each state its
 own turn (transcribing, drafting the listing, asking what is missing, publishing); for now every turn welcomes a new
 seller, or says what arrived.
+
+A maker whose share waits for proof of shipping is answered by the receipt flow first (proof.py): her courier receipt
+photo is read before the message is stored (look_at_photos, outside any transaction), she confirms the number, and the
+shares to pay come back in HandledMessage.pay_after, for the caller to pay once the message is committed.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from openstall_agents.adapters import LLM
+from openstall_api.chat.store import CHANNEL_WORDS, find_chat, save_message
 from openstall_api.events import EventType, record_event
 from openstall_api.media import MediaRejected, MediaStore
-from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller, utcnow
+from openstall_api.models import Channel, ChatMessage, ChatSession, DataSource, Direction, Seller
+from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
 
 # The countries in the demo, by dialing code. Other numbers leave the country empty until the seller says.
 DIALING_CODES = {"92": "PK", "91": "IN", "52": "MX", "44": "GB", "1": "US"}
-CHANNEL_WORDS = {Channel.WHATSAPP: "on WhatsApp", Channel.WEB: "in the web chat"}
+__all__ = ["CHANNEL_WORDS", "find_chat", "save_message"]  # kept here too: they moved to chat/store.py
 
 
 WELCOME = (
@@ -36,11 +43,13 @@ NUDGE = "Send more photos, or tell me the price and how many you can make each w
 @dataclass(frozen=True)
 class Sender:
     """Who a message is from. On WhatsApp: her number in E.164 form, and her profile name as a first guess at her
-    name. On the web: the demo phone id her browser keeps."""
+    name. On the web: the demo phone id her browser keeps. `seller_id`: fake mode playing a seeded maker, who has no
+    phone of her own (POST /api/dev/sellers/{id}/messages)."""
 
     channel: Channel
     address: str
     name_guess: str | None = None
+    seller_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +78,8 @@ class HandledMessage:
     seller_id: str
     message_id: str
     replies: list[Reply] = field(default_factory=list)
+    # Shares she proved she shipped, to capture and pay once this message is committed (proof.pay_on_proof).
+    pay_after: list[str] = field(default_factory=list)
 
 
 def country_of(number: str) -> str | None:
@@ -81,6 +92,11 @@ def country_of(number: str) -> str | None:
 
 def find_seller(session: Session, sender: Sender) -> Seller:
     """The seller behind a sender, made on her first message. Her profile name is only a first guess at her name."""
+    if sender.seller_id is not None:  # fake mode playing a seeded maker: the caller checked she exists
+        played = session.get(Seller, sender.seller_id)
+        if played is None:
+            raise LookupError(f"There is no seller called {sender.seller_id!r}.")
+        return played
     if sender.channel == Channel.WHATSAPP:
         seller = session.scalar(select(Seller).where(Seller.whatsapp_number == sender.address))
         made = {"whatsapp_number": sender.address, "country": country_of(sender.address)}
@@ -94,15 +110,6 @@ def find_seller(session: Session, sender: Sender) -> Seller:
         session.add(seller)
         session.flush()
     return seller
-
-
-def find_chat(session: Session, seller: Seller, channel: Channel) -> ChatSession:
-    chat = session.scalar(select(ChatSession).where(ChatSession.seller_id == seller.id, ChatSession.channel == channel))
-    if chat is None:
-        chat = ChatSession(seller_id=seller.id, channel=channel, state=ChatState.COLLECTING)
-        session.add(chat)
-        session.flush()
-    return chat
 
 
 def keep_media(store: MediaStore, files: Sequence[InboundFile | Refused]) -> list[dict[str, Any]]:
@@ -153,13 +160,18 @@ def received(text: str, media: list[dict[str, Any]]) -> str | None:
     return " and ".join([", ".join(parts[:-1]), parts[-1]] if len(parts) > 1 else parts)
 
 
-def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]]) -> list[Reply]:
-    """The chat's answer to one message, from its state. Files that could not be kept are always said first."""
-    replies = [
+def refusals(media: list[dict[str, Any]]) -> list[Reply]:
+    """One apology for each file that could not be kept."""
+    return [
         Reply(f"Sorry, I could not keep one of your files: {item['refused']} Photos and voice notes work best.")
         for item in media
         if "refused" in item
     ]
+
+
+def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]]) -> list[Reply]:
+    """The chat's answer to one message, from its state. Files that could not be kept are always said first."""
+    replies = refusals(media)
     what = received(text, media)
     if first:
         replies.append(Reply(WELCOME))
@@ -168,22 +180,31 @@ def turn(chat: ChatSession, first: bool, text: str, media: list[dict[str, Any]])
     return replies
 
 
-def save_message(
-    session: Session, chat: ChatSession, direction: Direction, text: str, media: list[dict[str, Any]]
-) -> ChatMessage:
-    message = ChatMessage(
-        session_id=chat.id, direction=direction, channel=chat.channel, text=text or None, media_json=media
-    )
-    session.add(message)
-    chat.updated_at = utcnow()
-    session.flush()
-    return message
+def look_at_photos(
+    sender: Sender, files: Sequence[InboundFile | Refused], llm: Callable[[], LLM]
+) -> PhotoReading | None:
+    """Before her message is stored: if she has a share waiting for proof of shipping, what the vision model reads on
+    the first photo she sent (proof.look_at_photo). None, without asking any model, otherwise."""
+    photos = [
+        (index, item.data, item.content_type)
+        for index, item in enumerate(files)
+        if isinstance(item, InboundFile) and item.content_type.startswith("image/")
+    ]
+    if not photos:
+        return None
+    return look_at_photo(sender.channel, sender.address, sender.seller_id, photos[0], llm)
 
 
 def handle_inbound(
-    session: Session, store: MediaStore, sender: Sender, text: str, files: Sequence[InboundFile | Refused]
+    session: Session,
+    store: MediaStore,
+    sender: Sender,
+    text: str,
+    files: Sequence[InboundFile | Refused],
+    photo: PhotoReading | None = None,
 ) -> HandledMessage:
-    """Store a seller's message and work out the replies. The caller commits, then delivers the replies."""
+    """Store a seller's message and work out the replies. The caller commits, then delivers the replies, then pays
+    any share in `pay_after`. `photo` is what look_at_photos read on her photo, before this transaction."""
     seller = find_seller(session, sender)
     chat = find_chat(session, seller, sender.channel)
     first = not session.scalar(
@@ -198,7 +219,11 @@ def handle_inbound(
         entity_id=seller.id,
         payload={"channel": sender.channel, "message_id": message.id},
     )
-    replies = turn(chat, first, text, media)
+    proof = proof_turn(session, seller, text, media, photo, message.id)
+    if proof is not None:
+        replies = refusals(media) + [Reply(reply) for reply in proof.replies]
+    else:
+        replies = turn(chat, first, text, media)
     for reply in replies:
         sent = save_message(session, chat, Direction.OUTBOUND, reply.text, [])
         record_event(
@@ -208,4 +233,6 @@ def handle_inbound(
             entity_id=seller.id,
             payload={"channel": sender.channel, "message_id": sent.id},
         )
-    return HandledMessage(seller_id=seller.id, message_id=message.id, replies=replies)
+    return HandledMessage(
+        seller_id=seller.id, message_id=message.id, replies=replies, pay_after=proof.pay_after if proof else []
+    )

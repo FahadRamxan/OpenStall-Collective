@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SellerChatView } from "@/components/seller-chat-view";
@@ -200,6 +200,44 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(text).toHaveAttribute("dir", "auto");
     // Her own words too, in the bubble and in the sellers list's preview.
     for (const words of screen.getAllByText("Here is my cushion")) expect(words).toHaveAttribute("dir", "auto");
+  });
+
+  it("in test mode, a maker with no phone can be played: her courier receipt photo, then her reply", async () => {
+    const posted: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json(CHATS),
+        "GET /api/chats/s_amina": () => Response.json({ ...CONVERSATION, playable: true }),
+        "POST /api/dev/sellers/s_amina/messages": (init) => {
+          posted.push(JSON.parse(String(init?.body)));
+          return Response.json({ seller_id: "s_amina", message_id: "cm_9", replies: [] }, { status: 201 });
+        },
+      }),
+    );
+    render(<SellerChatView />);
+
+    const panel = await screen.findByRole("region", { name: /Play Amina/ });
+    expect(panel).toHaveTextContent("Test mode");
+    fireEvent.click(within(panel).getByRole("button", { name: /Send her courier receipt photo/ }));
+    await waitFor(() => expect(posted).toEqual([{ text: "", receipt: true }]));
+
+    const reply = within(panel).getByRole("textbox", { name: "Reply as Amina" });
+    expect(within(panel).getByRole("button", { name: "Send as Amina" })).toBeDisabled();
+    fireEvent.change(reply, { target: { value: "ہاں" } });
+    fireEvent.click(within(panel).getByRole("button", { name: "Send as Amina" }));
+
+    await waitFor(() => expect(posted).toEqual([{ text: "", receipt: true }, { text: "ہاں", receipt: false }]));
+    await waitFor(() => expect(reply).toHaveValue(""));
+  });
+
+  it("offers no play panel for a maker who chats from her own phone", async () => {
+    vi.stubGlobal("fetch", api(BROWSING));
+
+    render(<SellerChatView />);
+
+    await screen.findByRole("list", { name: "Messages with Amina" });
+    expect(screen.queryByRole("region", { name: /Play Amina/ })).not.toBeInTheDocument();
   });
 
   it("an unknown seller says so", async () => {

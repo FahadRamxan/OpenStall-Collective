@@ -28,12 +28,14 @@ from typing import Any, Literal, cast
 from sqlalchemy import CursorResult, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from openstall_api.chat.handler import CHANNEL_WORDS, find_chat, save_message
+from openstall_api.chat.store import CHANNEL_WORDS, channel_for, find_chat, save_message
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
 from openstall_api.models import Channel, Direction, Event, Order, OrderPart, PartStatus, utcnow
 from openstall_api.payments import RESERVED, seller_rail
+from openstall_api.wording import LOCALES, format_day, format_money, template_language
+from openstall_api.wording import language_words as words_for_language
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +61,8 @@ class NoticeFacts:
 
 @dataclass(frozen=True)
 class Phrases:
-    """One language's wording. Each line takes its facts by name; dates and money are formatted for the language."""
+    """One language's wording. Each line takes its facts by name; dates and money are written as the language writes
+    them (wording.py)."""
 
     greeting: str  # {maker}
     order: str  # {order_id}
@@ -72,10 +75,7 @@ class Phrases:
     deliver_by: str  # {date}, when the place is not known
     paid: str  # {amount}
     wait: str  # {amount}, when no payout rail can reach her yet
-    months: tuple[str, ...]
-    day: str  # {day}, {month}, {year}
     some_items: str  # the item, when her listing is gone
-    money: str = "${value}"
 
 
 PHRASES: dict[str, Phrases] = {
@@ -93,11 +93,6 @@ PHRASES: dict[str, Phrases] = {
         "be paid then.",
         wait="PayPal is holding your {amount}, but payouts to your country are not connected yet. Please wait for "
         "our message before you ship.",
-        months=(
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December",
-        ),
-        day="{month} {day}, {year}",
         some_items="the items you offered",
     ),
     "ur": Phrases(
@@ -114,13 +109,7 @@ PHRASES: dict[str, Phrases] = {
         "وقت آپ کو ادائیگی ہو جائے گی۔",
         wait="PayPal نے آپ کے {amount} محفوظ کر لیے ہیں، لیکن آپ کے ملک میں ادائیگی کا انتظام ابھی مکمل نہیں ہوا۔ "
         "سامان بھیجنے سے پہلے ہمارے پیغام کا انتظار کریں۔",
-        months=(
-            "جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون",
-            "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر",
-        ),
-        day="{day} {month} {year}",
         some_items="وہ سامان جس کی آپ نے پیشکش کی تھی",
-        money="{value} ڈالر",  # as Urdu writes it; a "$" in right-to-left text lands after the number
     ),
     "hi": Phrases(
         greeting="नमस्ते {maker}! OpenStall से आपके लिए एक नया ऑर्डर आया है।",
@@ -136,11 +125,6 @@ PHRASES: dict[str, Phrases] = {
         "समय आपको भुगतान हो जाएगा।",
         wait="PayPal ने आपके {amount} सुरक्षित रख लिए हैं, लेकिन आपके देश में भुगतान की व्यवस्था अभी पूरी नहीं हुई है। "
         "सामान भेजने से पहले हमारे संदेश का इंतज़ार करें।",
-        months=(
-            "जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून",
-            "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर",
-        ),
-        day="{day} {month} {year}",
         some_items="वह सामान जिसकी आपने पेशकश की थी",
     ),
     "es": Phrases(
@@ -157,17 +141,10 @@ PHRASES: dict[str, Phrases] = {
         "y se te pagará en ese momento.",
         wait="PayPal tiene reservados tus {amount}, pero los pagos a tu país todavía no están conectados. Espera "
         "nuestro mensaje antes de enviar.",
-        months=(
-            "enero", "febrero", "marzo", "abril", "mayo", "junio",
-            "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-        ),
-        day="{day} de {month} de {year}",
         some_items="los artículos que ofreciste",
-        money="US${value}",  # "$" alone reads as pesos in Mexico
     ),
 }
-LANGUAGE_NAMES = {"en": "English", "ur": "Urdu", "hi": "Hindi", "es": "Spanish"}
-DEFAULT_LANGUAGE = "en"
+assert PHRASES.keys() == LOCALES.keys(), "every template language writes its own dates and money (wording.py)"
 
 
 @dataclass(frozen=True)
@@ -177,22 +154,16 @@ class Notice:
     requested: str | None  # her language, which may have no template yet
 
 
-def template_language(language: str | None) -> str:
-    """The template for her language (ISO 639-1, region ignored), or English when there is none."""
-    code = (language or "").split("-", 1)[0].strip().lower()
-    return code if code in PHRASES else DEFAULT_LANGUAGE
-
-
 def compose_notice(facts: NoticeFacts, language: str | None) -> Notice:
     """Her message, in her language. Every number comes from `facts`; nothing is translated at run time."""
     code = template_language(language)
     words = PHRASES[code]
 
     def money(value: Decimal) -> str:
-        return words.money.format(value=f"{value:,.2f}")
+        return format_money(code, value)
 
     def day(value: date) -> str:
-        return words.day.format(day=value.day, month=words.months[value.month - 1], year=value.year)
+        return format_day(code, value)
 
     lines = [
         words.greeting.format(maker=facts.maker),
@@ -242,16 +213,12 @@ def facts_of(part: OrderPart) -> NoticeFacts:
 
 def channel_of(part: OrderPart) -> Channel:
     """WhatsApp when we have her number; otherwise the web chat, her demo phone on /seller-chat."""
-    return Channel.WHATSAPP if part.seller.whatsapp_number else Channel.WEB
+    return channel_for(part.seller)
 
 
 def language_words(notice: Notice) -> str:
     """The language she was told in, for the feed: "Urdu", or "English (no template for 'bn' yet)"."""
-    used = LANGUAGE_NAMES[notice.language]
-    requested = (notice.requested or "").split("-", 1)[0].strip().lower()
-    if requested and requested != notice.language:
-        return f"{used} (no template for {notice.requested!r} yet)"
-    return used
+    return words_for_language(notice.language, notice.requested)
 
 
 def _day(value: date) -> str:

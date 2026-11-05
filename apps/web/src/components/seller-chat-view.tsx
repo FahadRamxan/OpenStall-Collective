@@ -14,6 +14,7 @@ import {
   getChats,
   getConversation,
   messageTime,
+  playSeller,
   sendWebMessage,
   type ChatMedia,
   type ChatMessage,
@@ -170,23 +171,107 @@ export function SellerChatView() {
         ) : !loaded ? (
           <div aria-busy="true" aria-label="Loading the conversation" className="h-96 animate-pulse rounded-3xl bg-border/60" />
         ) : (
-          <Phone
-            title={loaded.seller.name}
-            subtitle={place(loaded.seller.city, loaded.seller.country) ?? "Where she lives is not known yet"}
-            messages={loaded.messages}
-            perspective="watcher"
-            pending={[]}
-            loading={false}
-            empty="No messages yet."
-            footer={
-              <p className="border-t border-border bg-surface px-5 py-3 text-sm text-muted">
-                You are watching this chat. It happens on {CHANNEL_LABELS[loaded.messages[0]?.channel ?? "whatsapp"]}.
-              </p>
-            }
-          />
+          <>
+            <Phone
+              title={loaded.seller.name}
+              subtitle={place(loaded.seller.city, loaded.seller.country) ?? "Where she lives is not known yet"}
+              messages={loaded.messages}
+              perspective="watcher"
+              pending={[]}
+              loading={false}
+              empty="No messages yet."
+              footer={
+                <p className="border-t border-border bg-surface px-5 py-3 text-sm text-muted">
+                  You are watching this chat. It happens on {CHANNEL_LABELS[loaded.messages[0]?.channel ?? "whatsapp"]}.
+                </p>
+              }
+            />
+            {loaded.playable ? (
+              <PlayPanel name={loaded.seller.name} sellerId={loaded.seller.id} onSent={() => setVersion((count) => count + 1)} />
+            ) : null}
+          </>
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * Test mode only, under the chat of a maker with no phone of her own (the seeded makers): answer as her. Her courier
+ * receipt photo is fake mode's own, which its stand-in model reads; her words go through the same handler as WhatsApp.
+ */
+function PlayPanel({ name, sellerId, onSent }: { name: string; sellerId: string; onSent: () => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function send(receipt: boolean) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await playSeller(sellerId, receipt ? "" : text.trim(), receipt);
+      if (!receipt) setText("");
+      onSent();
+    } catch (error) {
+      setProblem(`Not sent: ${errorMessage(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="play-heading"
+      className="mx-auto mt-4 max-w-xl rounded-2xl border border-dashed border-border bg-surface p-4 sm:p-5"
+    >
+      <h3 id="play-heading" className="flex flex-wrap items-center gap-2 font-semibold">
+        Play {name} <Badge tone="warning">Test mode</Badge>
+      </h3>
+      <p className="mt-1 text-sm leading-6 text-muted">
+        {name} has no phone in this demo, so answer as her: send the courier receipt photo she would send once she has
+        shipped, then reply to OpenStall.
+      </p>
+      <button
+        type="button"
+        onClick={() => send(true)}
+        disabled={busy}
+        className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        Send her courier receipt photo
+        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs text-warning">Simulated</span>
+      </button>
+      <form
+        className="mt-3 flex flex-wrap items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (text.trim()) void send(false);
+        }}
+      >
+        <label className="min-w-0 flex-1 text-sm">
+          <span className="font-medium">Reply as {name}</span>
+          <input
+            dir="auto"
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            maxLength={4000}
+            placeholder="For example: yes"
+            className="mt-1 block min-h-11 w-full rounded-xl border border-border bg-background px-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy || !text.trim()}
+          className="inline-flex min-h-11 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-foreground hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Send as {name}
+        </button>
+      </form>
+      {problem ? (
+        <p role="alert" className="mt-2 text-sm font-semibold text-danger">
+          {problem}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

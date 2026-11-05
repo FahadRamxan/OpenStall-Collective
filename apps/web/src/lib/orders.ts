@@ -30,6 +30,12 @@ export type OrderPart = {
   status: PartStatus;
   /** Whether she was told about her share once PayPal held the order; null until then. */
   notice?: PartNotice | null;
+  /** Her courier, once she confirmed her tracking. */
+  carrier?: string | null;
+  /** Her tracking number, set only once she confirmed it: she is paid on it. */
+  tracking_number?: string | null;
+  /** Her courier receipt photo and what was read from it, from the moment she sends it. */
+  proof?: PartProof | null;
   /** A verified PayPal webhook confirmed this share's status. */
   confirmed_by_paypal: boolean;
   /** PayPal reported a problem with this share, such as a denied payment. */
@@ -67,6 +73,21 @@ export type PartNotice = {
   language: string | null;
   at: string;
   reason?: string | null;
+};
+
+/**
+ * Her proof of shipping: the courier receipt photo she sent, and the courier and tracking number read from it (or
+ * typed by her), waiting for her to confirm, waiting for her to type the number, or confirmed.
+ */
+export type PartProof = {
+  state: "awaiting_confirmation" | "awaiting_number" | "confirmed";
+  /** Her receipt photo, a path on the API. */
+  photo_url: string | null;
+  carrier: string | null;
+  tracking_number: string | null;
+  source: "photo" | "typed" | null;
+  /** Who read the photo, in words for people. */
+  read_by: string | null;
 };
 
 const NOTICE_CHANNELS = { whatsapp: "on WhatsApp", web: "in the web chat" } as const;

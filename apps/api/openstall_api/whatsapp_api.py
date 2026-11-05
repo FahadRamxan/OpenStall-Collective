@@ -14,13 +14,13 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
-from openstall_api.adapters import get_registry
-from openstall_api.chat.handler import HandledMessage, InboundFile, Refused, Sender, handle_inbound
+from openstall_api.chat.handler import HandledMessage, InboundFile, Refused, Sender, country_of
+from openstall_api.chat.inbox import receive
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.events_api import fake_mode_only
-from openstall_api.fixtures import fixture_photo, fixture_voice_note
-from openstall_api.media import MediaRejected, get_media_store, media_type
+from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
+from openstall_api.media import MediaRejected, media_type
 from openstall_api.models import Channel, ProcessedWebhook
 from openstall_api.settings import get_settings
 from openstall_api.whatsapp import (
@@ -60,17 +60,10 @@ def record_refusal() -> None:
 
 
 def deliver_inbound(sender: Sender, text: str, files: list[InboundFile | Refused]) -> HandledMessage:
-    """Handle a seller's message, then send the replies on WhatsApp. A reply that fails to send is logged; the
-    message and the reply are still stored."""
-    with session_scope() as session:
-        handled = handle_inbound(session, get_media_store(), sender, text, files)
-    messenger = get_registry().messenger
-    for reply in handled.replies:
-        try:
-            messenger.send(f"whatsapp:{sender.address}", reply.text)
-        except Exception:
-            log.exception("A WhatsApp reply to seller %s could not be sent", handled.seller_id)
-    return handled
+    """Handle a seller's message, then send the replies on WhatsApp (chat/inbox.py). A reply that fails to send is
+    logged; the message and the reply are still stored. A share she proved she shipped is paid before this returns:
+    it already runs in a background task, after Twilio has its answer."""
+    return receive(sender, text, files)
 
 
 def process_whatsapp_inbound(inbound: InboundMessage) -> None:
@@ -104,13 +97,15 @@ async def twilio_webhook(request: Request, background: BackgroundTasks) -> Respo
 
 
 class DevInbound(BaseModel):
-    """A WhatsApp message to play in fake mode, with a made-up photo or voice note if asked."""
+    """A WhatsApp message to play in fake mode, with a made-up photo, voice note or courier receipt photo if asked."""
 
     sender: Annotated[str, Field(pattern=r"^\+\d{7,15}$")] = "+923001234567"
     profile_name: Annotated[str | None, Field(max_length=120)] = "Amina"
     text: Annotated[str, Field(max_length=4000)] = ""
     photo: bool = False
     voice_note: bool = False
+    # Fake mode's courier receipt photo, with a made-up courier and tracking number for her number's country.
+    receipt: bool = False
 
 
 class DevInboundOut(BaseModel):
@@ -127,6 +122,8 @@ def dev_inbound(body: DevInbound) -> DevInboundOut:
         files.append(InboundFile(fixture_photo(), "image/png"))
     if body.voice_note:
         files.append(InboundFile(fixture_voice_note(), "audio/wav"))
+    if body.receipt:
+        files.append(InboundFile(fixture_receipt(*demo_shipment(country_of(body.sender))), "image/png"))
     handled = deliver_inbound(Sender(Channel.WHATSAPP, body.sender, body.profile_name), body.text, files)
     return DevInboundOut(
         seller_id=handled.seller_id, message_id=handled.message_id, replies=[reply.text for reply in handled.replies]

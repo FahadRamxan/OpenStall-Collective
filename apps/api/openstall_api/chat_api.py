@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from openstall_api.db import get_session
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Seller
+from openstall_api.settings import get_settings
 
 router = APIRouter(prefix="/api", tags=["chats"])
 
@@ -59,6 +60,9 @@ class ChatSummary(BaseModel):
 class Conversation(BaseModel):
     seller: ChatSeller
     messages: list[MessageOut]
+    # Fake mode only, for a maker with no phone of her own (the seeded makers): /seller-chat can play her, through
+    # POST /api/dev/sellers/{id}/messages, to send her courier receipt and answer OpenStall.
+    playable: bool = False
 
 
 def seller_out(seller: Seller) -> ChatSeller:
@@ -126,6 +130,7 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
     )
     return Conversation(
         seller=seller_out(seller),
+        playable=get_settings().OPENSTALL_MODE == "fake" and not seller.whatsapp_number and not seller.web_chat_id,
         messages=[
             MessageOut(
                 id=message.id,

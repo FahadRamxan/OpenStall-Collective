@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Badge, type BadgeTone } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
 import { ApiError, errorMessage } from "@/lib/api";
-import { formatUsd, languageName, place } from "@/lib/catalog";
+import { formatUsd, languageName, mediaUrl, place } from "@/lib/catalog";
 import {
   PART_STATUS_LABELS,
   authorizationSentence,
@@ -247,6 +247,7 @@ function Receipt({
                     <RailChip part={part} />
                   </div>
                   <NoticeLine part={part} />
+                  <ProofLine part={part} />
                   {simulated && part.status === "authorized" ? (
                     <SimulateProof part={part} onOrder={onOrder} />
                   ) : null}
@@ -361,6 +362,51 @@ function NoticeLine({ part }: { part: OrderPart }) {
       </Link>
     </p>
   );
+}
+
+/**
+ * Her proof of shipping: the tracking she confirmed (she is paid on it), with her courier receipt photo; or, while she
+ * is still answering OpenStall, what was read from it.
+ */
+function ProofLine({ part }: { part: OrderPart }) {
+  const proof = part.proof;
+  if (part.tracking_number) {
+    const courier = part.carrier && part.carrier !== "OTHER" ? ` with ${part.carrier}` : "";
+    return (
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs">
+        <span>
+          <span className="font-semibold">Shipped{courier}:</span>{" "}
+          <span className="font-mono break-all">{part.tracking_number}</span>
+        </span>
+        {proof?.photo_url ? (
+          <a
+            href={mediaUrl(proof.photo_url)}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-accent underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            See her courier receipt
+          </a>
+        ) : null}
+      </p>
+    );
+  }
+  if (proof?.state === "awaiting_confirmation") {
+    return (
+      <p className="mt-2 text-xs text-muted">
+        Her courier receipt reads {proof.carrier ? `${proof.carrier}, ` : ""}tracking{" "}
+        <span className="font-mono">{proof.tracking_number}</span>: waiting for her to confirm it.
+      </p>
+    );
+  }
+  if (proof?.state === "awaiting_number") {
+    return (
+      <p className="mt-2 text-xs text-muted">
+        Her courier receipt arrived; waiting for her to type its tracking number.
+      </p>
+    );
+  }
+  return null;
 }
 
 type ProofState = { state: "idle" } | { state: "sending" } | { state: "failed"; message: string };

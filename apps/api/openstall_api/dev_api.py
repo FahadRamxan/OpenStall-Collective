@@ -5,15 +5,19 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from openstall_api import quotes
 from openstall_api.adapters import AdapterRegistry, get_registry
-from openstall_api.db import get_session
+from openstall_api.chat.handler import InboundFile, Refused, Sender
+from openstall_api.chat.inbox import receive
+from openstall_api.chat.store import channel_for
+from openstall_api.db import get_session, new_session
 from openstall_api.events_api import fake_mode_only
-from openstall_api.models import Offer, OrderPart, PartStatus
+from openstall_api.fixtures import demo_shipment, fixture_receipt
+from openstall_api.models import Offer, OrderPart, PartStatus, Seller
 from openstall_api.offers import OfferOut
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
 from openstall_api.payments import pay_share, release_share
@@ -77,6 +81,43 @@ def simulate_proof(
     session.commit()
     background.add_task(deliver_fake_webhooks)  # simulated PayPal's capture and payout confirmations follow
     return order_out(session, _load(session, part.order_id))
+
+
+class PlayMessage(BaseModel):
+    """What a seeded maker says, played from /seller-chat in fake mode."""
+
+    text: str = Field(default="", max_length=4000)
+    # Fake mode's courier receipt photo, with a made-up courier and tracking number for her country.
+    receipt: bool = False
+
+
+class PlayedOut(BaseModel):
+    seller_id: str
+    message_id: str
+    replies: list[str]
+
+
+@router.post("/sellers/{seller_id}/messages", status_code=201)
+def play_seller(seller_id: str, body: PlayMessage, background: BackgroundTasks) -> PlayedOut:
+    """Fake mode: a message as if this maker sent it, where she chats with OpenStall (WhatsApp if she has a number,
+    else her web chat), so the seeded makers, who have no phone, can send their courier receipt and confirm it.
+    It takes exactly the path a real message takes (chat/inbox.py); a share she proves is paid after the answer."""
+    text = body.text.strip()
+    if not text and not body.receipt:
+        raise HTTPException(status_code=422, detail="Write what she says, or send her courier receipt photo.")
+    with new_session() as session:
+        seller = session.get(Seller, seller_id)
+        if seller is None:
+            raise HTTPException(status_code=404, detail=f"There is no seller called {seller_id!r}.")
+        channel, country = channel_for(seller), seller.country
+        address = seller.whatsapp_number or seller.web_chat_id or seller.id
+    files: list[InboundFile | Refused] = []
+    if body.receipt:
+        files.append(InboundFile(fixture_receipt(*demo_shipment(country)), "image/png"))
+    handled = receive(Sender(channel, address, seller_id=seller_id), text, files, background.add_task)
+    return PlayedOut(
+        seller_id=handled.seller_id, message_id=handled.message_id, replies=[reply.text for reply in handled.replies]
+    )
 
 
 @router.post("/release-reserved-shares")

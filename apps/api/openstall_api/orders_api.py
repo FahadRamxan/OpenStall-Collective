@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -56,6 +56,30 @@ class NoticeOut(BaseModel):
         )
 
 
+class ProofOut(BaseModel):
+    """Her proof of shipping (proof.py): the courier receipt photo she sent and what was read from it or typed."""
+
+    state: Literal["awaiting_confirmation", "awaiting_number", "confirmed"]
+    photo_url: str | None  # her receipt photo, a path on the API
+    carrier: str | None
+    tracking_number: str | None  # as read or typed; the share's own tracking once confirmed
+    source: Literal["photo", "typed"] | None
+    read_by: str | None  # who read the photo, in words for people
+
+    @classmethod
+    def of(cls, proof: dict[str, Any] | None) -> "ProofOut | None":
+        if not proof or proof.get("state") not in ("awaiting_confirmation", "awaiting_number", "confirmed"):
+            return None
+        return cls(
+            state=proof["state"],
+            photo_url=proof.get("photo_url"),
+            carrier=proof.get("carrier"),
+            tracking_number=proof.get("tracking_number"),
+            source=proof.get("source") if proof.get("source") in ("photo", "typed") else None,
+            read_by=proof.get("read_by"),
+        )
+
+
 class PartOut(BaseModel):
     id: str
     reference_id: str
@@ -69,6 +93,9 @@ class PartOut(BaseModel):
     ship_by: date | None  # when it must leave her: the delivery date less her listing's ship days
     status: PartStatus
     notice: NoticeOut | None  # whether she was told about her share; None until the order is reserved
+    carrier: str | None  # her courier, once she confirmed her tracking
+    tracking_number: str | None  # set only once she confirmed it: she is paid on it
+    proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
     confirmed_by_paypal: bool  # a verified PayPal webhook confirmed this share's status
     attention: str | None  # PayPal reported a problem with it, such as a denied payment
     # Who confirms it: the real PayPal sandbox's verified webhooks, or fake mode's simulated PayPal. The page must
@@ -164,6 +191,9 @@ def _part(
         ship_by=ship_by(part),
         status=part.status,
         notice=NoticeOut.of(notice) if notice else None,
+        carrier=part.carrier,
+        tracking_number=part.tracking_number,
+        proof=ProofOut.of(part.proof_json),
         confirmed_by_paypal=paypal.confirmed,
         attention=paypal.attention,
         confirmation_source="simulated" if settings.OPENSTALL_MODE == "fake" else "paypal_sandbox",

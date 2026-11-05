@@ -304,8 +304,11 @@ class OrderPart(Base):
     status: Mapped[PartStatus] = mapped_column(enum_type(PartStatus, "part_status"), default=PartStatus.PENDING)
     authorization_id: Mapped[str | None] = mapped_column(String(64))
     capture_id: Mapped[str | None] = mapped_column(String(64))
-    tracking_number: Mapped[str | None] = mapped_column(String(64))
+    tracking_number: Mapped[str | None] = mapped_column(String(64))  # set only once she confirmed it (pay-on-proof)
     carrier: Mapped[str | None] = mapped_column(String(64))
+    # Her proof of shipping (proof.py): the courier receipt photo she sent, what was read from it or what she typed,
+    # and whether she has confirmed it yet. Kept after payment, for disputes.
+    proof_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     delivery_date: Mapped[date | None] = mapped_column(Date)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

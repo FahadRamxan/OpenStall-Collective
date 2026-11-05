@@ -325,6 +325,78 @@ describe("ReturnView", () => {
     expect(within(rows[1]).queryByRole("link", { name: /chat/ })).not.toBeInTheDocument();
   });
 
+  it("shows the tracking each maker confirmed, with her courier receipt, or what is still being read", async () => {
+    const shipped: Order = {
+      ...RESERVED,
+      status: "partly_shipped",
+      parts: [
+        {
+          ...RESERVED.parts[0],
+          proof: {
+            state: "awaiting_confirmation",
+            photo_url: "/media/uploads/abc.png",
+            carrier: "TCS",
+            tracking_number: "7712345678",
+            source: "photo",
+            read_by: "Claude",
+          },
+        },
+        {
+          ...RESERVED.parts[1],
+          status: "captured",
+          carrier: "India Post",
+          tracking_number: "EE123456789IN",
+          proof: {
+            state: "confirmed",
+            photo_url: "/media/uploads/def.png",
+            carrier: "India Post",
+            tracking_number: "EE123456789IN",
+            source: "photo",
+            read_by: "Claude",
+          },
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(shipped)));
+
+    render(<ReturnView />);
+
+    const rows = within(await screen.findByRole("list", { name: "Each maker's share" })).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Her courier receipt reads TCS, tracking 7712345678: waiting for her to confirm it.");
+    expect(rows[1]).toHaveTextContent("Shipped with India Post: EE123456789IN");
+    expect(within(rows[1]).getByRole("link", { name: "See her courier receipt" })).toHaveAttribute(
+      "href",
+      "http://api.test/media/uploads/def.png",
+    );
+  });
+
+  it("says when her receipt arrived but its number still has to be typed", async () => {
+    const waiting: Order = {
+      ...RESERVED,
+      parts: [
+        {
+          ...RESERVED.parts[0],
+          proof: {
+            state: "awaiting_number",
+            photo_url: "/media/uploads/abc.png",
+            carrier: null,
+            tracking_number: null,
+            source: "photo",
+            read_by: null,
+          },
+        },
+        RESERVED.parts[1],
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(waiting)));
+
+    render(<ReturnView />);
+
+    expect(
+      await screen.findByText("Her courier receipt arrived; waiting for her to type its tracking number."),
+    ).toBeInTheDocument();
+  });
+
   it("says there is no order when the API does not know the id", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "No." }, { status: 404 })));
 
