@@ -42,6 +42,8 @@ UI_LABELS = [
     "Put it back",
     "The order heals itself",
     "Approve the top-up",
+    "Try to break it",
+    "Try every attack",
     "Order complete",
     "API online",
     "API offline",

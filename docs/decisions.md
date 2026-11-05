@@ -589,3 +589,13 @@ Code: `apps/api/openstall_api/healing.py` (`drop_turn` in the chat handler's tra
 - **Once per share.** Her share keeps the re-plan's request id: calling it again gives back the same top-up, and a re-plan cut off before its draft is finished on the next call.
 - **/demo follows the first order.** `GET /api/orders?top_ups=false` leaves top-ups out, so Payments and the phones stay on the order the buyer agent drafted; the order lists its top-ups, with their shares, and a top-up's makers get phones too.
 - **The words need a native read.** The drop-out messages in Urdu, Hindi and Spanish are written like the receipt flow's, and need the same check.
+
+## November 6: try to break it, the guardrail panel (prompt 40)
+
+Code: `apps/api/openstall_api/guardrails.py` (the attacks), `guardrails_api.py` (`GET /api/guardrails`, `POST /api/guardrails/run`, `POST /api/guardrails/{key}/run`), and `apps/web/src/components/guardrail-panel.tsx` on `/demo`.
+
+- **Built from spec section 7 and the code's own `security.rejected` event: prompt.md was not on hand.** The spec's test list (a price below the floor, a changed total, no MCP tool that captures, a changed passport) became attacks a judge can run, with three more the code already refuses: a forged webhook, reserving an order nobody approved, and paying a maker before she proved she shipped.
+- **Real attempts, not a picture of them.** Each attack calls the code a real request reaches: the offer check every agent's proposal goes through, the MCP storefront itself (a call to a `capture_payment` tool that does not exist), `verify_total`, `receive_paypal_webhook` with a made-up signature, `reserve_order` and `pay_share`, and `verify_card`. The panel shows the refusal those functions give, word for word.
+- **Nothing kept.** An attack that needs an order drafts the story's order in a transaction that is rolled back, so no page ever sees it and no id is left behind. Nothing reaches PayPal: each refusal comes before any PayPal call, which the tests check with a gateway that records every call. A forged webhook in sandbox mode is checked with PayPal, as any webhook is.
+- **Each refusal in the feed.** `security.rejected`, "Guardrail held: …", with the attack and what refused it; the forged webhook records its own refusal in `webhooks.py`, so it is not recorded twice. An attack that cannot run (no seeded makers) says "Not tried" and records nothing; one that got through would say "Got through", in red, and the tests fail on it.
+- **The demo token in sandbox mode.** Each run writes to the live feed and a forged webhook asks PayPal to verify it, so sandbox mode needs `DEMO_RUN_TOKEN`, like Run and Reset. The list of attacks is public.

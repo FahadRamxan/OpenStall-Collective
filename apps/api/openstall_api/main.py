@@ -16,6 +16,7 @@ from openstall_api.dev_api import router as dev_router
 from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
 from openstall_api.feeds_api import router as feeds_router
+from openstall_api.guardrails_api import router as guardrails_router
 from openstall_api.media_api import SeedPhotos
 from openstall_api.media_api import router as media_router
 from openstall_api.offers_api import router as offers_router
@@ -74,6 +75,7 @@ app.include_router(events_router)
 app.include_router(catalog_router)
 app.include_router(search_router)
 app.include_router(demo_router)
+app.include_router(guardrails_router)
 app.include_router(offers_router)
 app.include_router(quotes_router)
 app.include_router(orders_router)

@@ -9,6 +9,7 @@ export const STORY_SECTIONS: [string, string][] = [
   ["payments-heading", "Payments"],
   ["phones-heading", "Makers' phones"],
   ["tamper-heading", "Trust passports"],
+  ["guardrails-heading", "Try to break it"],
   ["activity-heading", "Live activity"],
 ];
 

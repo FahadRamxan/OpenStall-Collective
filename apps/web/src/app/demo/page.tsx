@@ -4,6 +4,7 @@ import { AgentSearches } from "@/components/agent-searches";
 import { AllocationPanel } from "@/components/allocation-panel";
 import { DemoControls } from "@/components/demo-controls";
 import { DemoNav } from "@/components/demo-nav";
+import { GuardrailPanel } from "@/components/guardrail-panel";
 import { LiveActivity } from "@/components/live-activity";
 import { MakerPhones } from "@/components/maker-phones";
 import { OfferRules } from "@/components/offer-rules";
@@ -20,9 +21,9 @@ export const metadata: Metadata = { title: "Live demo" };
 /**
  * The whole story on one page (spec 3.9: request, offers, validation, allocation, payments, phones), in its order:
  * the buyer agent's request, the offer rules and each seller agent's checked offer, the split, the order and its one
- * PayPal approval, each maker's payment on proof, the makers' own phones, and a trust passport checked live (spec
- * 3.7: change one number and its signature fails). The live feed sits beside it on a wide screen and after it on a
- * phone.
+ * PayPal approval, each maker's payment on proof, the makers' own phones, a trust passport checked live (spec 3.7:
+ * change one number and its signature fails), and the guardrails, each attack refused by the code it tries to get
+ * past. The live feed sits beside it on a wide screen and after it on a phone.
  */
 export default function DemoPage() {
   return (
@@ -51,6 +52,7 @@ export default function DemoPage() {
               <PaymentsPanel />
               <MakerPhones />
               <TamperCheck />
+              <GuardrailPanel />
             </div>
             <aside aria-label="The live feed" className="max-w-3xl min-w-0 xl:sticky xl:top-4 xl:max-w-none">
               <LiveActivity scroll />
