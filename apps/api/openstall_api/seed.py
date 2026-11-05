@@ -265,9 +265,10 @@ def _seed_maker(session: Session, maker: SeedMaker, settings: Settings) -> None:
             created_at=SEEDED_AT,
         )
     )
+    # The card's own fields, signed: nothing checks a PayPal account, so the passport does not claim one.
     signed = issue_passport(
         maker.id,
-        {**maker.trust, "paypal_account_verified": True},
+        dict(maker.trust),
         DataSource.SEEDED_DEMO.value,
         SEEDED_AT,
     )

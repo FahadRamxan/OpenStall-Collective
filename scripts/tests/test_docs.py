@@ -36,6 +36,7 @@ UI_LABELS = [
     "Your listing is live",
     "Open your stall",
     "Confirm delivery",
+    "Check its signature",
     "Order complete",
     "API online",
     "API offline",

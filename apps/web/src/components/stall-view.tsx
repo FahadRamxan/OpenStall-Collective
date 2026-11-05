@@ -231,8 +231,8 @@ function TrustRecord({ name, trust }: { name: string; trust: TrustSummary }) {
         </p>
       </div>
       <p className="mt-2 text-sm leading-6 text-muted">
-        {trust.orders_delivered} orders delivered. AI agents read these numbers as her trust card. Its signature,
-        which will let an agent check that nothing was changed, is still pending.
+        {trust.orders_delivered} orders delivered. AI agents read these numbers as her trust card, signed by
+        OpenStall so an agent can check that nothing was changed.
         {throughOpenStall > 0
           ? ` ${throughOpenStall} of these orders came through OpenStall, and her record was signed again on ${formatDay(trust.issued_at.slice(0, 10))}.`
           : null}

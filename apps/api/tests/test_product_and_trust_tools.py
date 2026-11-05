@@ -29,7 +29,7 @@ NOOR_CARD = {
     "score": 0.97,  # 0.4 x 0.96 + 0.3 x 1.00 + 0.3 x 0.94 = 0.966
     "data_source": "seeded_demo",
     "live_deliveries": 0,  # none of her orders went through OpenStall yet
-    "signature": "pending",
+    "live_on_time": 0,
 }
 
 
@@ -97,10 +97,13 @@ def test_get_trust_card_gives_exactly_what_the_passport_endpoint_serves():
         assert call(storefront, "get_trust_card", seller_id=seller_id) == client.get(f"/passport/{seller_id}").json()
 
 
-def test_the_trust_card_is_her_passport_with_its_score_and_the_signature_pending(seeded):
+def test_the_trust_card_is_her_signed_passport_with_its_score(seeded):
     card = call(storefront, "get_trust_card", seller_id="s_noor")
 
-    assert card == NOOR_CARD
+    assert {key: value for key, value in card.items() if key != "signature"} == NOOR_CARD
+    # It is the signed passport itself: OpenStall's key signed exactly these fields (prompt 35).
+    assert card["signature"].startswith("ed25519:")
+    assert client.post("/passport/verify", json=card).json()["valid"] is True
     # Her stored passport's own numbers, and the same record her stall page shows.
     stored = seeded.get(Passport, "s_noor").metrics_json
     for field in ("seller_id", "issued_at", "orders_delivered", "on_time_rate", "dispute_rate", "data_source"):
@@ -251,7 +254,8 @@ def test_over_http_the_tools_are_read_only_say_they_never_spend_money_and_refuse
         assert (annotations.idempotent_hint, annotations.open_world_hint) == (True, False), name
         assert "It only reads: it never spends money and changes no order." in tools[name].description
         assert tools[name].output_schema["type"] == "object"  # agents get structured results
-    assert "unverified" in tools["get_trust_card"].output_schema["properties"]["signature"]["description"]
+    signature = tools["get_trust_card"].output_schema["properties"]["signature"]["description"]
+    assert "/passport/public-key" in signature and "/verify" in signature
     assert unknown.is_error
     assert "There is no live listing called 'p_nobody'." in unknown.content[0].text
     # Over the wire, the result is still exactly the API's own entry.

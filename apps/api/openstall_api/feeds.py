@@ -156,9 +156,10 @@ def llms_txt(settings: Settings, tools: Sequence[Tool]) -> str:
         # The rules of packages/trust's canonical_json, all of them: a test rebuilds a card's signed bytes from them.
         "To check a trust card's signature, verify it with Ed25519 over the card's canonical JSON: every field but "
         '"signature", keys sorted at every level, no whitespace, UTF-8 text rather than \\u escapes, and whole-number '
-        "floats up to 2**53 written as integers (0.0 as 0, 1.0 as 1), the way JavaScript writes them. OpenStall does "
-        'not publish the public key or a verify endpoint yet, so every trust card\'s "signature" reads "pending": '
-        "treat its numbers as unverified.",
+        "floats up to 2**53 written as integers (0.0 as 0, 1.0 as 1), the way JavaScript writes them. The public key "
+        f"is at {base}/passport/public-key (standard base64 of its 32 raw bytes). Or ask OpenStall: "
+        f"{base}/passport/{{seller_id}}/verify checks her stored card, and POST {base}/passport/verify checks any card "
+        "you send it: change one number, and it fails.",
         "",
     ]
     return "\n".join(lines)

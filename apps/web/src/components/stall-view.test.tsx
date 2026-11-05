@@ -105,8 +105,8 @@ describe("StallView", () => {
     expect(trust).toHaveTextContent("25 orders delivered");
     expect(trust).toHaveTextContent("96%");
     expect(trust).toHaveTextContent("These are seeded demo numbers, not real sales.");
-    // Agents cannot check a signature yet, so the page does not say they can.
-    expect(trust).toHaveTextContent("Its signature, which will let an agent check that nothing was changed, is still");
+    // OpenStall signs it, and agents can check it (prompt 35).
+    expect(trust).toHaveTextContent("signed by OpenStall so an agent can check that nothing was changed.");
   });
 
   it("says how many of her orders came through OpenStall once her record is signed again", async () => {
@@ -143,7 +143,11 @@ describe("StallView", () => {
       "href",
       "http://api.test/passport/s_noor",
     );
-    expect(within(agents).getByText("Signature pending")).toBeInTheDocument();
+    expect(within(agents).getByText("Signed")).toBeInTheDocument();
+    expect(within(agents).getByRole("link", { name: "Check its signature" })).toHaveAttribute(
+      "href",
+      "http://api.test/passport/s_noor/verify",
+    );
     // The addresses themselves, for people setting up an agent.
     expect(within(agents).getByText("http://api.test/catalog/p_noor_cushion.json")).toBeInTheDocument();
     expect(within(agents).getByRole("group", { name: "MCP server address" })).toHaveTextContent("http://api.test/mcp");
@@ -182,7 +186,7 @@ describe("StallView", () => {
       within(agents).getByRole("link", { name: "Catalog entry: Chain-stitch embroidered cushion cover" }),
     ).toHaveAttribute("href", "http://api.test/catalog/p_noor_cushion.json");
     expect(within(agents).queryByRole("link", { name: /^Trust card/ })).not.toBeInTheDocument();
-    expect(within(agents).queryByText("Signature pending")).not.toBeInTheDocument();
+    expect(within(agents).queryByText("Signed")).not.toBeInTheDocument();
     expect(agents).toHaveTextContent("Buyer agents can read Noor's stall as JSON, or search it");
   });
 
@@ -198,7 +202,7 @@ describe("StallView", () => {
       "href",
       "http://api.test/passport/s_noor",
     );
-    expect(within(card).getByText("Signature pending")).toBeInTheDocument();
+    expect(within(card).getByText("Signed")).toBeInTheDocument();
     expect(within(agents).queryByRole("link", { name: /^Catalog entry/ })).not.toBeInTheDocument();
     expect(agents).toHaveTextContent(
       "Noor has nothing listed right now, so agents can read only her trust card. OpenStall's MCP server and " +

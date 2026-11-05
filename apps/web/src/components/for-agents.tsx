@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Badge } from "@/components/badge";
 import { CopyField } from "@/components/copy-field";
-import { catalogEntryUrl, catalogUrl, llmsTxtUrl, mcpUrl, trustCardUrl } from "@/lib/agent-urls";
+import { catalogEntryUrl, catalogUrl, llmsTxtUrl, mcpUrl, trustCardCheckUrl, trustCardUrl } from "@/lib/agent-urls";
 import type { SellerDetail } from "@/lib/catalog";
 
 /**
@@ -42,10 +42,12 @@ export function ForAgents({ seller }: { seller: SellerDetail }) {
               title={`${seller.name}'s passport`}
               href={trustCardUrl(seller.id)}
               linkClass={linkClass}
-              badge={<Badge tone="warning">Signature pending</Badge>}
+              badge={<Badge tone="success">Signed</Badge>}
             >
-              Her trust record as JSON, the same as get_trust_card. Its signature is pending until OpenStall publishes
-              the key that checks it.
+              Her trust record as JSON, the same as get_trust_card, signed by OpenStall with Ed25519.{" "}
+              <a href={trustCardCheckUrl(seller.id)} className={linkClass}>
+                Check its signature
+              </a>
             </AgentLink>
           ) : null}
         </ul>

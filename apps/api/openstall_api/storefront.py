@@ -180,8 +180,9 @@ def get_trust_card(
 
     Her orders delivered, on-time and dispute rates, photo originality, the score worked out from them (0.4 x on
     time + 0.3 x (1 - disputes) + 0.3 x photo originality, from 0 to 1), when it was issued, and data_source:
-    "seeded_demo" marks made-up demo numbers. "signature" reads "pending": OpenStall does not yet publish the key that
-    checks passports, so treat the numbers as unverified.
+    "seeded_demo" marks made-up demo numbers, and live_deliveries how many of her orders came through OpenStall. It is
+    the signed passport itself: "signature" is OpenStall's Ed25519 signature over the canonical JSON of every other
+    field. Check it with the key at /passport/public-key, or ask /passport/{seller_id}/verify.
     """
     with new_session() as session:
         try:

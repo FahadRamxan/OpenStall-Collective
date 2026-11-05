@@ -255,9 +255,11 @@ def test_llms_txt_says_what_openstall_is_where_to_connect_and_how_payment_works(
     assert "`https://api.openstall.example/catalog/{product_id}.json`" in text
     assert "`https://api.openstall.example/passport/{seller_id}`" in text
     assert 'data_source "seeded_demo"' in text
-    # How passports are checked, and that for now they cannot be.
+    # How passports are checked: the public key and the verify endpoints (prompt 35).
     assert "To check a trust card's signature, verify it with Ed25519 over the card's canonical JSON" in text
-    assert "every trust card's \"signature\" reads \"pending\": treat its numbers as unverified." in text
+    assert "The public key is at https://api.openstall.example/passport/public-key" in text
+    assert "https://api.openstall.example/passport/{seller_id}/verify checks her stored card" in text
+    assert "POST https://api.openstall.example/passport/verify checks any card you send it" in text
 
 
 def test_llms_txt_says_how_ordering_works_only_while_an_mcp_tool_takes_orders():

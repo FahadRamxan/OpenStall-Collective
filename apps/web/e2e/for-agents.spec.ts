@@ -75,13 +75,13 @@ test("a stall's catalog link opens its entry, which holds the product just as ge
   expect(photo.headers()["cache-control"]).toBe("public, max-age=3600");
 });
 
-test("the trust card link gives her passport with the signature pending, as get_trust_card does", async ({
+test("the trust card link gives her signed passport, as get_trust_card does, and its check says valid", async ({
   page,
   request,
 }) => {
   await openNoorsStall(page);
   const box = agentsBox(page);
-  await expect(box.getByText("Signature pending")).toBeVisible();
+  await expect(box.getByText("Signed", { exact: true })).toBeVisible();
   const link = box.getByRole("link", { name: "Trust card: Noor's passport" });
 
   const card = await (await follow(page, link, NOOR_CARD)).json();
@@ -96,9 +96,16 @@ test("the trust card link gives her passport with the signature pending, as get_
     score: 0.97,
     data_source: "seeded_demo",
     live_deliveries: 0,
-    signature: "pending",
+    live_on_time: 0,
+    signature: expect.stringMatching(/^ed25519:[A-Za-z0-9_-]{86}$/),
   });
   expect(await getTrustCard(request, "s_noor")).toEqual(card);
+
+  // OpenStall's check of her stored card, from the stall's own link.
+  await openNoorsStall(page);
+  const check = agentsBox(page).getByRole("link", { name: "Check its signature" });
+  const verdict = await (await follow(page, check, `${E2E_API_URL}/passport/s_noor/verify`)).json();
+  expect(verdict).toEqual({ valid: true, seller_id: "s_noor", reason: expect.stringContaining("nothing in it was changed") });
 });
 
 test("the MCP server address copies with one click, and the page says Copied", async ({ page, context }) => {
@@ -144,7 +151,7 @@ test("the box links to catalog.json, and to llms.txt, which opens in the browser
   await expect(text).toContainText("create_collective_order turns that plan into a draft order");
   await expect(text).toContainText("- No MCP tool captures, refunds or moves money.");
   await expect(text).toContainText(`[Catalog](${E2E_API_URL}/catalog.json)`);
-  await expect(text).toContainText('every trust card\'s "signature" reads "pending"');
+  await expect(text).toContainText(`The public key is at ${E2E_API_URL}/passport/public-key`);
   await page.screenshot({ path: path.join(SCREENSHOTS, "llms-txt-1280.png"), fullPage: true });
 });
 

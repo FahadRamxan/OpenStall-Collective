@@ -1,9 +1,10 @@
-"""Trust passports (spec 3.7): which key signs them, what goes in them, and the trust card agents read. The signing
-is packages/trust.
+"""Trust passports (spec 3.7): which key signs them, what goes in them, the trust card agents read, and how anyone
+checks one. The signing is packages/trust.
 
-The trust card is a maker's passport as the MCP tool get_trust_card and GET /passport/{seller_id} give it. Until
-agents can check signatures (prompt 35 publishes the public key and the verify endpoints), its signature reads
-"pending", though the seeded rows already carry a fake-mode signature.
+The trust card IS the signed passport: the MCP tool get_trust_card and GET /passport/{seller_id} give exactly the
+fields that were signed, with the signature. Anyone can check it with the public key at /passport/public-key
+(Ed25519 over the card's canonical JSON, every field but "signature"), or ask GET /passport/{seller_id}/verify, or
+send a card to POST /passport/verify, which says whether OpenStall's key signed exactly that.
 """
 
 import base64
@@ -15,13 +16,11 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from openstall_api.catalog import ID_PATTERN, NotFound, TrustSummary
+from openstall_api.catalog import ID_PATTERN, NotFound
 from openstall_api.models import Passport
 from openstall_api.settings import get_settings
-from openstall_trust import load_private_key, sign_passport
-
-# What a trust card's "signature" says until agents can check one (prompt 35).
-PENDING_SIGNATURE = "pending"
+from openstall_trust import load_private_key, load_public_key, public_key_b64, sign_passport, trust_score
+from openstall_trust import verify_passport as signature_holds
 
 # Fake mode only: a fixed key that anyone can rebuild from this file, so local runs and tests need no setup.
 # Nothing signed with it is trusted anywhere real, and sandbox mode refuses to use it.
@@ -44,23 +43,41 @@ def signing_key() -> Ed25519PrivateKey:
     )
 
 
+def public_key() -> str:
+    """The key that checks every passport, as base64 of its 32 raw bytes. Raises MissingSigningKey in sandbox mode
+    without PASSPORT_SIGNING_KEY."""
+    return public_key_b64(signing_key())
+
+
 def issue_passport(seller_id: str, metrics: dict[str, Any], data_source: str, issued_at: datetime) -> dict[str, Any]:
-    """A signed passport in the spec 3.7 shape: the seller, when, the numbers, where they came from, the signature."""
+    """A signed passport: exactly the trust card's fields (spec 3.7, with the core's score and how many of her
+    orders came through OpenStall), then the signature. `metrics`: orders_delivered, on_time_rate, dispute_rate and
+    photo_originality, and live_deliveries and live_on_time when there are any."""
     passport = {
         "seller_id": seller_id,
         "issued_at": issued_at.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        **metrics,
+        "orders_delivered": int(metrics["orders_delivered"]),
+        "on_time_rate": metrics["on_time_rate"],
+        "dispute_rate": metrics["dispute_rate"],
+        "photo_originality": metrics["photo_originality"],
+        "score": float(trust_score(metrics["on_time_rate"], metrics["dispute_rate"], metrics["photo_originality"])),
+        "live_deliveries": int(metrics.get("live_deliveries", 0)),
+        "live_on_time": int(metrics.get("live_on_time", 0)),
         "data_source": data_source,
     }
     return sign_passport(passport, signing_key())
 
 
-class TrustCard(BaseModel):
-    """A maker's trust passport as agents read it: get_trust_card and GET /passport/{seller_id}.
+def verify_card(card: Any) -> bool:
+    """Whether OpenStall's key signed exactly this card. Never raises for a bad card: anything changed, missing or
+    malformed is False."""
+    return signature_holds(card, load_public_key(public_key()))
 
-    The spec 3.7 passport with its score, read through the same TrustSummary as her stall page, so the two cannot
-    disagree. It leaves out the seeded passports' paypal_account_verified: nothing checks a PayPal account yet.
-    """
+
+class TrustCard(BaseModel):
+    """A maker's trust passport as agents read it: get_trust_card and GET /passport/{seller_id}. It is exactly what
+    was signed, with the signature, so an agent can check it: Ed25519 over the canonical JSON of every field but
+    "signature", with the key at /passport/public-key."""
 
     seller_id: str
     issued_at: str = Field(description="When OpenStall issued the passport, in UTC (ISO 8601).")
@@ -77,26 +94,16 @@ class TrustCard(BaseModel):
         description="Of her orders delivered, how many a buyer confirmed through OpenStall. The rest are the history "
         'she came with: made up, for a passport marked "seeded_demo".',
     )
+    live_on_time: int = Field(default=0, description="Of those, how many arrived by their delivery date.")
     signature: str = Field(
-        description='"pending": OpenStall does not yet publish the key that checks passports, so treat the numbers '
-        "as unverified."
+        description='OpenStall\'s Ed25519 signature, "ed25519:" then base64url, over the canonical JSON of every '
+        'other field. Check it with the key at /passport/public-key, or ask /passport/{seller_id}/verify.'
     )
 
     @classmethod
     def of(cls, passport: Passport) -> "TrustCard":
-        trust = TrustSummary.of(passport)
-        return cls(
-            seller_id=passport.seller_id,
-            issued_at=trust.issued_at,
-            orders_delivered=trust.orders_delivered,
-            on_time_rate=trust.on_time_rate,
-            dispute_rate=trust.dispute_rate,
-            photo_originality=trust.photo_originality,
-            score=float(trust.score),
-            data_source=trust.data_source.value,
-            live_deliveries=trust.live_deliveries,
-            signature=PENDING_SIGNATURE,
-        )
+        """Her stored passport, exactly as it was signed, with its signature."""
+        return cls.model_validate({**passport.metrics_json, "signature": passport.signature})
 
 
 def trust_card(session: Session, seller_id: str) -> TrustCard:

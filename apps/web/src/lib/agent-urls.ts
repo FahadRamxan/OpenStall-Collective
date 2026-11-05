@@ -25,6 +25,11 @@ export function trustCardUrl(sellerId: string): string {
   return `${apiBaseUrl()}/passport/${encodeURIComponent(sellerId)}`;
 }
 
+/** Where OpenStall checks a maker's stored trust card against its signature. */
+export function trustCardCheckUrl(sellerId: string): string {
+  return `${trustCardUrl(sellerId)}/verify`;
+}
+
 /** A short plain-text guide to OpenStall for language models. */
 export function llmsTxtUrl(): string {
   return `${apiBaseUrl()}/llms.txt`;
