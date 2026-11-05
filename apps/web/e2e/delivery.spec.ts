@@ -3,11 +3,12 @@ import path from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
 import { E2E_API_URL } from "../playwright.config";
-import { connect, getOrderStatus } from "./support/mcp";
+import { connect, getOrderStatus, getTrustCard } from "./support/mcp";
 
 // Delivery and the end of an order (prompt 34): on the receipt, the buyer confirms each parcel that shipped has
 // arrived; the maker is told in her language, the live feed and the buyer's agent follow it, and the order completes
-// with its last parcel. Amina cannot be paid yet (no payout rail reaches Pakistan), so her share is released.
+// with its last parcel. Amina cannot be paid yet (no payout rail reaches Pakistan), so her share is released. Each
+// maker's trust passport is then signed again with the delivery counted (prompt 36).
 const SCREENSHOTS = path.join(__dirname, "screenshots");
 
 async function freshOrder(request: APIRequestContext): Promise<string> {
@@ -23,6 +24,14 @@ async function approveAtSimulatedPayPal(page: Page, orderId: string) {
   await page.getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Simulated PayPal is holding $815.00" })).toBeVisible();
 }
+
+// The test below signs makers' passports again with their deliveries. Put the demo world back as seeded afterwards:
+// later spec files read the seeded passports.
+test.afterAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext();
+  expect((await api.post(`${E2E_API_URL}/api/demo/reset`)).ok()).toBeTruthy();
+  await api.dispose();
+});
 
 function row(page: Page, name: string) {
   return page.getByRole("list", { name: "Each maker's share" }).getByRole("listitem").filter({ hasText: name });
@@ -77,4 +86,17 @@ test("the buyer confirms each parcel arrived, the makers are told, and the order
   const feed = page.getByRole("list", { name: "Activity, newest first" });
   await expect(feed.getByText(`The buyer received Grace's parcel for order ${orderId}`, { exact: false })).toBeVisible();
   await expect(feed.getByText(`Order ${orderId} is complete: 3 makers delivered 28 units`, { exact: false })).toBeVisible();
+  await expect(
+    feed.getByText(/Priya's trust passport was signed again after her delivery: \d+ orders delivered/).first(),
+  ).toBeVisible();
+
+  // Her stall and her trust card say the delivery counted, and that the rest of her record is seeded.
+  const card = await getTrustCard(request, "s_priya");
+  expect(card.live_deliveries as number).toBeGreaterThanOrEqual(1);
+  expect(card.data_source).toBe("seeded_demo");
+  await page.goto("/stall/s_priya");
+  const trust = page.getByRole("region", { name: "Priya's trust record" });
+  await expect(trust).toContainText(`${card.orders_delivered} orders delivered`);
+  await expect(trust).toContainText(/\d+ of these orders came through OpenStall, and her record was signed again on/);
+  await expect(trust).toContainText("The rest are seeded demo numbers, not real sales.");
 });

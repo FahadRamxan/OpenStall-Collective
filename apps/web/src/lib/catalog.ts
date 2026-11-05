@@ -28,6 +28,8 @@ export type TrustSummary = {
   score: string;
   data_source: DataSource;
   issued_at: string;
+  /** Of her orders delivered, those a buyer confirmed through OpenStall; the rest are her history. */
+  live_deliveries?: number;
 };
 
 export type SellerCard = {

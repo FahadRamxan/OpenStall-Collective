@@ -58,6 +58,7 @@ PayPal's order trackers only say a parcel shipped, so the buyer, who receives th
 1. Go back to the receipt tab (the page that said "Simulated PayPal is holding $815.00"; reload it). Priya's row now has **Confirm delivery**. Press it.
 2. Her row says "Delivered to you" and "Received" with the date, on time (the order is due December 10). No money moves: she was paid when she shipped.
 3. **Priya's phone** on `/demo` gets the news in Hindi, and **Live activity** says "The buyer received Priya's parcel". `get_order_status` gives the buyer's agent the same: her share delivered, and on time.
+4. Her trust passport is signed again with the delivery counted: **Live activity** shows her old and new score, and her stall page (`/stall/s_priya`) now reads 68 orders delivered, "1 of these orders came through OpenStall", the rest still marked as seeded demo numbers.
 
 The order completes once every parcel that shipped has arrived and the rest were released: the receipt then reads **Order complete**, with what was paid to the makers and what came back to the buyer. Amina's share stays reserved here, since no payout rail reaches Pakistan, so this order stays open.
 

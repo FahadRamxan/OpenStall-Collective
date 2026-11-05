@@ -72,6 +72,11 @@ class TrustCard(BaseModel):
         description="From 0 to 1: 0.4 x on-time rate + 0.3 x (1 - dispute rate) + 0.3 x photo originality."
     )
     data_source: str = Field(description='Where the numbers come from: "seeded_demo" marks made-up demo numbers.')
+    live_deliveries: int = Field(
+        default=0,
+        description="Of her orders delivered, how many a buyer confirmed through OpenStall. The rest are the history "
+        'she came with: made up, for a passport marked "seeded_demo".',
+    )
     signature: str = Field(
         description='"pending": OpenStall does not yet publish the key that checks passports, so treat the numbers '
         "as unverified."
@@ -89,6 +94,7 @@ class TrustCard(BaseModel):
             photo_originality=trust.photo_originality,
             score=float(trust.score),
             data_source=trust.data_source.value,
+            live_deliveries=trust.live_deliveries,
             signature=PENDING_SIGNATURE,
         )
 

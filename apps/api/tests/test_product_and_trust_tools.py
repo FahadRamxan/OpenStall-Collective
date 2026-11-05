@@ -28,6 +28,7 @@ NOOR_CARD = {
     "photo_originality": 0.94,
     "score": 0.97,  # 0.4 x 0.96 + 0.3 x 1.00 + 0.3 x 0.94 = 0.966
     "data_source": "seeded_demo",
+    "live_deliveries": 0,  # none of her orders went through OpenStall yet
     "signature": "pending",
 }
 

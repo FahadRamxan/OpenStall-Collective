@@ -80,6 +80,8 @@ class TrustSummary(BaseModel):
     score: Decimal  # spec 3.7: 0.4 on time + 0.3 (1 - disputes) + 0.3 photo originality
     data_source: DataSource
     issued_at: str
+    # Of her orders delivered, those a buyer confirmed through OpenStall (prompt 36); the rest are her history.
+    live_deliveries: int = 0
 
     @classmethod
     def of(cls, passport: Passport) -> "TrustSummary":
@@ -92,6 +94,7 @@ class TrustSummary(BaseModel):
             score=trust_score(metrics["on_time_rate"], metrics["dispute_rate"], metrics["photo_originality"]),
             data_source=passport.data_source,
             issued_at=metrics["issued_at"],
+            live_deliveries=int(metrics.get("live_deliveries", 0)),
         )
 
 
@@ -190,7 +193,12 @@ class AgentTrust(BaseModel):
     @classmethod
     def of(cls, passport: Passport) -> "AgentTrust":
         trust = TrustSummary.of(passport)
-        demo = " (seeded demo numbers)" if trust.data_source is DataSource.SEEDED_DEMO else ""
+        through = (
+            f", {trust.live_deliveries} of them through OpenStall"
+            if trust.live_deliveries and trust.data_source is DataSource.SEEDED_DEMO
+            else ""
+        )
+        demo = f" (seeded demo numbers{through})" if trust.data_source is DataSource.SEEDED_DEMO else ""
         return cls(
             score=float(trust.score),
             orders_delivered=trust.orders_delivered,

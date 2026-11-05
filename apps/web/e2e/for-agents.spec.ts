@@ -95,6 +95,7 @@ test("the trust card link gives her passport with the signature pending, as get_
     photo_originality: 0.94,
     score: 0.97,
     data_source: "seeded_demo",
+    live_deliveries: 0,
     signature: "pending",
   });
   expect(await getTrustCard(request, "s_noor")).toEqual(card);

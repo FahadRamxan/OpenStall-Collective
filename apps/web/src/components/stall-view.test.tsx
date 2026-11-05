@@ -109,6 +109,23 @@ describe("StallView", () => {
     expect(trust).toHaveTextContent("Its signature, which will let an agent check that nothing was changed, is still");
   });
 
+  it("says how many of her orders came through OpenStall once her record is signed again", async () => {
+    const updated = {
+      ...NOOR,
+      trust: { ...NOOR.trust, orders_delivered: 26, live_deliveries: 1, issued_at: "2026-12-01T15:00:00Z" },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(updated)));
+
+    render(<StallView />);
+
+    const trust = await screen.findByRole("region", { name: "Noor's trust record" });
+    expect(trust).toHaveTextContent("26 orders delivered");
+    expect(trust).toHaveTextContent(
+      "1 of these orders came through OpenStall, and her record was signed again on December 1, 2026.",
+    );
+    expect(trust).toHaveTextContent("The rest are seeded demo numbers, not real sales.");
+  });
+
   it("has a For AI agents box linking to her catalog entry and trust card on the API", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(NOOR)));
 

@@ -19,6 +19,7 @@ import {
   type SellerDetail,
   type TrustSummary,
 } from "@/lib/catalog";
+import { formatDay } from "@/lib/orders";
 
 type Load =
   | { state: "loading" }
@@ -213,6 +214,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function TrustRecord({ name, trust }: { name: string; trust: TrustSummary }) {
+  const throughOpenStall = trust.live_deliveries ?? 0;
   const rates = [
     { label: "On time", value: trust.on_time_rate, good: true },
     { label: "Disputes", value: trust.dispute_rate, good: false },
@@ -231,7 +233,14 @@ function TrustRecord({ name, trust }: { name: string; trust: TrustSummary }) {
       <p className="mt-2 text-sm leading-6 text-muted">
         {trust.orders_delivered} orders delivered. AI agents read these numbers as her trust card. Its signature,
         which will let an agent check that nothing was changed, is still pending.
-        {trust.data_source === "seeded_demo" ? " These are seeded demo numbers, not real sales." : null}
+        {throughOpenStall > 0
+          ? ` ${throughOpenStall} of these orders came through OpenStall, and her record was signed again on ${formatDay(trust.issued_at.slice(0, 10))}.`
+          : null}
+        {trust.data_source === "seeded_demo"
+          ? throughOpenStall > 0
+            ? " The rest are seeded demo numbers, not real sales."
+            : " These are seeded demo numbers, not real sales."
+          : null}
       </p>
       <dl className="mt-6 grid gap-5 sm:grid-cols-3">
         {rates.map(({ label, value, good }) => (
