@@ -11,7 +11,8 @@ The attacks:
 - a smaller total sent by the browser: totals are worked out on the server (orders_api.verify_total);
 - a forged PayPal webhook saying the order was paid: every webhook is verified first (webhooks.py);
 - an order reserved that no person approved, and a maker paid before she proved she shipped (payments.py);
-- a trust card with one number raised: its Ed25519 signature no longer holds (passports.py).
+- a trust card with one number raised: its Ed25519 signature no longer holds (passports.py);
+- a flood of calls to the MCP storefront from one address: the limits middleware (limits.py, prompt 46).
 """
 
 import json
@@ -28,6 +29,7 @@ from mcp import Client
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.types import Message, Receive, Scope, Send
 
 from openstall_allocator import Offer as CoreOffer
 from openstall_allocator import QuoteRequest as CoreRequest
@@ -36,6 +38,7 @@ from openstall_api import quotes
 from openstall_api.adapters import AdapterRegistry
 from openstall_api.db import new_session, session_scope
 from openstall_api.events import EventType, record_event
+from openstall_api.limits import LIMITS, LimitsMiddleware
 from openstall_api.models import DataSource, Order, PartStatus, Passport, Product, ProductStatus
 from openstall_api.offer_rules import listing_of, seller_policy
 from openstall_api.orders import server_total
@@ -89,6 +92,11 @@ ATTACKS: tuple[Attack, ...] = (
         "A share is captured only once she has confirmed her tracking",
     ),
     Attack(
+        "flood",
+        "Flood the MCP storefront from one address",
+        "Each client gets 120 MCP calls a minute; the rest are refused with 429 Too Many Requests",
+    ),
+    Attack(
         "tampered_passport",
         "Raise a maker's on-time rate on her trust card",
         "Each trust card is signed with Ed25519: one changed number breaks the signature",
@@ -120,7 +128,12 @@ async def run_attack(key: str, registry: AdapterRegistry) -> Outcome:
     """Try one attack, record its refusal in the feed, and say what happened. Raises KeyError for an unknown key."""
     attack = BY_KEY[key]
     try:
-        tried = await _capture_tool() if key == "capture_tool" else SYNC_ATTACKS[key](registry)
+        if key == "capture_tool":
+            tried = await _capture_tool()
+        elif key == "flood":
+            tried = await _flood()
+        else:
+            tried = SYNC_ATTACKS[key](registry)
     except NotTried as missing:
         tried = Tried("Nothing: the demo world is missing what this attack needs.", "not_tried", str(missing))
     if tried.result == "refused" and key != "forged_webhook":  # a forged webhook is recorded by webhooks.py itself
@@ -307,4 +320,42 @@ SYNC_ATTACKS: dict[str, Callable[[AdapterRegistry], Tried]] = {
     "pay_before_proof": _pay_before_proof,
     "tampered_passport": _tampered_passport,
 }
-assert set(SYNC_ATTACKS) | {"capture_tool"} == set(BY_KEY)
+assert set(SYNC_ATTACKS) | {"capture_tool", "flood"} == set(BY_KEY)
+
+
+async def _flood() -> Tried:
+    """Through the limits middleware itself (limits.py), as every request to the API goes: calls to /mcp from one
+    made-up address, a key of its own each time, so the flood never slows a real client."""
+    limit = LIMITS["mcp"]
+    calls = limit.count + 30
+    address = f"guardrail-panel-{uuid.uuid4().hex[:8]}"
+
+    async def answered(scope: Scope, receive: Receive, send: Send) -> None:  # what /mcp would answer
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    middleware = LimitsMiddleware(answered)
+    statuses: list[int] = []
+    for _ in range(calls):
+        sent: list[Message] = []
+
+        async def receive() -> Message:
+            return {"type": "http.request", "body": b"{}", "more_body": False}
+
+        async def send(message: Message) -> None:
+            sent.append(message)  # noqa: B023: each call's own list, read before the next call
+
+        scope = {"type": "http", "method": "POST", "path": "/mcp", "headers": [], "client": (address, 443)}
+        await middleware(scope, receive, send)
+        statuses.append(int(sent[0]["status"]))
+    allowed, refused = statuses.count(200), statuses.count(429)
+    tried = f"An agent at one address calls the MCP storefront {calls} times in a minute."
+    if refused == 0:
+        return Tried(tried, "got_through", f"All {allowed} calls were answered: the limits are off (RATE_LIMITS).")
+    return Tried(
+        tried,
+        "refused",
+        f"Refused by the limits middleware: the first {allowed} calls were answered, the other {refused} got 429 "
+        "Too Many Requests with Retry-After. Every client has its own window, and its refusal is recorded once "
+        "a window.",
+    )

@@ -88,9 +88,9 @@ Still on `/demo`, with the story's order approved:
 
 ## 8. Try to break it
 
-On `/demo`, **Try to break it** (after the trust passports) lists seven attacks on OpenStall's guardrails. Each is a real attempt, made through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total from the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, and a trust card with one number raised.
+On `/demo`, **Try to break it** (after the trust passports) lists eight attacks on OpenStall's guardrails. Each is a real attempt, made through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total from the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, a flood of 150 calls to the MCP storefront from one address in a minute (the first 120 are answered, the rest get 429), and a trust card with one number raised.
 
-Press **Try every attack**. Each row says what was tried and what refused it, and the panel reads "7 of 7 attacks refused". **Live activity** records each refusal. Nothing an attack touches is kept: an attack that needs an order drafts one in a transaction that is rolled back.
+Press **Try every attack**. Each row says what was tried and what refused it, and the panel reads "8 of 8 attacks refused". **Live activity** records each refusal. Nothing an attack touches is kept: an attack that needs an order drafts one in a transaction that is rolled back.
 
 ## 9. The dashboard and Demand Radar
 

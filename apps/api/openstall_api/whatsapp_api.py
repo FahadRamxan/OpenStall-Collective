@@ -18,6 +18,7 @@ from openstall_api.chat.handler import HandledMessage, InboundFile, Refused, Sen
 from openstall_api.chat.store import country_of
 from openstall_api.chat.inbox import receive
 from openstall_api.db import session_scope
+from openstall_api.limits import TooMany, check
 from openstall_api.events import EventType, record_event
 from openstall_api.events_api import fake_mode_only
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
@@ -68,7 +69,13 @@ def deliver_inbound(sender: Sender, text: str, files: list[InboundFile | Refused
 
 
 def process_whatsapp_inbound(inbound: InboundMessage) -> None:
-    """The slow part, after Twilio has its answer: fetch each file, then handle the message."""
+    """The slow part, after Twilio has its answer: fetch each file, then handle the message. A sender over her
+    limit is dropped before any file is fetched or read (limits.py); Twilio already has its answer."""
+    try:
+        check("chat", f"whatsapp:{inbound.sender}")
+    except TooMany as error:
+        log.warning("A WhatsApp message was dropped: %s", error)
+        return
     files: list[InboundFile | Refused] = []
     if inbound.media:
         with httpx.Client(timeout=20.0) as http:

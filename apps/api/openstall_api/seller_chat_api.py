@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from openstall_api.chat.handler import InboundFile, Refused, Sender
 from openstall_api.chat.inbox import receive
+from openstall_api.limits import check
 from openstall_api.media import MAX_BYTES, media_type
 from openstall_api.models import Channel
 from openstall_api.settings import get_settings
@@ -69,6 +70,7 @@ async def send_message(
 ) -> WebChatReply:
     """A message from a seller in the web chat: text, photos and voice notes, handled exactly as on WhatsApp
     (chat/inbox.py). A share she proved she shipped is paid after the answer, and her chat shows it live."""
+    check("chat", f"web:{sender}")  # before any photo or voice note is read (limits.py, prompt 46)
     uploads = files or []
     if len(uploads) > MAX_FILES:
         raise HTTPException(status_code=422, detail=f"Send at most {MAX_FILES} files at a time.")

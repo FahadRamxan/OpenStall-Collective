@@ -91,6 +91,11 @@ class Settings(BaseSettings):
 
     # Seller photos and voice notes. A relative path is taken from the repo root; on Render, a persistent disk.
     MEDIA_DIR: str = "data/media"
+    # Security and abuse limits (limits.py, prompt 46). RATE_LIMITS=false turns every limit off. PROXY_HOPS: how
+    # many proxies stand in front of the API (1 on Render), so a client's address is read from the X-Forwarded-For
+    # entries they added, never from what the client wrote.
+    RATE_LIMITS: bool = True
+    PROXY_HOPS: int = 0
 
     # Trust passports: Ed25519 private key, base64.
     PASSPORT_SIGNING_KEY: SecretStr | None = None

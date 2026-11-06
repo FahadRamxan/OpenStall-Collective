@@ -25,6 +25,7 @@ from starlette.applications import Starlette
 
 from openstall_api import collective, quotes, search
 from openstall_api.disputes import dispute_words
+from openstall_api.limits import TooMany, check
 from openstall_api.adapters import get_registry
 from openstall_api.allocation import PlanOut, stored_plan
 from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_entry
@@ -274,6 +275,10 @@ async def request_quote(
 
 
 def _request_quote(queries: list[str], quantity: int, cap: Decimal, deadline: date, ship_to: str) -> Quote:
+    try:
+        check("quote")  # each quote request starts the makers' AI agents (limits.py, prompt 46)
+    except TooMany as error:
+        raise ToolError(str(error)) from None
     today = quotes.clock.today()
     with new_session() as session:
         try:

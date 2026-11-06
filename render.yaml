@@ -53,6 +53,9 @@ services:
         value: "false" # the start command migrates
       - key: MEDIA_DIR
         value: /var/data/media
+      # Render's proxy adds the client's address to X-Forwarded-For: the limits read it there (limits.py).
+      - key: PROXY_HOPS
+        value: "1"
       - key: PAYMENT_PATH
         value: payouts
       - key: PAYPAL_CLIENT_ID

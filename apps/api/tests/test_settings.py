@@ -44,6 +44,8 @@ ENVIRONMENT = {
     "PASSPORT_SIGNING_KEY": "bWFkZS11cCBzaWduaW5nIGtleQ==",
     "AUTO_MIGRATE": "false",
     "MEDIA_DIR": "/var/data/media",
+    "RATE_LIMITS": "false",
+    "PROXY_HOPS": "1",
 }
 
 SECRETS = (
@@ -64,6 +66,8 @@ HIDDEN = (*SECRETS, "DATABASE_URL")
 def plain(value: object) -> object:
     if isinstance(value, bool):
         return str(value).lower()
+    if isinstance(value, int):
+        return str(value)
     return value.get_secret_value() if isinstance(value, SecretStr) else value
 
 

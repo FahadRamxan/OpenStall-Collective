@@ -2,9 +2,10 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from openstall_api import __version__
 from openstall_api.adapters import get_registry
@@ -14,6 +15,7 @@ from openstall_api.dashboard_api import router as dashboard_router
 from openstall_api.db import REPO_ROOT, migrate
 from openstall_api.demo_api import router as demo_router
 from openstall_api.dev_api import router as dev_router
+from openstall_api.limits import LimitsMiddleware, TooMany
 from openstall_api.doctor import router as doctor_router
 from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
@@ -58,6 +60,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OpenStall Collective API", version=__version__, lifespan=lifespan)
+
+# Security and abuse limits, body sizes and security headers (limits.py). Added before CORS, so CORS wraps it and a
+# 429 still reaches the web app with its CORS headers.
+app.add_middleware(LimitsMiddleware)
+
+
+@app.exception_handler(TooMany)
+def too_many(request: Request, error: TooMany) -> JSONResponse:
+    """A limit reached in code (a quote request, an agent run, a seller's messages): 429, with when to retry."""
+    return JSONResponse({"detail": str(error)}, status_code=429, headers={"Retry-After": str(error.retry_after)})
+
 
 # The web app calls the API from the browser, from another origin. Allow that origin and no other.
 app.add_middleware(

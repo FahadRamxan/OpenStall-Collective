@@ -61,6 +61,7 @@ def test_the_panel_lists_every_attack_and_what_refuses_it(db):
         "forged_webhook",
         "reserve_unapproved",
         "pay_before_proof",
+        "flood",
         "tampered_passport",
     ]
     assert all(attack["name"] and attack["guard"] for attack in attacks)
@@ -78,9 +79,11 @@ def test_every_attack_is_refused_and_nothing_it_touched_is_kept(seeded, fakes):
     assert (count(seeded, Order), count(seeded, QuoteRequest), count(seeded, OrderPart)) == (orders, requests, parts)
     assert count(seeded, ProcessedWebhook) == webhooks  # the forged event was never applied
     assert fakes.payment_gateway.calls == []  # nothing reached PayPal: no reserve, no capture
-    # Each refusal is in the live feed: six from the panel, and the forged webhook's own.
+    # Each refusal is in the live feed: one from the panel for each attack but the forged webhook, which records its
+    # own; and the flood's limit, which the limits middleware records too.
     feed = rejections(seeded)
-    assert len(feed) == len(ATTACKS)
+    assert len(feed) == len(ATTACKS) + 1
+    assert any(summary.startswith("Limit reached: more than 120 calls to the MCP storefront from client ") for summary in feed)
     assert "A PayPal webhook failed verification and was refused" in feed
     assert "Guardrail held: Talk a maker's price down to $1.00. Refused by code (below_floor)" in " ".join(feed)
 
@@ -104,6 +107,10 @@ def test_what_refused_each_attack(seeded, fakes):
         "paid when her tracking is confirmed, and there is none yet. Nothing was captured."
     )
     assert outcomes["tampered_passport"]["reason"].startswith("Refused: the signature does not match.")
+    assert outcomes["flood"]["tried"] == "An agent at one address calls the MCP storefront 150 times in a minute."
+    assert outcomes["flood"]["reason"].startswith(
+        "Refused by the limits middleware: the first 120 calls were answered, the other 30 got 429 Too Many Requests"
+    )
 
 
 def test_one_attack_at_a_time(seeded):
@@ -120,9 +127,11 @@ def test_without_the_seeded_world_the_attacks_that_need_it_are_not_tried(db):
 
     assert outcomes["capture_tool"]["result"] == "refused"
     assert outcomes["forged_webhook"]["result"] == "refused"
+    assert outcomes["flood"]["result"] == "refused"  # it needs nothing seeded
     for key in ("below_floor", "changed_total", "reserve_unapproved", "pay_before_proof", "tampered_passport"):
         assert outcomes[key]["result"] == "not_tried", key
-    assert len(rejections(db)) == 2  # only refusals are recorded
+    # Only refusals are recorded: the capture tool's, the forged webhook's, and the flood's with its limit.
+    assert len(rejections(db)) == 4
 
 
 def test_in_sandbox_mode_the_panel_needs_the_demo_token(db, use_settings):

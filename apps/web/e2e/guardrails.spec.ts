@@ -13,11 +13,11 @@ test("every attack on the guardrail panel is refused, and the live feed says so"
   const panel = page.getByRole("region", { name: "Try to break it" });
   await panel.scrollIntoViewIfNeeded();
   const attacks = panel.getByRole("list", { name: "Attacks" }).getByRole("listitem");
-  await expect(attacks).toHaveCount(7);
+  await expect(attacks).toHaveCount(8);
 
   await panel.getByRole("button", { name: "Try every attack" }).click();
 
-  await expect(panel.getByRole("status")).toHaveText("7 of 7 attacks refused");
+  await expect(panel.getByRole("status")).toHaveText("8 of 8 attacks refused");
   for (const row of await attacks.all()) {
     await expect(row.getByText("Refused", { exact: true })).toBeVisible();
   }
@@ -31,6 +31,8 @@ test("every attack on the guardrail panel is refused, and the live feed says so"
   await expect(webhook).toContainText("Refused: PayPal did not sign this event. Nothing changed.");
   const passport = panel.getByRole("listitem", { name: "Raise a maker's on-time rate on her trust card" });
   await expect(passport).toContainText("Refused: the signature does not match.");
+  const flood = panel.getByRole("listitem", { name: "Flood the MCP storefront from one address" });
+  await expect(flood).toContainText("the other 30 got 429 Too Many Requests");
   await page.screenshot({ path: path.join(SCREENSHOTS, "guardrails-1280.png"), fullPage: false });
 
   const feed = page.getByRole("region", { name: "Live activity" });

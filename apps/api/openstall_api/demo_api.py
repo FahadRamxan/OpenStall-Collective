@@ -24,6 +24,7 @@ from openstall_api import quotes
 from openstall_api.adapters import AdapterRegistry, AdapterUnavailable, get_registry
 from openstall_api.buyer import STORY_CITY, STORY_DAYS, STORY_MAX_UNIT_PRICE, BuyerError, run_story
 from openstall_api.db import get_session
+from openstall_api.limits import check
 from openstall_api.events import EventType, record_event
 from openstall_api.models import DataSource
 from openstall_api.offer_rules import MakerLimits, default_deadline, limits_by_deadline
@@ -216,6 +217,7 @@ async def run_agent(
     """The story's request, played by a buyer's AI agent (prompt 30): the person's request in words, and the
     agent chooses the MCP storefront's tools itself, in process, until it has the approval link. Claude in sandbox
     mode (LLM_MODEL, needing ANTHROPIC_API_KEY); test mode's stand-in otherwise. /demo follows it live."""
+    check("agent_run")  # it calls Claude in a loop: OpenStall takes a few an hour (limits.py)
     try:
         buyer = registry.buyer_agent
     except AdapterUnavailable as error:
