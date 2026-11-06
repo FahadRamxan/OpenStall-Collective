@@ -709,3 +709,12 @@ Code: `apps/web/e2e/accessibility.spec.ts`, the reduced-motion rule in `globals.
 - **Checked by a machine, on every page, every run.** axe-core (the engine behind most accessibility audits, already installed with the lint rules, now a declared dev dependency at the same version) runs WCAG 2.1 A and AA's rules on every page, with its content in, in light and in dark mode, at a laptop's width and a phone's. The test fails on any finding, so a new page or panel cannot quietly break it. axe finds what code can find (contrast, names, roles, landmarks, labels); a person with a screen reader is still the real test.
 - **What it found, and the fixes:** the makers' phones on /demo and the seller chat scroll, so their message lists now take keyboard focus, with a visible ring, and can be scrolled from the keyboard; a stall's trust numbers were a definition list with each term and value wrapped one level too deep, so each group now holds its dt and dd directly, the bar beside them a hidden dd; and a message still being sent is marked by a dashed edge instead of being faded, so its words keep their contrast. Colour contrast already passed everywhere, in both themes.
 - **Less motion when asked.** With `prefers-reduced-motion: reduce`, the pulsing placeholders and the live feed's dot stop and transitions end at once, by one rule in `globals.css`.
+
+## November 6: the whole story, tested end to end, twice (prompt 47)
+
+Code: `apps/web/e2e/whole-story.spec.ts`.
+
+- **Built from spec sections 2 and 7: prompt.md was not on hand.** Recheck against the prompt.
+- **All thirteen steps, through the pages a person uses.** Each prompt has its own browser test; this one joins them in the story's order, in one browser, so a step that only works after another is tested that way: the new seller's listing is live when the buyer agent asks, the money is held when the phones are told, and Amina's passport is signed again only after her parcel arrives.
+- **Twice in a row, from a fresh seed.** Each run starts with `POST /api/demo/reset`. The second run must tell the same story as the first: the same total, the same split and the same payment to Amina, on a new order. That is the spec's check that the demo can be run again in front of judges without anything left over.
+- **Test mode only.** Simulated PayPal and the stand-in models make the run deterministic; on the real sandbox, with a person approving at PayPal, the story is the dress rehearsal's (prompt 48) to run.

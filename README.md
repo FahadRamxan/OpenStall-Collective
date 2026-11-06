@@ -102,6 +102,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Demand Radar.** Searches that found nothing are grouped by their words (plural and singular alike, filler words left out), counted for the week, and matched to the maker whose listings share the most describing words, the most trusted first. The dashboard leads with the biggest group: in the seeded world, "23 agents searched for ceramic mugs this week. Nobody sells them.", marked as seeded demo searches. **Send the tip to Noor** sends a group's tip to its maker, in her language, once a week.
 - **Security and abuse limits.** What costs money or fills the database is limited, in a sliding window, and refused with 429 and Retry-After: each client gets 600 API requests and 120 MCP calls a minute, 20 stall orders and 30 demo runs an hour; in sandbox mode, where real AI services cost money, OpenStall takes 60 quote requests (each starts the makers' AI agents) and 12 buyer-agent runs an hour from everyone together, and 30 messages per seller every 10 minutes, dropped before any photo or voice note is read. Behind Render's proxy a client is the address the proxy added to X-Forwarded-For (`PROXY_HOPS`), never one the client wrote; this computer is not counted. A refusal is in the live feed once a window, with a hash of the address, never the address. Bodies over 17 MB are refused before they are read, and every page and API answer carries security headers (no framing, no type guessing, no camera or location). `python scripts/scan_secrets.py` looks for secrets in every tracked file and the whole git history, and for this computer's own `.env` values anywhere: it runs with the tests, and the repository is clean.
 - **Accessible, light and dark.** axe-core checks every page against WCAG 2.1 A and AA, in light and in dark mode, at a laptop's width and a phone's, and finds nothing (`e2e/accessibility.spec.ts`). Every page has a skip link and its landmarks; every control can be reached and named; the words carry each state, and colour only repeats it. Someone who asks for less motion gets none.
+- **The whole story, tested end to end, twice.** `e2e/whole-story.spec.ts` plays all thirteen steps of the story in test mode, through the pages a person uses, twice in a row, each from a fresh seed: a new seller's photo and Urdu voice note become a live listing; the buyer agent's request is quoted, checked and split; one approval reserves the money; each maker is told on her phone, in her language; Amina proves she shipped and is paid, her tracking on the PayPal order; the buyer receives her parcel and her signed passport checks; and the dashboard shows Demand Radar's tip. The second run must tell the same story as the first.
 - **A status page** at `/status`: the mode, the database, PayPal's token and the SDK in use.
 - **The PayPal doctor.** `/status` checks whether this setup is ready to hold a buyer's money and pay the makers, and says what to do for each check: where the money goes (test mode, PayPal's sandbox, or its live host), PayPal's keys and a token, the registered webhook read back with its URL and events, the makers' sandbox payout accounts, and the APIMatic cross-check (below). `python scripts/doctor.py` prints the same report in a terminal (`--checks` for the checks only) and exits with 1 when a check fails. It names a missing key, never its value. Under it, **PayPal products** lists every PayPal product with how far it has got and the evidence.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
@@ -156,7 +157,7 @@ Every PayPal product OpenStall uses or plans to, and how far it has got (`packag
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **49 done, 3 partly done, 6 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **50 done, 3 partly done, 5 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -169,10 +170,10 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Trust passports and the materials advance | 35, 36, 37, 38 | | |
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44, 45 | | |
-| Hardening and submission | 46 | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 47, 48, 50 |
+| Hardening and submission | 46, 47 | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 48, 50 |
 | More of PayPal | 51, 52, 53, 56, 58 | | 54 Braintree, 55 ops agent, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account, and the Devpost draft; then the whole story end to end (47).
+Next: the hosted demo once there is a Render account (12), its dress rehearsal (48), and the Devpost draft and submission kit (50).
 
 ## Run it locally, in more detail
 
