@@ -26,6 +26,14 @@ export const CANT_WORDS: Record<string, string> = {
   en: "Sorry, I can't make this order.",
 };
 
+/** "Can I have an advance for materials?" as each maker writes it: in test mode, a maker asking for one. */
+export const ADVANCE_WORDS: Record<string, string> = {
+  ur: "کیا مجھے سامان کے لیے کچھ پیشگی مل سکتا ہے؟",
+  hi: "क्या मुझे सामान के लिए कुछ अग्रिम मिल सकता है?",
+  es: "¿Me pueden dar un anticipo para los materiales?",
+  en: "Could I have an advance for materials?",
+};
+
 /**
  * One phone per maker of the order and of its top-ups (prompt 39): her share still waiting on her if one is, else
  * her first. A maker who dropped out keeps her phone, so her words and OpenStall's answer stay in view.
@@ -231,10 +239,14 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
 function PlayButtons({ part, onPlayed }: { part: OrderPart; onPlayed: () => void }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const asked = part.proof?.state === "awaiting_confirmation" || part.drop?.state === "asked";
+  const asked =
+    part.proof?.state === "awaiting_confirmation" || part.drop?.state === "asked" || part.advance?.state === "asked";
   const canSend = part.status === "authorized" && !part.tracking_number && !asked;
   const yes = YES_WORDS[part.notice?.language ?? "en"] ?? YES_WORDS.en;
   const cant = CANT_WORDS[part.notice?.language ?? "en"] ?? CANT_WORDS.en;
+  const advance = ADVANCE_WORDS[part.notice?.language ?? "en"] ?? ADVANCE_WORDS.en;
+  // An advance can be asked for once per share: not while one is offered, on its way or paid.
+  const canAskAdvance = canSend && !part.advance;
   if (!canSend && !asked) return null;
 
   async function play(text: string, receipt: boolean) {
@@ -273,6 +285,18 @@ function PlayButtons({ part, onPlayed }: { part: OrderPart; onPlayed: () => void
             className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-xs font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
           >
             {part.seller.name} can&apos;t make it
+            <span className="rounded-full bg-warning-soft px-2 py-0.5 text-warning">Simulated</span>
+          </button>
+        ) : null}
+        {canAskAdvance ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => play(advance, false)}
+            title={advance}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-3 text-xs font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-60"
+          >
+            {part.seller.name} asks for an advance
             <span className="rounded-full bg-warning-soft px-2 py-0.5 text-warning">Simulated</span>
           </button>
         ) : null}

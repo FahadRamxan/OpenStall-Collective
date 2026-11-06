@@ -6,7 +6,15 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
-import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import {
+  AdvanceLine,
+  DeliveryLine,
+  MakersTold,
+  NoticeLine,
+  PART_TONES,
+  ProofLine,
+  shipDates,
+} from "@/components/share-lines";
 import { TopUps } from "@/components/top-ups";
 import { ApiError, errorMessage } from "@/lib/api";
 import { formatUsd, place } from "@/lib/catalog";
@@ -242,6 +250,7 @@ function Receipt({
                     <RailChip part={part} />
                   </div>
                   <NoticeLine part={part} />
+                  <AdvanceLine part={part} simulated={simulated} />
                   <ProofLine part={part} simulated={simulated} />
                   <DeliveryLine part={part} />
                   {part.status === "captured" ? (

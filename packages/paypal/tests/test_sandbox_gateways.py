@@ -17,6 +17,7 @@ import pytest
 import respx
 from paypal.core import HttpRequest, HttpResponse, JsonBody, RetryOptions, TransportError
 
+from openstall_paypal import Advance, AdvancePayment
 from openstall_paypal import (
     RETRY_POLICY,
     WHOLE_ORDER,
@@ -886,3 +887,46 @@ def test_reading_an_order_lists_its_trackers(fake: FakePayPal, client: PayPalCli
 
     assert gateway.get_order("5O190127TN364715T").trackers == ("CAP-1-7712345678",)
     assert gateway.get_order("ORDER-NONE").trackers == ()
+
+
+# A materials advance (prompt 37): a payout from the platform's balance, ahead of her proof.
+
+
+def test_payouts_pays_an_advance_from_the_platform_without_capturing(paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "BATCH-ADV"}})
+    share = Share("op_grace", "AUTH-ALL", Decimal("203.00"), payee_email="grace@example.com", note="7 covers")
+
+    paid = PayoutsGateway(client, sdk).pay_advance(Advance(share, Decimal("50.75")))
+
+    assert paid == AdvancePayment("BATCH-ADV", "paypal")
+    body, key = payout_sent(payout)
+    assert key == "openstall-advance-op_grace"
+    assert body["sender_batch_header"]["sender_batch_id"] == "openstall-advance-op_grace"
+    assert body["items"] == [
+        {
+            "recipient_type": "EMAIL",
+            "receiver": "grace@example.com",
+            "amount": {"currency": "USD", "value": "50.75"},
+            "sender_item_id": "op_grace-advance",
+            "note": "7 covers",
+        }
+    ]
+
+
+def test_a_share_paid_ahead_is_captured_whole_and_paid_the_rest(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "CAPTURE-8"}))
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
+    share = Share(
+        "op_grace", "AUTH-ALL", Decimal("203.00"), payee_email="grace@example.com", paid_ahead_usd=Decimal("50.75")
+    )
+
+    PayoutsGateway(client, sdk).pay_share(share)
+
+    assert sent(capture)[0]["amount"] == {"currency_code": "USD", "value": "203.00"}
+    body, _ = payout_sent(payout)
+    assert body["items"][0]["amount"] == {"currency": "USD", "value": "152.25"}
+
+
+def test_the_multiparty_path_pays_no_advances(client: PayPalClient, sdk: PayPalSdk) -> None:
+    with pytest.raises(PaymentError, match="payouts path"):
+        MultipartyGateway(client, sdk).pay_advance(Advance(Share("op_1", "AUTH-1", Decimal("10.00")), Decimal("2.50")))

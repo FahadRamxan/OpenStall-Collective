@@ -37,6 +37,7 @@ from openstall_api.chat.voice import Heard, listen, remember_language, transcrib
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller
+from openstall_api.advance import advance_turn
 from openstall_api.healing import drop_turn
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
 from openstall_api.wording import LOCALES, template_language
@@ -104,6 +105,8 @@ class HandledMessage:
     pay_after: list[str] = field(default_factory=list)
     # Shares she dropped out of, to release and re-plan once this message is committed (healing.heal_after).
     heal_after: list[str] = field(default_factory=list)
+    # Advances she accepted, to pay out once this message is committed (advance.pay_advance_after).
+    advance_after: list[str] = field(default_factory=list)
     # The listing her yes published, for the caller to announce once this message is committed.
     published: str | None = None
     # Each reply's stored message, in order, and the template language they are in: a maker who sent a voice note
@@ -324,12 +327,17 @@ def handle_inbound(
     # Her words typed and said: "I can't make it" counts in a voice note too.
     said = " ".join(words for words in (text, heard.transcript) if words)
     drop = drop_turn(session, seller, said, message.id) if proof is None else None
+    advance = advance_turn(session, seller, said, message.id) if proof is None and drop is None else None
     language = template_language(seller.language)
     published: str | None = None
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]
     elif drop is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in drop.replies]
+    elif advance is not None:
+        replies = (
+            refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in advance.replies]
+        )
     elif confirmed(chat, text, heard, media):
         published = publish(session, chat, seller).id
         live = [Reply(live_reply(language, stall_url(seller)))]
@@ -359,6 +367,7 @@ def handle_inbound(
         replies=replies,
         pay_after=proof.pay_after if proof else [],
         heal_after=drop.heal_after if drop else [],
+        advance_after=advance.pay_after if advance else [],
         published=published,
         reply_ids=reply_ids,
         language=language,

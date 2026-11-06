@@ -50,8 +50,8 @@ class EventType(StrEnum):
     PART_KEPT = "part.kept"  # asked, she kept her share after all
     PART_DROPPED = "part.dropped"
     TOPUP_CREATED = "topup.created"
-    ADVANCE_REQUESTED = "advance.requested"
-    ADVANCE_PAID = "advance.paid"
+    ADVANCE_REQUESTED = "advance.requested"  # she asked; OpenStall offered it (advance.py)
+    ADVANCE_PAID = "advance.paid"  # OpenStall paid it out, ahead of her proof
     PAYMENT_WEBHOOK = "payment.webhook"
     MESSAGE_RECEIVED = "message.received"
     MESSAGE_SENT = "message.sent"

@@ -115,7 +115,8 @@ def receiver(share: Share) -> dict[str, str]:
 def payout_item(share: Share) -> dict[str, Any]:
     """The share's item in a POST /v1/payments/payouts request, for her rail. Raises PaymentError when no rail can
     pay her, so callers build it before capturing anything."""
-    amount = {"currency": "USD", "value": f"{share.amount_usd:.2f}"}
+    # What is left to pay her: her share, less anything the platform paid her ahead (an advance).
+    amount = {"currency": "USD", "value": f"{share.amount_usd - share.paid_ahead_usd:.2f}"}
     note = share.note or DEFAULT_NOTE
     if share.payout_rail == "venmo":
         if not share.venmo_handle:

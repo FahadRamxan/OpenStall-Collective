@@ -20,6 +20,7 @@ share they are about.
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from decimal import Decimal
 from typing import Self, cast
 
@@ -51,6 +52,8 @@ from paypal.models.enums import (
 
 from openstall_paypal.client import PayPalClient, PayPalError, PayPalUnavailable
 from openstall_paypal.gateway import (
+    Advance,
+    AdvancePayment,
     WHOLE_ORDER,
     Checkout,
     CheckoutRequest,
@@ -267,7 +270,12 @@ class SandboxGateway:
             raise
 
 
-class MultipartyGateway(SandboxGateway):
+class _NoAdvances:
+    def pay_advance(self, advance: Advance) -> AdvancePayment:
+        raise PaymentError("ADVANCE_UNAVAILABLE", "advances are paid out by the platform, on the payouts path")
+
+
+class MultipartyGateway(_NoAdvances, SandboxGateway):
     """Each seller is a payee on the one PayPal order, so each share has its own authorization.
 
     A recorded dead end, kept out of the demo and the README: the Orders v2 schema (v2.36) says intent AUTHORIZE "is
@@ -372,6 +380,30 @@ class PayoutsGateway(SandboxGateway):
             payout_batch_id=payout["batch_header"]["payout_batch_id"],
             payout_rail=share.payout_rail,
         )
+
+    def pay_advance(self, advance: Advance) -> AdvancePayment:
+        # A payout from the platform's own balance: nothing is captured from the buyer's hold for it.
+        share = advance.share
+        ahead = replace(
+            share, part_id=f"{share.part_id}-advance", amount_usd=advance.amount_usd, paid_ahead_usd=Decimal("0.00")
+        )
+        item = payout_item(ahead)  # refuses a maker no rail reaches
+        if share.payout_rail == "venmo" and self.simulate_venmo:
+            return AdvancePayment(None, "venmo", payout_simulated=True)
+        with paypal_errors():
+            payout = self.client.post(
+                "/v1/payments/payouts",
+                {
+                    "sender_batch_header": {
+                        "sender_batch_id": f"openstall-advance-{share.part_id}",
+                        "email_subject": "An advance for your OpenStall order",
+                        "email_message": ahead.note or DEFAULT_NOTE,
+                    },
+                    "items": [item],
+                },
+                idempotency_key=f"openstall-advance-{share.part_id}",
+            )
+        return AdvancePayment(payout["batch_header"]["payout_batch_id"], share.payout_rail)
 
     def release_share(self, share: Share) -> None:
         # Her amount is never captured. Only the last open share closes the hold, giving back whatever is left.

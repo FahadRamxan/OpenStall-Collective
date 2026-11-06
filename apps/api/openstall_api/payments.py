@@ -230,6 +230,13 @@ def seller_rail(seller: Seller, settings: Settings | None = None) -> Rail:
     )
 
 
+def paid_ahead(part: OrderPart) -> Decimal:
+    """What OpenStall paid her ahead on this share as a materials advance (advance.py): taken off her payout when
+    she ships."""
+    advance = part.advance_json or {}
+    return Decimal(str(advance["amount_usd"])) if advance.get("state") == "paid" else Decimal("0.00")
+
+
 def share_of(part: OrderPart) -> Share:
     """A reserved share as the gateway needs it. `last`: no other share of the order is still reserved."""
     assert part.authorization_id is not None
@@ -244,6 +251,7 @@ def share_of(part: OrderPart) -> Share:
         last=not others_open,
         payout_rail=seller_rail(part.seller).kind,
         venmo_handle=part.seller.venmo_handle,
+        paid_ahead_usd=paid_ahead(part),
     )
 
 
@@ -275,7 +283,13 @@ def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderP
     record_event(
         session,
         EventType.PART_CAPTURED,
-        f"{name} was paid ${part.amount_usd:,.2f} on proof of shipping",
+        f"{name} was paid ${part.amount_usd:,.2f} on proof of shipping"
+        + (
+            f" (${share.paid_ahead_usd:,.2f} of it ahead, as OpenStall's advance; "
+            f"${part.amount_usd - share.paid_ahead_usd:,.2f} sent now)"
+            if share.paid_ahead_usd
+            else ""
+        ),
         entity_id=part.id,
         payload={
             "order_id": part.order_id,

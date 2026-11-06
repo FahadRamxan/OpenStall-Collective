@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CANT_WORDS, MakerPhones, PHONE_MESSAGES, YES_WORDS, phoneParts } from "@/components/maker-phones";
+import { ADVANCE_WORDS, CANT_WORDS, MakerPhones, PHONE_MESSAGES, YES_WORDS, phoneParts } from "@/components/maker-phones";
 import type { EventStreamState } from "@/hooks/use-event-stream";
 import type { LatestOrderState } from "@/hooks/use-latest-order";
 import type { Conversation } from "@/lib/chats";
@@ -231,6 +231,32 @@ describe("MakerPhones", () => {
         { text: "ہاں", receipt: false },
       ]),
     );
+  });
+
+  it("in test mode, a maker asks for an advance in her language, once per share", async () => {
+    const posted: unknown[] = [];
+    const paid = { state: "paid" as const, amount_usd: "54.00", paid_at: "2026-11-10T10:08:00Z" };
+    latest.order = { ...ORDER, parts: [ORDER.parts[0], share("Amina", "s_amina", "ur", { advance: paid })] };
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats/s_priya": () => Response.json(chat("s_priya", "Priya", [NOTICE_HI])),
+        "GET /api/chats/s_amina": () => Response.json(chat("s_amina", "Amina", [NOTICE_UR])),
+        "POST /api/dev/sellers/s_priya/messages": (init) => {
+          posted.push(JSON.parse(String(init?.body)));
+          return Response.json({ seller_id: "s_priya", message_id: "cm_9", replies: [] }, { status: 201 });
+        },
+      }),
+    );
+
+    render(<MakerPhones />);
+
+    const priya = screen.getByRole("article", { name: "Priya's phone" });
+    fireEvent.click(await within(priya).findByRole("button", { name: /Priya asks for an advance/ }));
+    await waitFor(() => expect(posted).toEqual([{ text: ADVANCE_WORDS.hi, receipt: false }]));
+    // Amina has had hers: no second one.
+    const amina = screen.getByRole("article", { name: "Amina's phone" });
+    expect(within(amina).queryByRole("button", { name: /asks for an advance/ })).not.toBeInTheDocument();
   });
 
   it("gives a top-up's makers a phone too, and keeps the phone of the maker who dropped out", async () => {

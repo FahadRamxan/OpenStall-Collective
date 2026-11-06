@@ -38,7 +38,7 @@ from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
 from openstall_api.models import Channel, Order, OrderPart, OrderStatus, PartStatus, Seller, utcnow
 from openstall_api.notices import ship_by
-from openstall_api.payments import PAID, OrderNotFound, WrongStatus, pay_share, seller_rail
+from openstall_api.payments import PAID, OrderNotFound, WrongStatus, paid_ahead, pay_share, seller_rail
 from openstall_api.settings import get_settings
 from openstall_api.tracking import track_on_paypal
 from openstall_api.webhooks import deliver_fake_webhooks
@@ -489,7 +489,9 @@ def _tell(part_id: str, kind: str, messenger: Callable[[], Messenger], reason: s
         language = language_words(code, seller.language)
         if kind == "paid":
             rail = RAIL_NAMES[seller_rail(seller).kind]
-            text = words.paid.format(amount=format_money(code, part.amount_usd), order_id=part.order_id, rail=rail)
+            # What reached her now: her share, less any advance OpenStall paid her ahead (advance.py).
+            sent = part.amount_usd - paid_ahead(part)
+            text = words.paid.format(amount=format_money(code, sent), order_id=part.order_id, rail=rail)
             if get_settings().OPENSTALL_MODE == "fake":
                 text = f"{text}\n{words.simulated}"
             summary = f"{seller.name} was told {{where}}, in {language}, that she is paid for order {part.order_id}"

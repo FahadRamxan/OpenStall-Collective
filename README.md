@@ -91,6 +91,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **The tamper check, live on `/demo`.** **Check a trust passport** loads a maker's signed trust card and checks its signature twice: in your browser, with OpenStall's public key and the browser's own Ed25519 (Web Crypto), and by OpenStall's `POST /passport/verify`. Change any number and press **Check the signature**: both say it no longer matches. **Put it back**, and it checks out again.
 - **Try to break it, on `/demo`.** Seven attacks, each a real attempt through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total sent by the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, and a trust card with one number raised. **Try every attack**: each is refused by that code, and the live feed records each refusal (`security.rejected`). Nothing an attack touches is kept. `POST /api/guardrails/run` runs them all (in sandbox mode, with the demo token).
 - **Trust passports update after each delivery.** When a buyer receives a maker's parcel, her trust passport is worked out again (orders delivered, on-time rate, dispute rate, her score) and signed again with OpenStall's key. It is worked out from facts each time: her history (made-up numbers for the seeded makers, which stay marked as demo data) and every parcel of hers a buyer received, on time or not by its delivery date. Her stall page, her trust card for agents and search results say how many of her orders came through OpenStall; the live feed shows the old and new score. A maker who joined through the chat gets her first passport once her photos can be checked (not built yet).
+- **A materials advance for a trusted maker.** A maker whose signed trust score is 0.90 or more can ask in her chat, in her language, for part of a reserved share ahead, to buy her materials: a quarter of it, paid by OpenStall from its own balance by Payouts on her rail, never taken from the buyer. When she ships, her share is captured whole and her payout is the rest; if she never ships, the advance is OpenStall's loss, not the buyer's. In test mode, **Grace asks for an advance** on her phone on `/demo` plays it.
 - **A buyer agent you can run.** `python scripts/run_demo_request.py` plays the story through the MCP storefront (search, quote, draft order, approval link) and prints each step; add `--pause` to step through it for a recording, and `--url` to point it at the hosted demo. On `/demo`, "Run the demo request" does the same on the server, a stepper follows it from Search to Approval, and "Reset demo" puts the seeded world back. In sandbox mode both buttons need the `DEMO_RUN_TOKEN`.
 - **A real AI agent as the buyer.** On `/demo`, **Run it with an AI agent** hands the story's request, in words, to a buyer's AI agent that chooses the MCP storefront's tools itself, turn by turn, until it has the approval link for its person: Claude (`LLM_MODEL`) in sandbox mode with `ANTHROPIC_API_KEY`, test mode's stand-in otherwise. `/demo` shows each tool it chose and its answer, and the approval page says an AI agent asked for the order (`POST /api/demo/run-agent`).
 - **The whole story on `/demo`, live.** In the story's order: the buyer agent's request, the offer rules and every checked offer, the split, the order and its one PayPal approval, each maker's payment (reserved, told, paid on proof, tracking on PayPal), and the makers' own phones, each showing her order in her language, her courier receipt and her payment as they happen, and a maker's trust passport you can tamper with. The live feed of everything that happens sits beside it. In test mode you can play a seeded maker from her phone: send her courier receipt, then say yes in her language.
@@ -132,7 +133,7 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **43 done, 3 partly done, 12 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **44 done, 3 partly done, 11 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -142,13 +143,13 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Agent storefront | 20, 21 | | |
 | Negotiation and the collective | 22–30 | | |
 | After payment | 31–34 | | |
-| Trust passports | 35, 36, 38 | | 37 materials advance |
+| Trust passports and the materials advance | 35, 36, 37, 38 | | |
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44 | | 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
 | More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account, and the Devpost draft; then the materials advance (37), the Hyperwallet rail (52), PayPal's products table (53) and disputes answered with the proof (56).
+Next: the hosted demo once there is a Render account, and the Devpost draft; then the Hyperwallet rail (52), PayPal's products table (53) and disputes answered with the proof (56).
 
 ## Run it locally, in more detail
 

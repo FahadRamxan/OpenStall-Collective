@@ -315,6 +315,8 @@ class OrderPart(Base):
     # She said she cannot make her share (healing.py): asked to confirm, then dropped, with the quote request
     # that re-plans her units once it is made. None while she has said nothing of the kind.
     drop_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # A materials advance on this share (advance.py): offered, accepted, then paid by OpenStall ahead of her proof.
+    advance_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # PayPal's tracker for her shipment, once her tracking is on her capture at PayPal (prompt 33, tracking.py).
     paypal_tracker_id: Mapped[str | None] = mapped_column(String(128))
     delivery_date: Mapped[date | None] = mapped_column(Date)

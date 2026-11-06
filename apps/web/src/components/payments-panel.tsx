@@ -2,7 +2,15 @@
 
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
-import { DeliveryLine, MakersTold, NoticeLine, PART_TONES, ProofLine, shipDates } from "@/components/share-lines";
+import {
+  AdvanceLine,
+  DeliveryLine,
+  MakersTold,
+  NoticeLine,
+  PART_TONES,
+  ProofLine,
+  shipDates,
+} from "@/components/share-lines";
 import { TopUps } from "@/components/top-ups";
 import { useLatestOrder } from "@/hooks/use-latest-order";
 import { formatUsd, place } from "@/lib/catalog";
@@ -144,6 +152,7 @@ function Payments({ order }: { order: Order }) {
                   <RailChip part={part} />
                 </div>
                 <NoticeLine part={part} />
+                <AdvanceLine part={part} simulated={simulated} />
                 <ProofLine part={part} simulated={simulated} />
                 <DeliveryLine part={part} />
               </div>

@@ -64,6 +64,8 @@ export type OrderPart = {
   proof?: PartProof | null;
   /** She said she cannot make it: null while she has said nothing of the kind. */
   drop?: PartDrop | null;
+  /** A materials advance on her share, paid by OpenStall ahead of her proof (prompt 37). */
+  advance?: { state: "asked" | "accepted" | "paid"; amount_usd: string; paid_at: string | null } | null;
   /** Her tracking is on her payment on the PayPal order (simulated PayPal in test mode). */
   tracking_on_paypal?: boolean;
   /** When the buyer confirmed her parcel arrived: null until then. */
@@ -195,13 +197,14 @@ export async function getLatestOrder(init: RequestInit = {}): Promise<Order | nu
 /**
  * Events after which the latest order may read differently: an order or one of its shares changed, a maker was
  * told about her share (or could not be), her proof of shipping moved on (read, confirmed, on PayPal), or a top-up
- * was drafted for a maker who dropped out.
+ * was drafted for a maker who dropped out, or a materials advance was offered or paid.
  */
 export function changesOrders(event: FeedEvent): boolean {
   return (
     event.type.startsWith("order.") ||
     event.type.startsWith("part.") ||
     event.type.startsWith("topup.") ||
+    event.type.startsWith("advance.") ||
     event.type.startsWith("message.order_notice") ||
     event.type.startsWith("tracking.")
   );

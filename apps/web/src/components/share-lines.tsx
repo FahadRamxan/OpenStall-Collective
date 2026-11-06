@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { type BadgeTone } from "@/components/badge";
-import { languageName, mediaUrl } from "@/lib/catalog";
+import { formatUsd, languageName, mediaUrl } from "@/lib/catalog";
 import { formatDay, noticeChannel, type Order, type OrderPart, type PartStatus } from "@/lib/orders";
 
 /*
@@ -76,6 +76,23 @@ export function DeliveryLine({ part }: { part: OrderPart }) {
       {part.on_time ? ", on time" : late}
     </p>
   );
+}
+
+/**
+ * A materials advance on her share (prompt 37): offered, on its way, or paid by OpenStall ahead of her proof. The
+ * buyer is never charged for it: her share is captured whole when she ships, and her payout then is less.
+ */
+export function AdvanceLine({ part, simulated }: { part: OrderPart; simulated: boolean }) {
+  const advance = part.advance;
+  if (!advance) return null;
+  const amount = formatUsd(advance.amount_usd);
+  const words =
+    advance.state === "paid"
+      ? `Advance for materials: ${amount}, paid by OpenStall${simulated ? " (simulated PayPal)" : ""}, not the buyer`
+      : advance.state === "accepted"
+        ? `Advance for materials: ${amount}, on its way`
+        : `Advance for materials offered: ${amount}`;
+  return <p className="mt-2 text-xs font-semibold text-accent">{words}</p>;
 }
 
 /** Whether she was told about her share: where, in which language, and a link to her chat. */

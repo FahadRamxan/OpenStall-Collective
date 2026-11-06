@@ -120,6 +120,9 @@ class Share:
     last: bool = True  # no other share of the order is still reserved, so whatever the hold has left can be freed
     payout_rail: PayoutRail = "paypal"  # how she is paid once her share is captured (rails.rail_for)
     venmo_handle: str | None = None  # her Venmo handle, on the Venmo rail
+    # Paid to her ahead by the platform, as a materials advance: her share is still captured whole, and her payout
+    # on proof is that much less.
+    paid_ahead_usd: Decimal = Decimal("0.00")
 
 
 @dataclass(frozen=True)
@@ -150,6 +153,26 @@ class Tracking:
     known_trackers: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class Advance:
+    """Part of a maker's share paid to her ahead, for her materials, by the platform itself (prompt 37). Nothing is
+    taken from the buyer for it: her share is captured whole when she ships, and her payout then is that much less.
+    """
+
+    share: Share
+    amount_usd: Decimal
+
+
+@dataclass(frozen=True)
+class AdvancePayment:
+    """An advance paid out to her: the payout batch, her rail, and whether it was only recorded (Venmo on the
+    sandbox)."""
+
+    payout_batch_id: str | None
+    payout_rail: PayoutRail
+    payout_simulated: bool = False
+
+
 @runtime_checkable
 class PaymentGateway(Protocol):
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
@@ -170,6 +193,11 @@ class PaymentGateway(Protocol):
 
     def release_share(self, share: Share) -> None:
         """Give one seller's share back to the buyer. Refused once the share is paid."""
+        ...
+
+    def pay_advance(self, advance: Advance) -> AdvancePayment:
+        """Pay part of a share to her ahead, from the platform, on her payout rail; nothing is captured. Safe to
+        repeat: an advance is paid at most once."""
         ...
 
     def add_tracking(self, tracking: Tracking) -> str:
@@ -243,6 +271,7 @@ class FakeGateway:
         self._authorizations: dict[str, _FakeAuthorization] = {}  # payouts: one per order
         self._hold_orders: dict[str, str] = {}  # authorization id -> PayPal order id
         self._payments: dict[str, Payment] = {}
+        self._advances: dict[str, AdvancePayment] = {}
         self._trackers: dict[str, list[str]] = {}  # PayPal order id -> its tracker ids, oldest first
 
     def take_outbox(self) -> list[dict[str, Any]]:
@@ -399,7 +428,7 @@ class FakeGateway:
         item: dict[str, Any] = {
             "recipient_type": "USER_HANDLE" if venmo else "EMAIL",
             "recipient_wallet": "Venmo" if venmo else "PAYPAL",
-            "amount": {"currency": "USD", "value": f"{share.amount_usd:.2f}"},
+            "amount": {"currency": "USD", "value": f"{share.amount_usd - share.paid_ahead_usd:.2f}"},
             "note": share.note or "Your share of an OpenStall Collective order.",
             "sender_item_id": share.part_id,
         }
@@ -416,10 +445,25 @@ class FakeGateway:
                 "payout_batch_id": batch_id,
                 "payout_item": item,
             },
-            f"A payout of ${share.amount_usd:.2f} to {'Venmo' if venmo else 'PayPal'} succeeded",
+            f"A payout of ${share.amount_usd - share.paid_ahead_usd:.2f} to {'Venmo' if venmo else 'PayPal'} succeeded",
         )
         payment = Payment(capture_id=capture_id, payout_batch_id=batch_id, payout_rail=share.payout_rail)
         self._payments[share.part_id] = payment
+        return payment
+
+    def pay_advance(self, advance: Advance) -> AdvancePayment:
+        self.calls.append(("pay_advance", advance))
+        share = advance.share
+        if share.part_id in self._advances:
+            return self._advances[share.part_id]
+        if self.path != "payouts":
+            raise PaymentError("ADVANCE_UNAVAILABLE", "advances are paid out by the platform, on the payouts path")
+        if share.payout_rail not in ("paypal", "venmo"):
+            raise PaymentError(
+                "PAYOUT_RAIL_UNAVAILABLE", f"no payout rail can reach the maker of share {share.part_id} yet"
+            )
+        payment = AdvancePayment(f"FAKE-ADVANCE-{_digest(share.part_id)}", share.payout_rail)
+        self._advances[share.part_id] = payment
         return payment
 
     def release_share(self, share: Share) -> None:

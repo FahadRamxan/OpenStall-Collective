@@ -8,6 +8,8 @@ import pytest
 
 from openstall_paypal.gateway import (
     WHOLE_ORDER,
+    Advance,
+    AdvancePayment,
     CheckoutPart,
     CheckoutRequest,
     FakeGateway,
@@ -192,3 +194,46 @@ def test_a_share_no_rail_can_reach_is_never_captured() -> None:
     assert error.value.issue == "PAYOUT_RAIL_UNAVAILABLE"
     assert gateway.take_outbox() == []
     assert gateway.authorization(reservation.holds[WHOLE_ORDER])[1] == Decimal("0.00")
+
+
+# A materials advance (prompt 37): paid by the platform, ahead of her proof; nothing is captured for it.
+
+
+def test_an_advance_is_paid_once_and_nothing_is_captured_for_it() -> None:
+    gateway = FakeGateway()
+    reservation = reserved(gateway)
+    grace = share(reservation, "op_grace", "203.00", payee_email="grace@example.com")
+
+    first = gateway.pay_advance(Advance(grace, Decimal("50.75")))
+    again = gateway.pay_advance(Advance(grace, Decimal("50.75")))
+
+    assert first == again and isinstance(first, AdvancePayment) and first.payout_rail == "paypal"
+    assert gateway.authorization(reservation.holds[WHOLE_ORDER]) == (Decimal("815.00"), Decimal("0.00"), "CREATED")
+
+
+def test_a_share_paid_ahead_is_captured_whole_and_paid_out_the_rest() -> None:
+    gateway = FakeGateway()
+    reservation = reserved(gateway)
+    gateway.take_outbox()
+    grace = Share(
+        part_id="op_grace",
+        hold_id=reservation.holds[WHOLE_ORDER],
+        amount_usd=Decimal("203.00"),
+        payee_email="grace@example.com",
+        paid_ahead_usd=Decimal("50.75"),
+    )
+
+    gateway.pay_share(grace)
+
+    assert gateway.authorization(reservation.holds[WHOLE_ORDER])[1] == Decimal("203.00")
+    [payout] = events(gateway, "PAYMENT.PAYOUTS-ITEM.SUCCEEDED")
+    assert payout["payout_item"]["amount"] == {"currency": "USD", "value": "152.25"}
+
+
+def test_no_advance_for_a_maker_no_rail_reaches() -> None:
+    gateway = FakeGateway()
+    reservation = reserved(gateway)
+
+    with pytest.raises(PaymentError, match="no payout rail"):
+        amina = share(reservation, "op_amina", "216.00", payout_rail="unavailable")
+        gateway.pay_advance(Advance(amina, Decimal("54.00")))

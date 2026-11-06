@@ -99,6 +99,22 @@ class DropOut(BaseModel):
         return cls.model_validate(shown) if shown else None
 
 
+class AdvanceOut(BaseModel):
+    """A materials advance on her share (advance.py): offered, accepted, or paid by OpenStall ahead of her proof."""
+
+    state: Literal["asked", "accepted", "paid"]
+    amount_usd: Decimal
+    paid_at: datetime | None = None
+
+    @classmethod
+    def of(cls, advance: dict[str, Any] | None) -> "AdvanceOut | None":
+        if not advance or advance.get("state") not in ("asked", "accepted", "paid"):
+            return None
+        return cls(
+            state=advance["state"], amount_usd=Decimal(str(advance["amount_usd"])), paid_at=advance.get("paid_at")
+        )
+
+
 class PartOut(BaseModel):
     id: str
     reference_id: str
@@ -116,6 +132,7 @@ class PartOut(BaseModel):
     tracking_number: str | None  # set only once she confirmed it: she is paid on it
     proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
     drop: DropOut | None = None  # she said she cannot make it (healing.py); None while she has not
+    advance: AdvanceOut | None = None  # a materials advance on her share (advance.py)
     tracking_on_paypal: bool  # her tracking is on her capture at PayPal (simulated PayPal in fake mode)
     # When the buyer confirmed her parcel arrived (prompt 34), and whether by its delivery date. None before.
     delivered_at: datetime | None = None
@@ -248,6 +265,7 @@ def _part(
         tracking_number=part.tracking_number,
         proof=ProofOut.of(part.proof_json),
         drop=DropOut.of(part.drop_json),
+        advance=AdvanceOut.of(part.advance_json),
         tracking_on_paypal=part.paypal_tracker_id is not None,
         delivered_at=delivered_utc(part),
         on_time=on_time(part),
