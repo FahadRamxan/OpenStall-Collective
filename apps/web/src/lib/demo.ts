@@ -16,6 +16,24 @@ export type DemoRun = {
 
 export type DemoReset = { sellers: number; products: number; passports: number; order_id: string };
 
+/** One tool a buyer's AI agent chose, and how it went. */
+export type AgentStep = { tool: string; arguments: Record<string, unknown>; ok: boolean; summary: string };
+
+/** What the buyer's AI agent did, as POST /api/demo/run-agent says. */
+export type DemoAgentRun = {
+  /** Claude and its model, or test mode's stand-in. */
+  agent: string;
+  request: string;
+  steps: AgentStep[];
+  /** What it said, turn by turn; the last is its answer to the person. */
+  said: string[];
+  finished: boolean;
+  request_id: string | null;
+  order_id: string | null;
+  total_usd: string | null;
+  approval_url: string | null;
+};
+
 function headers(token: string | null): RequestInit {
   return token ? { headers: { [TOKEN_HEADER]: token } } : {};
 }
@@ -23,6 +41,11 @@ function headers(token: string | null): RequestInit {
 /** Runs the story's request with the scripted buyer agent, through the MCP storefront. */
 export function runDemo(token: string | null = null): Promise<DemoRun> {
   return apiPost<DemoRun>("/api/demo/run", {}, headers(token));
+}
+
+/** Runs the story's request with a buyer's AI agent that chooses the storefront's tools itself. */
+export function runAgent(token: string | null = null): Promise<DemoAgentRun> {
+  return apiPost<DemoAgentRun>("/api/demo/run-agent", {}, headers(token));
 }
 
 /** Puts the demo world back as seeded. */
@@ -39,12 +62,15 @@ export const STEPS = [
   { name: "Approval", done: "checkout.link_issued" },
 ] as const;
 
+/** The events that start a run: the scripted buyer agent's, or a buyer's AI agent's. */
+const RUN_STARTS = new Set(["demo.run", "agent.started"]);
+
 /**
- * How far the latest run has got: the number of steps done, from the events since the newest demo.run (events come
- * newest first). Null before any run, or after a reset.
+ * How far the latest run has got: the number of steps done, from the events since the newest run started (events
+ * come newest first). Null before any run, or after a reset.
  */
 export function stepsDone(events: FeedEvent[]): number | null {
-  const start = events.findIndex((event) => event.type === "demo.run" || event.type === "demo.reset");
+  const start = events.findIndex((event) => RUN_STARTS.has(event.type) || event.type === "demo.reset");
   if (start === -1 || events[start].type === "demo.reset") return null;
   const since = new Set(events.slice(0, start).map((event) => event.type));
   let done = 0;

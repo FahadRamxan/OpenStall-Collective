@@ -59,6 +59,43 @@ describe("DemoControls", () => {
     expect(fetch).toHaveBeenCalledWith("http://api.test/api/demo/run", expect.objectContaining({ method: "POST" }));
   });
 
+  it("runs it with an AI agent: the tools it chose, its answer, and the order's approval page", async () => {
+    const agentRun = {
+      agent: "test mode's stand-in for Claude",
+      request: "Please buy 40 hand-embroidered cushion covers for corporate gifts",
+      steps: [
+        { tool: "search_products", arguments: {}, ok: true, summary: "12 listings found" },
+        { tool: "request_quote", arguments: {}, ok: true, summary: "Quote q_2: 4 valid offers" },
+        { tool: "create_collective_order", arguments: {}, ok: true, summary: "Order ord_10 drafted: $815.00" },
+        { tool: "checkout", arguments: {}, ok: true, summary: "Approval link for the person" },
+      ],
+      said: ["I'll look first.", "Order ord_10 is drafted. Approve it here: http://localhost:3000/approve/ord_10"],
+      finished: true,
+      request_id: "q_2",
+      order_id: "ord_10",
+      total_usd: "815.00",
+      approval_url: "http://localhost:3000/approve/ord_10",
+    };
+    const fetch = vi.fn().mockResolvedValue(Response.json(agentRun));
+    vi.stubGlobal("fetch", fetch);
+
+    render(<DemoControls />);
+    fireEvent.click(screen.getByRole("button", { name: "Run it with an AI agent" }));
+
+    expect(await screen.findByRole("link", { name: "Open its approval page" })).toHaveAttribute("href", "/approve/ord_10");
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("The buyer's AI agent (test mode's stand-in for Claude) chose 4 tools:");
+    const tools = within(status).getByRole("list", { name: "The tools the AI agent chose" });
+    expect(within(tools).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      "search_products: 12 listings found",
+      "request_quote: Quote q_2: 4 valid offers",
+      "create_collective_order: Order ord_10 drafted: $815.00",
+      "checkout: Approval link for the person",
+    ]);
+    expect(status).toHaveTextContent("Order ord_10 is drafted. Approve it here: http://localhost:3000/approve/ord_10");
+    expect(fetch).toHaveBeenCalledWith("http://api.test/api/demo/run-agent", expect.objectContaining({ method: "POST" }));
+  });
+
   it("asks before resetting, and says when it is done", async () => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ sellers: 5, products: 5, passports: 5, order_id: "ord_demo" }));
     vi.stubGlobal("fetch", fetch);
@@ -111,5 +148,7 @@ describe("stepsDone", () => {
     // Steps from an earlier run do not count.
     expect(stepsDone(events("search.logged", "quote.requested", "demo.run", "search.logged"))).toBe(1);
     expect(stepsDone(events("demo.run", "search.logged", "demo.reset"))).toBeNull();
+    // A buyer's AI agent's run is followed the same way.
+    expect(stepsDone(events("demo.run", "search.logged", "agent.started", "search.logged", "quote.requested"))).toBe(2);
   });
 });

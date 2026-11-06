@@ -15,6 +15,7 @@ client = TestClient(app)
 
 ALL_ADAPTERS = [
     "llm",
+    "buyer_agent",
     "speech_to_text",
     "text_to_speech",
     "embedder",

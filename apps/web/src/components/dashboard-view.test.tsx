@@ -126,9 +126,12 @@ describe("DashboardView", () => {
     );
     expect(within(region("Orders")).getByText("$815.00")).toBeInTheDocument();
     expect(within(region("Orders")).getByText("Drafted by an AI agent")).toBeInTheDocument();
-    expect(within(region("Payouts")).getByText("Paid on proof of shipping")).toBeInTheDocument();
-    expect(within(region("Tracking")).getByText("EE123456789IN")).toBeInTheDocument();
-    expect(within(region("Trust passports")).getByRole("link", { name: "Priya" })).toHaveAttribute("href", "/stall/s_priya");
+    expect(await within(region("Payouts")).findByText("Paid on proof of shipping")).toBeInTheDocument();
+    expect(await within(region("Tracking")).findByText("EE123456789IN")).toBeInTheDocument();
+    expect(await within(region("Trust passports")).findByRole("link", { name: "Priya" })).toHaveAttribute(
+      "href",
+      "/stall/s_priya",
+    );
     expect(within(region("Trust passports")).getByText("Valid")).toBeInTheDocument();
     expect(screen.getByText("Test mode")).toBeInTheDocument();
   });
@@ -147,7 +150,7 @@ describe("DashboardView", () => {
     render(<DashboardView />);
 
     const radar = await screen.findByRole("region", { name: "Demand Radar" });
-    expect(within(radar).getByText("Nobody on OpenStall yet")).toBeInTheDocument();
+    expect(await within(radar).findByText("Nobody on OpenStall yet")).toBeInTheDocument();
     fireEvent.click(await within(radar).findByRole("button", { name: "Send the tip to Noor" }));
 
     await waitFor(() => expect(within(radar).getByText(/^Tipped /)).toBeInTheDocument());

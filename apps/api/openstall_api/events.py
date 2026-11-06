@@ -71,6 +71,8 @@ class EventType(StrEnum):
     SECURITY_REJECTED = "security.rejected"
     RADAR_TIP_SENT = "radar.tip_sent"  # a Demand Radar tip sent to a maker (radar.py); the entity is its group
     DEMO_TEST = "demo.test"  # made with POST /api/dev/events, in fake mode only
+    AGENT_STARTED = "agent.started"  # a buyer's AI agent got a person's request (POST /api/demo/run-agent)
+    AGENT_FINISHED = "agent.finished"  # it stopped: with the approval link, or why not
     DEMO_RUN = "demo.run"  # the scripted buyer agent started the story (POST /api/demo/run)
     DEMO_RESET = "demo.reset"  # the demo world was put back as seeded (POST /api/demo/reset)
 

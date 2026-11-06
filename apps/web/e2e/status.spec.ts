@@ -6,6 +6,7 @@ import type { StatusReport } from "../src/lib/api";
 
 const ADAPTERS = [
   "LLM",
+  "Buyer agent",
   "Speech to text",
   "Text to speech",
   "Embedder",

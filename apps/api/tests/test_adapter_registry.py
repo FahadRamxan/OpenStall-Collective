@@ -20,6 +20,7 @@ from openstall_agents.adapters import (
     TextToSpeech,
 )
 from openstall_agents.adapters.claude import ClaudeLLM
+from openstall_agents.buyer_agent import FakeBuyer
 from openstall_agents.fake_answers import fake_answer
 from openstall_api.adapters import ADAPTERS, AdapterRegistry, AdapterSpec, AdapterUnavailable, get_registry
 from openstall_api.messaging import FakeMessenger, Messenger
@@ -35,6 +36,7 @@ from openstall_paypal import (
 
 ALL_ADAPTERS = [
     "llm",
+    "buyer_agent",
     "speech_to_text",
     "text_to_speech",
     "embedder",
@@ -67,6 +69,7 @@ def test_fake_mode_uses_a_fake_for_every_adapter(use_settings):
     registry = AdapterRegistry(use_settings(OPENSTALL_MODE="fake"))
 
     assert isinstance(registry.llm, FakeLLM)
+    assert isinstance(registry.buyer_agent, FakeBuyer)
     assert isinstance(registry.speech_to_text, FakeSpeechToText)
     assert isinstance(registry.text_to_speech, FakeTextToSpeech)
     assert isinstance(registry.embedder, FakeEmbedder)
@@ -143,6 +146,7 @@ def test_with_its_keys_but_no_real_implementation_an_adapter_is_not_built(use_se
     assert statuses(registry) == {
         **dict.fromkeys(ALL_ADAPTERS, "not built"),
         "llm": "real",
+        "buyer_agent": "real",
         "speech_to_text": "real",
         "text_to_speech": "real",
         "payment_gateway": "real",

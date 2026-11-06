@@ -25,7 +25,8 @@ from openstall_agents.adapters import (
     SpeechToText,
     TextToSpeech,
 )
-from openstall_agents.adapters.claude import ClaudeLLM
+from openstall_agents.adapters.claude import ClaudeBuyer, ClaudeLLM
+from openstall_agents.buyer_agent import BuyerModel, FakeBuyer
 from openstall_agents.fake_answers import fake_answer
 from openstall_api.db import reset_engine
 from openstall_api.feeds import clear_catalog_cache
@@ -79,6 +80,12 @@ def make_claude(settings: Settings) -> ClaudeLLM:
     return ClaudeLLM(settings.ANTHROPIC_API_KEY.get_secret_value(), settings.LLM_MODEL)
 
 
+def make_claude_buyer(settings: Settings) -> ClaudeBuyer:
+    """The buyer's AI agent on Claude, with the model from LLM_MODEL. The registry checks the key is set first."""
+    assert settings.ANTHROPIC_API_KEY
+    return ClaudeBuyer(settings.ANTHROPIC_API_KEY.get_secret_value(), settings.LLM_MODEL)
+
+
 def make_openai_speech(settings: Settings) -> OpenAISpeechToText:
     """OpenAI's transcriptions, with the model from SPEECH_MODEL. The registry checks the key is set first."""
     assert settings.OPENAI_API_KEY
@@ -127,6 +134,16 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         keys=("ANTHROPIC_API_KEY",),
         make_fake=lambda settings: FakeLLM(responder=fake_answer),
         make_real=lambda settings: make_claude(settings),
+    ),
+    AdapterSpec(
+        name="buyer_agent",
+        label="Buyer agent",
+        purpose="Buys on /demo as an AI agent would: reads a person's request and chooses the MCP storefront's "
+        "tools itself.",
+        service="Claude (Anthropic)",
+        keys=("ANTHROPIC_API_KEY",),
+        make_fake=lambda settings: FakeBuyer(),
+        make_real=lambda settings: make_claude_buyer(settings),
     ),
     AdapterSpec(
         name="speech_to_text",
@@ -257,6 +274,10 @@ class AdapterRegistry:
     @property
     def llm(self) -> LLM:
         return cast(LLM, self.get("llm"))
+
+    @property
+    def buyer_agent(self) -> BuyerModel:
+        return cast(BuyerModel, self.get("buyer_agent"))
 
     @property
     def speech_to_text(self) -> SpeechToText:
