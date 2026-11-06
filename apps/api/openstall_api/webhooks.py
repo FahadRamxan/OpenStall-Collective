@@ -52,6 +52,21 @@ ATTENTION = {
 }
 
 
+# The events the PayPal webhook must be subscribed to (docs/day-one-checks.md, "PayPal webhooks"): what moves an
+# order or a share on, and the payouts path's. The PayPal doctor (doctor.py) checks the registered webhook has them.
+SUBSCRIBED_EVENTS = (
+    "CHECKOUT.ORDER.APPROVED",
+    "PAYMENT.AUTHORIZATION.CREATED",
+    "PAYMENT.AUTHORIZATION.VOIDED",
+    "PAYMENT.CAPTURE.COMPLETED",
+    "PAYMENT.CAPTURE.DENIED",
+    "PAYMENT.CAPTURE.REFUNDED",
+    "PAYMENT.PAYOUTSBATCH.SUCCESS",
+    "PAYMENT.PAYOUTS-ITEM.SUCCEEDED",
+    "PAYMENT.PAYOUTS-ITEM.FAILED",
+)
+
+
 class WebhookRefused(ValueError):
     """Not a genuine PayPal event: refused with 400, and nothing is changed."""
 

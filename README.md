@@ -100,6 +100,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **The dashboard, in AG Grid.** `/dashboard` lists the recent orders (top-ups marked), each maker's share and payout, every parcel's tracking (on PayPal, delivered, on time), and the trust passports with whether each signature holds. It follows the live feed.
 - **Demand Radar.** Searches that found nothing are grouped by their words (plural and singular alike, filler words left out), counted for the week, and matched to the maker whose listings share the most describing words, the most trusted first. The dashboard leads with the biggest group: in the seeded world, "23 agents searched for ceramic mugs this week. Nobody sells them.", marked as seeded demo searches. **Send the tip to Noor** sends a group's tip to its maker, in her language, once a week.
 - **A status page** at `/status`: the mode, the database, PayPal's token and the SDK in use.
+- **The PayPal doctor.** `/status` checks whether this setup is ready to hold a buyer's money and pay the makers, and says what to do for each check: where the money goes (test mode, PayPal's sandbox, or its live host), PayPal's keys and a token, the registered webhook read back with its URL and events, the makers' sandbox payout accounts, and the APIMatic cross-check (below). `python scripts/doctor.py` prints the same report in a terminal (`--checks` for the checks only) and exits with 1 when a check fails. It names a missing key, never its value. Under it, **PayPal products** lists every PayPal product with how far it has got and the evidence.
 - **Test mode:** a simulated PayPal (labelled as such everywhere), Twilio and AI models, so everything runs offline and in tests.
 
 ## How it uses PayPal
@@ -108,10 +109,28 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 
 - **Orders v2, intent AUTHORIZE:** one PayPal order for the whole collective order, with each maker's share as an item, so approving it only reserves the money.
 - **Payments:** a partial capture of each maker's share when she proves she shipped (`final_capture` on the last), and a void of whatever is left when a share is released.
-- **Payouts:** each maker paid on her payout rail, PayPal or, for a US maker, Venmo (simulated on the sandbox, which refuses Venmo payouts).
+- **Payouts:** each maker paid on her payout rail, PayPal or, for a US maker, Venmo (simulated on the sandbox, which refuses Venmo payouts); a maker in Pakistan, where Payouts does not reach, is paid to her bank through Hyperwallet (simulated: no Hyperwallet account is connected).
 - **Order tracking:** each maker's tracking number and courier attached to her capture on the PayPal order.
 - **Webhooks:** every event verified with PayPal (`verify-webhook-signature`) and applied exactly once.
 - **APIMatic's PayPal Python SDK** for every Orders and Payments call ([below](#built-with-apimatics-paypal-context-plugin)). Every write carries an idempotency key made from our own ids, and is never resent blindly.
+
+Every PayPal product OpenStall uses or plans to, and how far it has got (`packages/paypal/openstall_paypal/products.py`; [/status](http://localhost:3000/status#paypal-products) shows the evidence for each):
+
+| Product | How far it has got |
+| --- | --- |
+| OAuth 2.0 access tokens | Proven on the sandbox |
+| Orders v2, intent AUTHORIZE | Proven on the sandbox |
+| Payments v2: captures and voids | Proven on the sandbox |
+| Order tracking | Built, not yet run on the sandbox |
+| Payouts | Proven on the sandbox |
+| Payouts to Venmo | Simulated |
+| Hyperwallet | Simulated |
+| Webhooks | Built, not yet run on the sandbox |
+| JavaScript SDK buttons | Built, not yet run on the sandbox |
+| Disputes | Not built yet |
+| Braintree | Not built yet |
+| PayPal's MCP server | Not built yet |
+| Venmo and Pay Later at checkout | Not built yet |
 
 ## How it uses AI, and where code decides
 
@@ -133,7 +152,7 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **45 done, 3 partly done, 10 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **46 done, 3 partly done, 9 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -147,9 +166,9 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44 | | 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
-| More of PayPal | 51, 52, 58 | | 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
+| More of PayPal | 51, 52, 53, 58 | | 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account, and the Devpost draft; then PayPal's products table (53) and disputes answered with the proof (56).
+Next: the hosted demo once there is a Render account, and the Devpost draft; then disputes answered with the proof (56).
 
 ## Run it locally, in more detail
 
@@ -243,6 +262,7 @@ OpenStall's PayPal Orders and Payments calls (creating the checkout, reading the
 - **The SDK is pinned** in `pyproject.toml` to commit `143e57f2a372` (by its full hash) of its repository (version 2.29), the code the sheet was checked against. `pip install -e ".[dev]"` installs it, and `/status` names the SDK the gateway uses.
 - **Tests fake PayPal at the SDK's own seam:** a fake transport passed as `custom_http_client`, so they check the request the SDK really builds, and every failure kind the plugin lists (refusals, bad credentials, never-sent and may-have-landed transport failures, unreadable answers, the retry policy). See `packages/paypal/tests/test_sandbox_gateways.py`.
 - **What the SDK does not cover stays on our own client:** PayPal Payouts and webhook verification.
+- **Cross-checked on every run.** The PayPal doctor (`/status`, `python scripts/doctor.py`) checks that the sheet, the gateway's calls and the installed SDK still agree: every SDK call has its row in the sheet and every row is called; each call passes exactly the keywords its row says; the installed SDK has each operation with those parameters, by its own signatures; and the sheet, the pin and the installed SDK are one commit. `packages/paypal/tests/test_crosscheck.py` runs it with the tests.
 
 The design choices are in [docs/decisions.md](docs/decisions.md) (November 3: the APIMatic PayPal SDK). To use the plugin yourself with Claude Code, install it once:
 

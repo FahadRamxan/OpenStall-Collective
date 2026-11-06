@@ -39,6 +39,12 @@ maker in Pakistan) is captured with `capture_authorized_payment` like any other;
 because her payout to her bank through Hyperwallet is simulated (no Hyperwallet account is connected).
 `rails.rail_for` gives that rail only in test mode and on the sandbox host.
 
+Prompt 53 cross-checks this sheet against the code and the installed SDK on every run of the PayPal doctor and the tests
+(`packages/paypal/openstall_paypal/crosscheck.py`): each `client.orders`/`client.payments` call must have its row in the
+Operations table below and pass exactly the keywords that row lists, each row must be called, the installed SDK must
+take those parameters by its own signatures, and the commit named under "Toolchain and baseline" must be the one
+`pyproject.toml` pins and the one installed. A new SDK call needs its row here first.
+
 ## Repo survey (pattern + exemplar)
 
 - Host is **sync**: FastAPI endpoints are `def`, run in the thread pool (exemplar: apps/api/openstall_api/orders_api.py).

@@ -54,7 +54,11 @@ const STEPS = [
 const PAYPAL = [
   ["Orders v2, intent AUTHORIZE", "one approval reserves the whole collective order"],
   ["Payments", "a partial capture of each maker's share on proof, a final capture on the last, a void of the rest"],
-  ["Payouts", "each maker paid on her own rail: PayPal, or Venmo for a US maker"],
+  [
+    "Payouts",
+    "each maker paid on her own rail: PayPal, Venmo for a US maker, or her bank through Hyperwallet in Pakistan " +
+      "(simulated)",
+  ],
   ["Order tracking", "each maker's courier and tracking number on her capture"],
   ["Webhooks", "every event verified with PayPal and applied exactly once"],
   ["APIMatic's PayPal SDK", "every Orders and Payments call"],
@@ -211,7 +215,10 @@ export default function HomePage() {
               </div>
             ))}
           </dl>
-          <p className="mt-6">
+          <p className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+            <Link href="/status#paypal-products" className={LINK}>
+              Every PayPal product, and how far it has got
+            </Link>
             <a href={REPO_URL} className={LINK}>
               Read the code on GitHub
             </a>

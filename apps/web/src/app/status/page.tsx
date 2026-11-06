@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PayPalDoctor } from "@/components/paypal-doctor";
 import { StatusPanel } from "@/components/status-panel";
 
 export const metadata: Metadata = { title: "System status" };
@@ -14,6 +15,7 @@ export default function StatusPage() {
           services are ready to use.
         </p>
         <StatusPanel />
+        <PayPalDoctor />
       </div>
     </section>
   );

@@ -50,7 +50,7 @@ test("shows the API's fake mode, its version and every adapter as fake", async (
 
   await expect(modeBadge(page, "Fake")).toBeVisible();
   await expect(page.getByRole("region", { name: "Mode" }).getByText(report.version, { exact: true })).toBeVisible();
-  const paypal = page.getByRole("region", { name: "PayPal" });
+  const paypal = page.getByRole("region", { name: "PayPal", exact: true });
   await expect(paypal.getByText("Fake", { exact: true })).toBeVisible();
   await expect(paypal).toContainText("Checkout runs on the simulated PayPal page.");
   // Fake mode says honestly that no SDK is in use.
@@ -115,7 +115,7 @@ test("in sandbox mode, names the missing keys, and fits a phone screen", async (
   await expect(adapterRow(page, "Messenger")).toContainText("Not set: TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.");
   await expect(adapterRow(page, "LLM").getByText("Not built yet", { exact: true })).toBeVisible();
   await expect(adapterRow(page, "Payment gateway").getByText("Real", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "PayPal" })).toContainText(
+  await expect(page.getByRole("region", { name: "PayPal", exact: true })).toContainText(
     "APIMatic PayPal Python SDK 2.29 (commit 143e57f).",
   );
 

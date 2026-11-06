@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from openstall_paypal.products import PRODUCTS, STATE_WORDS
+
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = [ROOT / "README.md", ROOT / "docs" / "judges.md", ROOT / "apps" / "web" / "README.md"]
 LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)\)")
@@ -142,3 +144,12 @@ def test_the_walkthrough_is_the_one_the_browser_test_follows() -> None:
     spec = (ROOT / "apps" / "web" / "e2e" / "live-demo.spec.ts").read_text(encoding="utf-8")
     for step in ("Run the demo request", "Open its approval page", "Approve and pay with PayPal", "courier receipt"):
         assert step in spec
+
+
+def test_the_readme_s_paypal_products_table_is_the_code_s() -> None:
+    """Row for row, products.py's (prompt 53): a product's state changes in one place, and /status, the doctor and the
+    README all say the same."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    table = readme[readme.index("| Product | How far it has got |") :].split("\n\n", 1)[0].splitlines()
+
+    assert table[2:] == [f"| {product.name} | {STATE_WORDS[product.state]} |" for product in PRODUCTS]
