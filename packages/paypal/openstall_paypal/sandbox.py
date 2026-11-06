@@ -356,6 +356,14 @@ class PayoutsGateway(SandboxGateway):
             raise PaymentError(
                 "PAYOUT_RAIL_UNAVAILABLE", f"no payout rail can reach the maker of share {share.part_id} yet"
             )
+        if share.payout_rail == "hyperwallet":
+            # Her capture is real; her bank payout through Hyperwallet is simulated, as no Hyperwallet account is
+            # connected yet. rails.rail_for allows this rail only on the sandbox, where no money is real.
+            capture_id = self.capture(
+                share,
+                CaptureRequest(amount=money(share.amount_usd), invoice_id=share.part_id, final_capture=share.last),
+            )
+            return Payment(capture_id=capture_id, payout_rail="hyperwallet", payout_simulated=True)
         item = payout_item(share)
         capture_id = self.capture(
             share, CaptureRequest(amount=money(share.amount_usd), invoice_id=share.part_id, final_capture=share.last)
@@ -387,6 +395,8 @@ class PayoutsGateway(SandboxGateway):
         ahead = replace(
             share, part_id=f"{share.part_id}-advance", amount_usd=advance.amount_usd, paid_ahead_usd=Decimal("0.00")
         )
+        if share.payout_rail == "hyperwallet":
+            return AdvancePayment(None, "hyperwallet", payout_simulated=True)  # Hyperwallet is not connected yet
         item = payout_item(ahead)  # refuses a maker no rail reaches
         if share.payout_rail == "venmo" and self.simulate_venmo:
             return AdvancePayment(None, "venmo", payout_simulated=True)

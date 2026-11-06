@@ -45,12 +45,13 @@ def test_each_maker_shows_her_rail_and_fake_mode_says_it_is_simulated(demo_order
     parts = parts_by_seller(client.get(f"/api/orders/{DEMO_ORDER_ID}").json())
 
     assert {seller: (p["payout_rail"], p["payout_label"]) for seller, p in parts.items()} == {
-        "s_amina": ("unavailable", "Payout rail not connected yet (Pakistan)"),
+        "s_amina": ("hyperwallet", "Paid to her bank through Hyperwallet when she ships (simulated)"),
         "s_priya": ("paypal", "Paid to PayPal when she ships (simulated)"),
         "s_lucia": ("paypal", "Paid to PayPal when she ships (simulated)"),
         "s_grace": ("venmo", "Paid to Venmo when she ships (simulated)"),
     }
     assert {p["confirmation_source"] for p in parts.values()} == {"simulated"}
+    # Amina's payout goes through Hyperwallet, which PayPal's webhooks never confirm.
     assert [p["payout_via_paypal"] for p in parts.values()] == [False, True, True, True]
 
 
@@ -91,18 +92,24 @@ def test_dev_proof_twice_pays_once(reserved, demo_order, fakes):
     assert parts_by_seller(second.json())["s_grace"]["payout_label"] == "Paid to Venmo (simulated)"
 
 
-def test_dev_proof_refuses_amina_before_anything_is_captured(reserved, demo_order, fakes):
+def test_dev_proof_pays_amina_to_her_bank_through_hyperwallet_simulated(reserved, demo_order, fakes):
+    """Prompt 52: PayPal Payouts does not reach Pakistan, so Amina is paid to her bank through Hyperwallet,
+    which is simulated. Her share is captured like anyone's; PayPal confirms nothing about her payout."""
     amina = reserved["s_amina"]
-    fakes.payment_gateway.calls.clear()
 
     response = client.post(f"/api/dev/parts/{amina}/proof")
 
-    assert response.status_code == 409
-    assert "Payout rail not connected yet (Pakistan)" in response.json()["detail"]
-    assert fakes.payment_gateway.calls == []
-    demo_order.expire_all()
-    part = demo_order.get(OrderPart, amina)
-    assert (part.status, part.tracking_number) == (PartStatus.AUTHORIZED, None)  # nothing was saved
+    assert response.status_code == 200
+    [paid] = [share for name, share in fakes.payment_gateway.calls if name == "pay_share"]
+    assert (paid.part_id, paid.payout_rail) == (amina, "hyperwallet")
+    part = parts_by_seller(response.json())["s_amina"]
+    assert (part["status"], part["payout_label"]) == ("captured", "Paid to her bank through Hyperwallet (simulated)")
+    assert (part["payout_via_paypal"], part["payout_confirmed"]) == (False, False)
+    [captured] = demo_order.scalars(select(Event).where(Event.type == EventType.PART_CAPTURED)).all()
+    assert captured.payload_json["summary"] == (
+        "Amina was paid $216.00 on proof of shipping, to her bank through Hyperwallet (simulated)"
+    )
+    assert (captured.payload_json["payout_rail"], captured.payload_json["payout_simulated"]) == ("hyperwallet", True)
 
 
 def test_a_paypal_override_does_not_get_amina_captured(reserved, demo_order, fakes):
@@ -128,8 +135,7 @@ def test_dev_proof_returns_404_in_sandbox_mode(use_settings, db):
 
 
 def test_the_last_proof_is_the_final_capture(reserved, demo_order, fakes):
-    assert client.post(f"/api/dev/parts/{reserved['s_amina']}/proof").status_code == 409  # she stays reserved
-    release_share(demo_order, reserved["s_amina"], fakes.payment_gateway)  # until she is released mid-order
+    release_share(demo_order, reserved["s_amina"], fakes.payment_gateway)  # she is released mid-order
     demo_order.commit()
     for seller in ("s_priya", "s_lucia", "s_grace"):
         assert client.post(f"/api/dev/parts/{reserved[seller]}/proof").status_code == 200
@@ -194,15 +200,25 @@ class Recorded(PayoutsGateway):
         return {"batch_header": {"payout_batch_id": f"BATCH-{idempotency_key}"}}
 
 
-def test_in_sandbox_mode_pay_share_builds_a_receiver_for_each_non_pk_seeded_maker(use_settings, db):
+def test_on_paypal_s_live_host_amina_has_no_rail_rather_than_a_pretend_payout(use_settings, demo_order):
+    """Hyperwallet is only simulated, so it never runs where money is real."""
+    use_settings(OPENSTALL_MODE="sandbox", PAYPAL_API_BASE="https://api-m.paypal.com", **PAYEES)
+
+    amina = parts_by_seller(client.get(f"/api/orders/{DEMO_ORDER_ID}").json())["s_amina"]
+
+    assert (amina["payout_rail"], amina["payout_label"]) == (
+        "unavailable",
+        "Payout rail not connected yet (Hyperwallet is simulated only, so not where money is real)",
+    )
+
+
+def test_in_sandbox_mode_pay_share_pays_each_seeded_maker_on_her_rail(use_settings, db):
     use_settings(OPENSTALL_MODE="sandbox", **PAYEES)
     seed(db, with_amina=True)
     db.commit()
     gateway = Recorded()
     paid = {}
     for maker in MAKERS:
-        if maker.country == "PK":
-            continue
         seller = db.get(Seller, maker.id)
         part = OrderPart(
             id=f"op_{maker.id}",
@@ -228,6 +244,10 @@ def test_in_sandbox_mode_pay_share_builds_a_receiver_for_each_non_pk_seeded_make
     # Grace is captured for real but her Venmo payout is simulated: PayPal's sandbox refuses Venmo payouts.
     assert "op_s_grace" in gateway.captured
     assert paid["s_grace"] == Payment("CAPTURE-op_s_grace", None, "venmo", payout_simulated=True)
+    # Amina is captured for real too; her bank payout through Hyperwallet is simulated, and no PayPal payout item
+    # is built for her (receivers above).
+    assert "op_s_amina" in gateway.captured
+    assert paid["s_amina"] == Payment("CAPTURE-op_s_amina", None, "hyperwallet", payout_simulated=True)
 
 
 def test_in_sandbox_mode_without_payees_the_paypal_makers_are_not_connected(use_settings, demo_order):
@@ -236,7 +256,7 @@ def test_in_sandbox_mode_without_payees_the_paypal_makers_are_not_connected(use_
     parts = parts_by_seller(client.get(f"/api/orders/{DEMO_ORDER_ID}").json())
 
     assert {seller: (p["payout_rail"], p["payout_label"]) for seller, p in parts.items()} == {
-        "s_amina": ("unavailable", "Payout rail not connected yet (Pakistan)"),
+        "s_amina": ("hyperwallet", "Paid to her bank through Hyperwallet when she ships (simulated)"),  # simulated, and needs no PayPal account
         "s_priya": ("unavailable", "Payout rail not connected yet (no sandbox PayPal account linked yet)"),
         "s_lucia": ("unavailable", "Payout rail not connected yet (no sandbox PayPal account linked yet)"),
         "s_grace": ("venmo", "Paid to Venmo when she ships (simulated: Venmo payouts don't run in PayPal's sandbox)"),

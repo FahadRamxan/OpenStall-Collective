@@ -10,8 +10,9 @@ the courier and the tracking number, she confirms them, and her share is capture
    was read and is asked about once more; a "no" asks her for the right one.
 3. After that commit, pay_on_proof captures her share and pays her out (payments.pay_share: once, and never without a
    way to pay her), puts her tracking on her capture at PayPal (tracking.py, prompt 33), then tells her in her
-   language. A maker no payout rail reaches yet (Amina, until prompt 52) keeps
-   her confirmed tracking, and is told she is paid once payouts reach her country.
+   language. A maker paid through Hyperwallet (Amina, in Pakistan) is captured like any other and told her bank
+   payout is simulated; a maker no payout rail reaches yet keeps her confirmed tracking, and is told she is paid
+   once payouts reach her.
 
 Nothing is paid on what the model read alone: only her confirmation moves money.
 """
@@ -65,7 +66,9 @@ class ProofPhrases:
     confirmed_paying: str  # {tracking}, {amount}
     confirmed_waiting: str  # {tracking}, {amount}: no payout rail reaches her yet
     paid: str  # {amount}, {order_id}, {rail}
+    paid_bank: str  # {amount}, {order_id}: to her bank through Hyperwallet
     simulated: str  # added to `paid` in test mode
+    hyperwallet: str  # added to `paid_bank` in sandbox mode: Hyperwallet is simulated
     payment_failed: str
     retrying: str  # {order_id}
 
@@ -84,7 +87,10 @@ PHRASES: dict[str, ProofPhrases] = {
         confirmed_waiting="Thank you! Your tracking number {tracking} is saved. Payouts to your country are not "
         "connected yet, so your {amount} stays reserved at PayPal; we will message you as soon as we can pay you.",
         paid="You are paid! {amount} for order {order_id} has been sent to your {rail} account.",
+        paid_bank="You are paid! {amount} for order {order_id} has been sent to your bank account through "
+        "Hyperwallet.",
         simulated="(Test mode: simulated PayPal, no real money moved.)",
+        hyperwallet="(Hyperwallet is simulated here: no real money reached your bank.)",
         payment_failed="Your tracking number is saved, but the payment did not go through yet. We will try again; "
         "reply YES here to try now.",
         retrying="Your tracking number for order {order_id} is already saved. Trying your payment again now.",
@@ -102,7 +108,10 @@ PHRASES: dict[str, ProofPhrases] = {
         confirmed_waiting="شکریہ! آپ کا ٹریکنگ نمبر {tracking} محفوظ ہو گیا ہے۔ آپ کے ملک میں ادائیگی کا انتظام ابھی "
         "مکمل نہیں ہوا، اس لیے آپ کے {amount} PayPal کے پاس محفوظ ہیں؛ ادائیگی ممکن ہوتے ہی ہم آپ کو پیغام بھیجیں گے۔",
         paid="آپ کو ادائیگی ہو گئی! آرڈر {order_id} کے {amount} آپ کے {rail} اکاؤنٹ میں بھیج دیے گئے ہیں۔",
+        paid_bank="آپ کو ادائیگی ہو گئی! آرڈر {order_id} کے {amount} Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں "
+        "بھیج دیے گئے ہیں۔",
         simulated="(ٹیسٹ موڈ: نقلی PayPal، کوئی اصل رقم منتقل نہیں ہوئی۔)",
+        hyperwallet="(یہاں Hyperwallet نقلی ہے: آپ کے بینک میں کوئی اصل رقم نہیں پہنچی۔)",
         payment_failed="آپ کا ٹریکنگ نمبر محفوظ ہے، لیکن ادائیگی ابھی نہیں ہو سکی۔ ہم دوبارہ کوشش کریں گے؛ ابھی کوشش "
         "کے لیے یہاں \"ہاں\" لکھیں۔",
         retrying="آرڈر {order_id} کا آپ کا ٹریکنگ نمبر پہلے سے محفوظ ہے۔ ہم ابھی دوبارہ ادائیگی کی کوشش کر رہے ہیں۔",
@@ -120,7 +129,10 @@ PHRASES: dict[str, ProofPhrases] = {
         confirmed_waiting="धन्यवाद! आपका ट्रैकिंग नंबर {tracking} सेव हो गया है। आपके देश में भुगतान की व्यवस्था अभी "
         "पूरी नहीं हुई है, इसलिए आपके {amount} PayPal के पास सुरक्षित हैं; भुगतान संभव होते ही हम आपको संदेश भेजेंगे।",
         paid="आपको भुगतान हो गया! ऑर्डर {order_id} के {amount} आपके {rail} खाते में भेज दिए गए हैं।",
+        paid_bank="आपको भुगतान हो गया! ऑर्डर {order_id} के {amount} Hyperwallet के ज़रिए आपके बैंक खाते में भेज "
+        "दिए गए हैं।",
         simulated="(टेस्ट मोड: नकली PayPal, कोई असली पैसा नहीं भेजा गया।)",
+        hyperwallet="(यहाँ Hyperwallet नकली है: आपके बैंक में कोई असली पैसा नहीं पहुँचा।)",
         payment_failed="आपका ट्रैकिंग नंबर सेव है, लेकिन भुगतान अभी नहीं हो पाया। हम फिर से कोशिश करेंगे; अभी कोशिश "
         "करने के लिए यहाँ \"हाँ\" लिखें।",
         retrying="ऑर्डर {order_id} का आपका ट्रैकिंग नंबर पहले से सेव है। हम अभी फिर से भुगतान की कोशिश कर रहे हैं।",
@@ -139,7 +151,10 @@ PHRASES: dict[str, ProofPhrases] = {
         "están conectados, así que tus {amount} siguen reservados en PayPal; te escribiremos en cuanto podamos "
         "pagarte.",
         paid="¡Ya te pagamos! Los {amount} del pedido {order_id} se enviaron a tu cuenta de {rail}.",
+        paid_bank="¡Ya te pagamos! Los {amount} del pedido {order_id} se enviaron a tu cuenta bancaria a "
+        "través de Hyperwallet.",
         simulated="(Modo de prueba: PayPal simulado, no se movió dinero real.)",
+        hyperwallet="(Aquí Hyperwallet es simulado: no llegó dinero real a tu banco.)",
         payment_failed="Tu número de guía está guardado, pero el pago todavía no se completó. Lo intentaremos de "
         "nuevo; responde SÍ aquí para intentarlo ahora.",
         retrying="Tu número de guía del pedido {order_id} ya está guardado. Estamos intentando tu pago de nuevo.",
@@ -488,12 +503,17 @@ def _tell(part_id: str, kind: str, messenger: Callable[[], Messenger], reason: s
         words = PHRASES[code]
         language = language_words(code, seller.language)
         if kind == "paid":
-            rail = RAIL_NAMES[seller_rail(seller).kind]
+            rail = seller_rail(seller).kind
             # What reached her now: her share, less any advance OpenStall paid her ahead (advance.py).
-            sent = part.amount_usd - paid_ahead(part)
-            text = words.paid.format(amount=format_money(code, sent), order_id=part.order_id, rail=rail)
+            sent = format_money(code, part.amount_usd - paid_ahead(part))
+            if rail == "hyperwallet":
+                text = words.paid_bank.format(amount=sent, order_id=part.order_id)
+            else:
+                text = words.paid.format(amount=sent, order_id=part.order_id, rail=RAIL_NAMES[rail])
             if get_settings().OPENSTALL_MODE == "fake":
                 text = f"{text}\n{words.simulated}"
+            elif rail == "hyperwallet":
+                text = f"{text}\n{words.hyperwallet}"
             summary = f"{seller.name} was told {{where}}, in {language}, that she is paid for order {part.order_id}"
         else:
             text = words.payment_failed

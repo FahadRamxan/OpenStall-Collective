@@ -21,7 +21,8 @@ WAITING_FOR_BUYER: frozenset[str] = frozenset({"CREATED", "PAYER_ACTION_REQUIRED
 WHOLE_ORDER = "whole_order"
 
 # How a maker is paid once her share is captured (spec 3.5a; rails.py decides which). "unavailable": no rail can
-# reach her yet, so her share is never captured. "hyperwallet" is for prompt 52 and is not connected yet.
+# reach her yet, so her share is never captured. "hyperwallet": her bank, through Hyperwallet, which is simulated
+# because no Hyperwallet account is connected yet (prompt 52).
 PayoutRail = Literal["paypal", "venmo", "hyperwallet", "unavailable"]
 
 # Which payment path a gateway follows (docs/decisions.md, "Payment path: payouts only").
@@ -130,7 +131,7 @@ class Payment:
     """A share that was paid: the capture, and on the payouts path the payout batch that sent it to the seller.
 
     `payout_simulated`: her payout was not sent at all, only recorded (Venmo payouts in PayPal's sandbox, which refuses
-    them). Her capture is real either way.
+    them, and Hyperwallet, which is not connected yet). Her capture is real either way.
     """
 
     capture_id: str
@@ -166,7 +167,7 @@ class Advance:
 @dataclass(frozen=True)
 class AdvancePayment:
     """An advance paid out to her: the payout batch, her rail, and whether it was only recorded (Venmo on the
-    sandbox)."""
+    sandbox, and Hyperwallet)."""
 
     payout_batch_id: str | None
     payout_rail: PayoutRail
@@ -400,7 +401,7 @@ class FakeGateway:
     def _capture_and_pay_out(self, share: Share) -> Payment:
         """The payouts path: a partial capture of her amount from the order's one authorization, then her payout."""
         # Checked before capturing, as PayoutsGateway does, so a share is never captured without a way to pay her.
-        if share.payout_rail not in ("paypal", "venmo"):
+        if share.payout_rail not in ("paypal", "venmo", "hyperwallet"):
             raise PaymentError(
                 "PAYOUT_RAIL_UNAVAILABLE", f"no payout rail can reach the maker of share {share.part_id} yet"
             )
@@ -422,6 +423,11 @@ class FakeGateway:
             hold.state = "CAPTURED"
         capture_id = f"{share.hold_id}-CAP-{hold.captures}"
         self._capture_event(share, capture_id, final_capture=share.last)
+        if share.payout_rail == "hyperwallet":
+            # Her bank payout through Hyperwallet is simulated: no PayPal payout, so no payout event follows.
+            simulated = Payment(capture_id=capture_id, payout_rail="hyperwallet", payout_simulated=True)
+            self._payments[share.part_id] = simulated
+            return simulated
 
         batch_id = f"FAKE-BATCH-{_digest(share.part_id)}"
         venmo = share.payout_rail == "venmo"
@@ -458,11 +464,14 @@ class FakeGateway:
             return self._advances[share.part_id]
         if self.path != "payouts":
             raise PaymentError("ADVANCE_UNAVAILABLE", "advances are paid out by the platform, on the payouts path")
-        if share.payout_rail not in ("paypal", "venmo"):
+        if share.payout_rail not in ("paypal", "venmo", "hyperwallet"):
             raise PaymentError(
                 "PAYOUT_RAIL_UNAVAILABLE", f"no payout rail can reach the maker of share {share.part_id} yet"
             )
-        payment = AdvancePayment(f"FAKE-ADVANCE-{_digest(share.part_id)}", share.payout_rail)
+        if share.payout_rail == "hyperwallet":
+            payment = AdvancePayment(None, "hyperwallet", payout_simulated=True)
+        else:
+            payment = AdvancePayment(f"FAKE-ADVANCE-{_digest(share.part_id)}", share.payout_rail)
         self._advances[share.part_id] = payment
         return payment
 

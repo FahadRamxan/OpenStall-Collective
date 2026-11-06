@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from openstall_api.events import EventType
 from openstall_api.main import app
-from openstall_api.models import Event, Order, OrderPart, OrderStatus, PartStatus
+from openstall_api.models import Event, Order, OrderPart, OrderStatus, PartStatus, PayoutRailChoice, Seller
 from openstall_api.payments import WrongStatus, pay_share, release_share, reserve_order
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_paypal import PaymentError, PaymentUnavailable
@@ -238,8 +238,24 @@ def test_a_share_with_confirmed_tracking_is_paid_once(reserved, demo_order, fake
     assert event.payload_json["payout_rail"] == "paypal"
 
 
+def test_amina_is_captured_and_paid_to_her_bank_through_hyperwallet_simulated(reserved, demo_order, fakes):
+    amina = reserved["s_amina"]  # Lahore: PayPal cannot pay out to Pakistan; Hyperwallet can (simulated)
+    confirm_tracking(demo_order, amina)
+
+    pay(demo_order, fakes, amina)
+
+    assert part(demo_order, amina).status == PartStatus.CAPTURED
+    [event] = events(demo_order, EventType.PART_CAPTURED)
+    assert event.payload_json["summary"] == (
+        "Amina was paid $216.00 on proof of shipping, to her bank through Hyperwallet (simulated)"
+    )
+    assert (event.payload_json["payout_rail"], event.payload_json["payout_simulated"]) == ("hyperwallet", True)
+
+
 def test_a_maker_no_payout_rail_can_reach_is_never_captured(reserved, demo_order, fakes):
-    amina = reserved["s_amina"]  # Lahore: PayPal cannot pay out to Pakistan, and Hyperwallet is prompt 52
+    amina = reserved["s_amina"]
+    demo_order.get(Seller, "s_amina").payout_rail = PayoutRailChoice.PAYPAL  # PayPal Payouts cannot reach Pakistan
+    demo_order.commit()
     confirm_tracking(demo_order, amina)
 
     with pytest.raises(WrongStatus, match=r"Amina's share stays reserved and is not captured. Payout rail not connected yet \(Pakistan\)"):

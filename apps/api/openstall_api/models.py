@@ -117,7 +117,7 @@ class PayoutRailChoice(StrEnum):
 
     PAYPAL = "paypal"
     VENMO = "venmo"
-    HYPERWALLET = "hyperwallet"  # prompt 52
+    HYPERWALLET = "hyperwallet"  # her bank through Hyperwallet, simulated (prompt 52)
     UNAVAILABLE = "unavailable"
 
 

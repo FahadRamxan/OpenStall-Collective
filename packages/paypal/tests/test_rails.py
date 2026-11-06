@@ -5,7 +5,13 @@ from decimal import Decimal
 import pytest
 
 from openstall_paypal import CheckoutRequest, FakeGateway, PaymentError, Share
-from openstall_paypal.rails import NO_SANDBOX_PAYPAL_ACCOUNT, payout_item, rail_for, venmo_payouts_simulated
+from openstall_paypal.rails import (
+    NO_SANDBOX_PAYPAL_ACCOUNT,
+    payout_item,
+    rail_for,
+    sandbox_host,
+    venmo_payouts_simulated,
+)
 
 GRACE = Share(
     "op_grace",
@@ -20,7 +26,7 @@ GRACE = Share(
 @pytest.mark.parametrize(
     ("country", "handle", "kind"),
     [
-        ("PK", None, "unavailable"),  # Amina, Lahore: until prompt 52 adds Hyperwallet
+        ("PK", None, "hyperwallet"),  # Amina, Lahore: her bank, through Hyperwallet (simulated, prompt 52)
         ("IN", None, "paypal"),  # Priya, Jaipur
         ("MX", None, "paypal"),  # Lucía, Oaxaca
         ("GB", None, "paypal"),  # Noor, Manchester
@@ -32,11 +38,17 @@ def test_rail_for_each_seed_country(country: str, handle: str | None, kind: str)
     assert rail_for(country, handle, None, None).kind == kind
 
 
-def test_pakistan_says_honestly_that_her_rail_is_not_connected_yet() -> None:
-    rail = rail_for("PK", None, None, None)
+def test_pakistan_is_paid_through_hyperwallet_but_never_where_money_is_real() -> None:
+    """Hyperwallet is simulated (no Hyperwallet account is connected), so it runs in test mode and on PayPal's
+    sandbox, needing no PayPal account; on PayPal's live host she has no rail rather than a pretend payout."""
+    assert rail_for("PK", None, None, None) == rail_for("PK", None, None, None, payee_required=True)
+    assert rail_for("PK", None, None, None).available
 
-    assert not rail.available
-    assert rail.reason == "Payout rail not connected yet (Pakistan)"
+    live = rail_for("PK", None, None, None, payee_required=True, live_money=True)
+
+    assert (live.kind, live.available) == ("unavailable", False)
+    assert live.reason == "Payout rail not connected yet (Hyperwallet is simulated only, so not where money is real)"
+    assert rail_for("IN", None, "priya@example.com", None, payee_required=True, live_money=True).kind == "paypal"
 
 
 def test_on_a_real_money_path_a_paypal_maker_needs_a_paypal_account() -> None:
@@ -52,7 +64,8 @@ def test_an_override_is_honoured_but_never_pays_venmo_without_a_handle_or_outsid
     assert rail_for("US", "grace", None, None, override="paypal").kind == "paypal"
     assert rail_for("US", None, None, None, override="venmo").kind == "unavailable"
     assert rail_for("MX", "lucia", None, None, override="venmo").kind == "unavailable"
-    assert rail_for("PK", None, None, None, override="hyperwallet").kind == "unavailable"
+    assert rail_for("PK", None, None, None, override="hyperwallet").kind == "hyperwallet"
+    assert rail_for("IN", None, None, None, override="hyperwallet").kind == "hyperwallet"  # an operator's choice
 
 
 def test_an_override_never_reaches_pakistan_on_paypal_or_venmo() -> None:
@@ -123,3 +136,20 @@ def test_unavailable_rail_refuses_before_capture() -> None:
 )
 def test_venmo_payouts_are_simulated_only_on_the_sandbox(base: str, simulated: bool) -> None:
     assert venmo_payouts_simulated(base) is simulated
+
+
+def test_hyperwallet_is_never_a_paypal_payout() -> None:
+    """Her bank payout through Hyperwallet is simulated by the gateways themselves: no PayPal Payouts item is
+    ever built for it."""
+    with pytest.raises(PaymentError) as error:
+        payout_item(Share("op_amina", "AUTH-ALL", Decimal("216.00"), payout_rail="hyperwallet"))
+
+    assert error.value.issue == "PAYOUT_RAIL_UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    ("base", "sandbox"),
+    [("https://api-m.sandbox.paypal.com", True), ("https://api-m.paypal.com", False), ("not a url", False)],
+)
+def test_sandbox_host(base: str, sandbox: bool) -> None:
+    assert sandbox_host(base) is sandbox

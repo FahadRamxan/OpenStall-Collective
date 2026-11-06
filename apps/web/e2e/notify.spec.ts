@@ -64,13 +64,14 @@ test("once PayPal holds the order, each maker is told about her share in her lan
     "page",
   );
 
-  // Amina's, in Urdu: no payout rail reaches Pakistan yet, so she is asked to wait for us before she ships.
+  // Amina's, in Urdu: she is paid to her bank through Hyperwallet (simulated, prompt 52), so she too is asked for
+  // her courier receipt.
   await page.goto("/seller-chat?seller=s_amina");
   const amina = page.getByRole("list", { name: "Messages with Amina" });
   await expect(amina).toContainText("السلام علیکم Amina!");
   await expect(amina).toContainText(`آرڈر: ${orderId}`);
   await expect(amina).toContainText("قیمت: 18.00 ڈالر فی عدد، کل 216.00 ڈالر"); // dollars as Urdu writes them
-  await expect(amina).toContainText("ادائیگی کا انتظام ابھی مکمل نہیں ہوا");
+  await expect(amina).toContainText("رسید کی تصویر یہاں بھیجیں، اسی وقت آپ کو ادائیگی ہو جائے گی");
   await page.screenshot({ path: path.join(SCREENSHOTS, "notify-chat-amina-1280.png"), fullPage: true });
 
   // Lucía's, in Spanish, in US dollars.

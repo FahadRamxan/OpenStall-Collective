@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from openstall_api.events import EventType
 from openstall_api.main import app
-from openstall_api.models import Event, Order, OrderPart, PartStatus
+from openstall_api.models import Event, Order, OrderPart, PartStatus, PayoutRailChoice, Seller
 from openstall_api.payments import WrongStatus, track_share
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
@@ -101,7 +101,9 @@ def test_the_buyer_agent_sees_her_tracking_is_on_the_paypal_order(story):
 
 
 def test_a_maker_who_is_not_paid_yet_has_no_tracking_at_paypal(story, fakes):
-    prove("s_amina")  # no payout rail reaches Pakistan yet: tracked, not captured
+    story.get(Seller, "s_amina").payout_rail = PayoutRailChoice.PAYPAL  # PayPal Payouts cannot reach Pakistan
+    story.commit()
+    prove("s_amina")  # no payout rail reaches her: tracked, not captured
 
     amina = part_of(story, "Amina")
     assert (amina.tracking_number, amina.status, amina.paypal_tracker_id) == ("7712345678", PartStatus.AUTHORIZED, None)

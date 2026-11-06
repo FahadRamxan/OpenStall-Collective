@@ -3,7 +3,8 @@ import type { OrderPart } from "@/lib/orders";
 
 /**
  * How a maker is paid once her share is captured (spec 3.5a): "Paid to PayPal (simulated)", "Paid to Venmo
- * (simulated)", or "Payout rail not connected yet (Pakistan)". The words come from the API, which knows the mode.
+ * (simulated)", "Paid to her bank through Hyperwallet (simulated)" (always simulated: prompt 52), or "Payout rail
+ * not connected yet (...)". The words come from the API, which knows the mode.
  * A tick shows once PayPal confirmed her payout; in fake mode it says the confirmation is simulated.
  */
 export function RailChip({ part }: { part: OrderPart }) {

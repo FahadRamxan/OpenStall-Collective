@@ -183,6 +183,23 @@ def test_payout_events_have_ids_of_their_own() -> None:
     assert len(ids) == len(set(ids)) == 4
 
 
+def test_a_hyperwallet_share_is_captured_and_her_bank_payout_simulated() -> None:
+    """Prompt 52: Amina in Pakistan is paid to her bank through Hyperwallet, which is simulated. Her capture is
+    as real as anyone's; no PayPal payout is sent for her, so no payout event follows."""
+    gateway = FakeGateway()
+    reservation = reserved(gateway)
+    gateway.take_outbox()
+    amina = share(reservation, "op_amina", "216.00", payout_rail="hyperwallet")
+
+    payment = gateway.pay_share(amina)
+
+    assert (payment.payout_rail, payment.payout_simulated, payment.payout_batch_id) == ("hyperwallet", True, None)
+    kinds = [event["event_type"] for event in gateway.take_outbox()]
+    assert kinds == ["PAYMENT.CAPTURE.COMPLETED"]
+    assert gateway.authorization(reservation.holds[WHOLE_ORDER])[1] == Decimal("216.00")
+    assert gateway.pay_share(amina) == payment  # once
+
+
 def test_a_share_no_rail_can_reach_is_never_captured() -> None:
     gateway = FakeGateway()
     reservation = reserved(gateway)
@@ -237,3 +254,14 @@ def test_no_advance_for_a_maker_no_rail_reaches() -> None:
     with pytest.raises(PaymentError, match="no payout rail"):
         amina = share(reservation, "op_amina", "216.00", payout_rail="unavailable")
         gateway.pay_advance(Advance(amina, Decimal("54.00")))
+
+
+def test_an_advance_through_hyperwallet_is_simulated() -> None:
+    gateway = FakeGateway()
+    reservation = reserved(gateway)
+    gateway.take_outbox()
+
+    paid = gateway.pay_advance(Advance(share(reservation, "op_amina", "216.00", payout_rail="hyperwallet"), Decimal("54.00")))
+
+    assert paid == AdvancePayment(None, "hyperwallet", payout_simulated=True)
+    assert gateway.take_outbox() == []

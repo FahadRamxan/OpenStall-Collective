@@ -37,6 +37,7 @@ from openstall_paypal.rails import (
     Rail,
     payout_item,
     rail_for,
+    sandbox_host,
     venmo_payouts_simulated,
 )
 from openstall_paypal.sandbox import MultipartyGateway, PayoutsGateway, SandboxGateway
@@ -95,6 +96,7 @@ __all__ = [
     "fake_event",
     "payout_item",
     "rail_for",
+    "sandbox_host",
     "sdk_info",
     "sign_fake_webhook",
     "tracker_for",

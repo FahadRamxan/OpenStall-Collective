@@ -65,7 +65,13 @@ export type OrderPart = {
   /** She said she cannot make it: null while she has said nothing of the kind. */
   drop?: PartDrop | null;
   /** A materials advance on her share, paid by OpenStall ahead of her proof (prompt 37). */
-  advance?: { state: "asked" | "accepted" | "paid"; amount_usd: string; paid_at: string | null } | null;
+  advance?: {
+    state: "asked" | "accepted" | "paid";
+    amount_usd: string;
+    paid_at: string | null;
+    /** Only recorded, not sent: Venmo on PayPal's sandbox, and Hyperwallet (simulated, prompt 52). */
+    payout_simulated?: boolean;
+  } | null;
   /** Her tracking is on her payment on the PayPal order (simulated PayPal in test mode). */
   tracking_on_paypal?: boolean;
   /** When the buyer confirmed her parcel arrived: null until then. */
@@ -95,7 +101,10 @@ export type OrderPart = {
   trust_data_source: "seeded_demo" | "live" | null;
 };
 
-/** How a maker is paid once her share is captured (spec 3.5a). "unavailable": no rail can reach her yet. */
+/**
+ * How a maker is paid once her share is captured (spec 3.5a). "hyperwallet": her bank, through Hyperwallet, which
+ * is simulated (prompt 52). "unavailable": no rail can reach her yet.
+ */
 export type PayoutRail = "paypal" | "venmo" | "hyperwallet" | "unavailable";
 
 /**

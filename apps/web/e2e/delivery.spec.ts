@@ -7,7 +7,7 @@ import { connect, getOrderStatus, getTrustCard } from "./support/mcp";
 
 // Delivery and the end of an order (prompt 34): on the receipt, the buyer confirms each parcel that shipped has
 // arrived; the maker is told in her language, the live feed and the buyer's agent follow it, and the order completes
-// with its last parcel. Amina cannot be paid yet (no payout rail reaches Pakistan), so her share is released. Each
+// with its last parcel. Amina does not ship in this story, so her share is released. Each
 // maker's trust passport is then signed again with the delivery counted (prompt 36).
 const SCREENSHOTS = path.join(__dirname, "screenshots");
 
@@ -50,7 +50,7 @@ test("the buyer confirms each parcel arrived, the makers are told, and the order
   }
   // Only a parcel that shipped can be received: Amina's share is still reserved, with nothing to confirm.
   await expect(row(page, "Amina").getByRole("button", { name: /Confirm delivery/ })).toHaveCount(0);
-  // Amina cannot ship: her share goes back to the buyer.
+  // Amina does not ship: her share goes back to the buyer.
   expect((await request.post(`${E2E_API_URL}/api/dev/release-reserved-shares`)).ok()).toBeTruthy();
   await page.reload();
   await expect(row(page, "Amina")).toContainText("Released back to you");

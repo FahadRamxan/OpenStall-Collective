@@ -43,17 +43,16 @@ for (const width of [1280, 375]) {
     await approveAtSimulatedPayPal(page, orderId);
 
     // Each maker's rail before anyone ships.
-    await expect(row(page, "Amina")).toContainText("Payout rail not connected yet (Pakistan)");
+    await expect(row(page, "Amina")).toContainText("Paid to her bank through Hyperwallet when she ships (simulated)");
     await expect(row(page, "Priya")).toContainText("Paid to PayPal when she ships (simulated)");
     await expect(row(page, "Lucía")).toContainText("Paid to PayPal when she ships (simulated)");
     await expect(row(page, "Grace")).toContainText("Paid to Venmo when she ships (simulated)");
     await expect(page.getByText("One PayPal authorization for $815.00. Each maker's share is captured when she ships.")).toBeVisible();
 
-    // Amina's simulated proof is disabled, with the reason: no rail can pay her yet, so she is never captured.
-    const aminaProof = row(page, "Amina").getByRole("button", { name: /Simulate proof of shipping/ });
-    await expect(aminaProof).toBeDisabled();
-    await expect(aminaProof).toContainText("Simulated");
-    await expect(row(page, "Amina")).toContainText("Not possible yet: payout rail not connected yet (Pakistan).");
+    // Every maker can be paid on proof, Amina too: through Hyperwallet, simulated (prompt 52).
+    for (const name of ["Amina", "Priya", "Lucía", "Grace"]) {
+      await expect(row(page, name).getByRole("button", { name: /Simulate proof of shipping/ })).toBeEnabled();
+    }
 
     await row(page, "Priya").getByRole("button", { name: /Simulate proof of shipping/ }).click();
 
@@ -84,11 +83,34 @@ for (const width of [1280, 375]) {
   });
 }
 
+test("Amina is paid on proof to her bank through Hyperwallet, simulated, with nothing for PayPal to confirm", async ({
+  page,
+  request,
+}) => {
+  const orderId = await freshOrder(request);
+  await approveAtSimulatedPayPal(page, orderId);
+
+  await row(page, "Amina").getByRole("button", { name: /Simulate proof of shipping/ }).click();
+
+  const amina = row(page, "Amina");
+  await expect(amina).toContainText("Paid on proof of shipping");
+  await expect(amina).toContainText("Paid to her bank through Hyperwallet (simulated)");
+  await expect(amina.locator('[data-rail="hyperwallet"] svg')).toHaveCount(0); // PayPal never confirms Hyperwallet
+  await expect(amina).not.toContainText("payout confirmed");
+  await neverSaysConfirmedByPayPal(page);
+  await page.screenshot({ path: path.join(SCREENSHOTS, "pay-on-proof-hyperwallet-1280.png"), fullPage: true });
+
+  await page.goto("/demo");
+  await expect(page.getByRole("list", { name: "Activity, newest first" })).toContainText(
+    "Amina was paid $216.00 on proof of shipping, to her bank through Hyperwallet (simulated)",
+  );
+});
+
 test("the approval page shows each maker's rail chip", async ({ page, request }) => {
   const orderId = await freshOrder(request);
   await page.goto(`/approve/${orderId}`);
 
-  await expect(row(page, "Amina")).toContainText("Payout rail not connected yet (Pakistan)");
+  await expect(row(page, "Amina")).toContainText("Paid to her bank through Hyperwallet when she ships (simulated)");
   await expect(row(page, "Priya")).toContainText("Paid to PayPal when she ships (simulated)");
   await expect(row(page, "Grace")).toContainText("Paid to Venmo when she ships (simulated)");
 });

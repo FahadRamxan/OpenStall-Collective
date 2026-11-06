@@ -65,7 +65,7 @@ Set `OPENSTALL_MODE=sandbox` in `.env`, with a PayPal sandbox REST app's `PAYPAL
 
 Being built step by step; each step is tested, wired into the web app, tested in a browser, then pushed.
 
-- **Pay-on-proof with PayPal.** `/approve/{order}` shows each maker's share. Approving creates one PayPal order (intent AUTHORIZE) for the whole total, and the receipt shows PayPal holding the money. Each share is captured on its own when she ships, or released if she cannot deliver, and she is paid on the payout rail her country allows: PayPal Payouts; Venmo for a US maker (simulated in the sandbox, where PayPal does not run Venmo payouts); Pakistan not connected yet. Verified, idempotent PayPal webhooks confirm each step.
+- **Pay-on-proof with PayPal.** `/approve/{order}` shows each maker's share. Approving creates one PayPal order (intent AUTHORIZE) for the whole total, and the receipt shows PayPal holding the money. Each share is captured on its own when she ships, or released if she cannot deliver, and she is paid on the payout rail her country allows: PayPal Payouts; Venmo for a US maker (simulated in the sandbox, where PayPal does not run Venmo payouts); her bank account through Hyperwallet for a maker in Pakistan, where PayPal Payouts does not reach (her share is captured as usual; the Hyperwallet payout is simulated and labelled so, as no Hyperwallet account is connected). Verified, idempotent PayPal webhooks confirm each step.
 - **Proven on PayPal's real sandbox:** one authorization, several partial captures with tracking on each, a final capture, a void, a payout, and OpenStall's own Approve flow end to end. See [docs/day-one-checks.md](docs/day-one-checks.md).
 - **Built on APIMatic's PayPal SDK,** with APIMatic's PayPal Context Plugin (below).
 - **Sellers chat on WhatsApp or in the browser.** A verified Twilio webhook stores their messages, photos and voice notes; `/seller-chat` is the same chat as a phone in the browser. One handler serves both.
@@ -128,12 +128,12 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 
 - **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
 - **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
-- **Not connected yet:** payouts to Pakistan (Amina's share stays reserved), and a buyer's street address (makers are told the buyer's city).
+- **Not connected yet:** Hyperwallet, so Amina's bank payout in Pakistan is simulated in every mode (on PayPal's live host she would have no rail rather than a pretend payout), and a buyer's street address (makers are told the buyer's city).
 - **Not built yet:** changing a listing once it is live. [Build progress](#build-progress) lists every step.
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **44 done, 3 partly done, 11 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **45 done, 3 partly done, 10 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -147,9 +147,9 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44 | | 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
-| More of PayPal | 51, 58 | | 52 Hyperwallet (simulated), 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
+| More of PayPal | 51, 52, 58 | | 53 products table, 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account, and the Devpost draft; then the Hyperwallet rail (52), PayPal's products table (53) and disputes answered with the proof (56).
+Next: the hosted demo once there is a Render account, and the Devpost draft; then PayPal's products table (53) and disputes answered with the proof (56).
 
 ## Run it locally, in more detail
 

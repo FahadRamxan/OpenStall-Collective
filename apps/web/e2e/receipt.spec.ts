@@ -81,7 +81,7 @@ test("Priya photographs her courier receipt, confirms it in Hindi, and is paid o
   await expect(feed).toContainText(`Priya was told in the web chat, in Hindi, that she is paid for order ${orderId}`);
 });
 
-test("Amina confirms her receipt in Urdu, and is told to wait: no payout rail reaches Pakistan yet", async ({
+test("Amina confirms her receipt in Urdu, and is paid to her bank through Hyperwallet (simulated)", async ({
   page,
   request,
 }) => {
@@ -98,15 +98,17 @@ test("Amina confirms her receipt in Urdu, and is told to wait: no payout rail re
   await panel.getByRole("button", { name: "Send as Amina" }).click();
 
   await expect(thread).toContainText("آپ کا ٹریکنگ نمبر 7712345678 محفوظ ہو گیا ہے");
-  await expect(thread).toContainText("216.00 ڈالر PayPal کے پاس محفوظ ہیں");
+  await expect(thread).toContainText("216.00 ڈالر ابھی ادا کیے جا رہے ہیں");
+  await expect(thread).toContainText("Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں بھیج دیے گئے ہیں");
+  await expect(thread).toContainText("(ٹیسٹ موڈ: نقلی PayPal، کوئی اصل رقم منتقل نہیں ہوئی۔)");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await page.screenshot({ path: path.join(SCREENSHOTS, "receipt-chat-amina-375.png"), fullPage: true });
 
-  // Her tracking is saved, but her share stays reserved: it is never captured without a way to pay her.
+  // Her share is captured like anyone's, so her tracking goes on the PayPal order; her bank payout through
+  // Hyperwallet is simulated (prompt 52).
   await page.goto(`/approve/${orderId}/return`);
   await expect(row(page, "Amina")).toContainText("Shipped with TCS: 7712345678");
-  await expect(row(page, "Amina")).toContainText("Reserved, paid when she ships");
-  await expect(row(page, "Amina")).toContainText("Payout rail not connected yet (Pakistan)");
-  // PayPal tracks a payment, and hers is not captured: her tracking waits.
-  await expect(row(page, "Amina")).toContainText("It goes on the simulated PayPal order once her share is captured.");
+  await expect(row(page, "Amina")).toContainText("Paid on proof of shipping");
+  await expect(row(page, "Amina")).toContainText("Paid to her bank through Hyperwallet (simulated)");
+  await expect(row(page, "Amina")).toContainText("Tracking on the simulated PayPal order");
 });

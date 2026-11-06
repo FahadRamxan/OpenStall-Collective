@@ -34,6 +34,11 @@ builds her Payouts item (`rails.payout_item`: PayPal by EMAIL or PAYPAL_ID, or V
 before that capture, so a share no rail can reach is never captured. On the sandbox host a Venmo share is captured
 and its payout is simulated, because PayPal's sandbox refuses Venmo payouts; no Payouts call is made for it.
 
+Prompt 52 (Hyperwallet, simulated) changes nothing on the SDK side either. A share on the Hyperwallet rail (a
+maker in Pakistan) is captured with `capture_authorized_payment` like any other; no Payouts call is made for it,
+because her payout to her bank through Hyperwallet is simulated (no Hyperwallet account is connected).
+`rails.rail_for` gives that rail only in test mode and on the sandbox host.
+
 ## Repo survey (pattern + exemplar)
 
 - Host is **sync**: FastAPI endpoints are `def`, run in the thread pool (exemplar: apps/api/openstall_api/orders_api.py).

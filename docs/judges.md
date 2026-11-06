@@ -38,7 +38,7 @@ Press **Watch it happen on the live demo**. On `/demo`:
 
 - **Payments** shows the order's steps: Reserved at PayPal, Makers told. "$815.00 reserved at simulated PayPal. Nothing is captured yet."
 - **The makers' phones** show each maker's chat as she sees it: her order in Hindi (Priya), Urdu, right to left (Amina), Spanish, in US dollars (Lucía) and English (Grace): the item, how many, her price, the date to ship by, where it goes and how she is paid. Code writes these from templates, so every number is the order's own.
-- Amina's message asks her to wait before she ships. No payout rail reaches Pakistan yet, and OpenStall never asks a maker to ship goods it cannot pay for.
+- Amina's message, like the others, asks for her courier receipt photo when she ships. PayPal Payouts does not reach Pakistan, so she is paid to her bank through Hyperwallet, which is simulated: no Hyperwallet account is connected. A maker no payout rail reaches would be asked to wait instead: OpenStall never asks a maker to ship goods it cannot pay for.
 
 ## 4. Priya proves she shipped and is paid
 
@@ -49,7 +49,7 @@ The seeded makers have no phone, so in test mode you play them from their phones
 3. **Payments** now ticks Paid on proof and Tracking on PayPal. "$176.00 paid on proof to 1 maker". Priya's row: "Paid on proof of shipping", "Shipped with India Post: EE123456789IN" with her receipt photo, and "Tracking on the simulated PayPal order".
 4. **Live activity** shows each step: the receipt read, her confirmation, the capture, the payout, and her tracking put on the PayPal order.
 
-Try **Amina's phone** the same way, with "ہاں". Her tracking is saved, but she is not paid: her share stays reserved at PayPal until a payout rail reaches Pakistan. This is a real limit of the build, shown as it is.
+Try **Amina's phone** the same way, with "ہاں". Her share is captured like Priya's, and her row says "Paid to her bank through Hyperwallet (simulated)", with no PayPal tick: PayPal Payouts does not reach Pakistan, and the Hyperwallet payout to her bank is simulated, as no Hyperwallet account is connected. She is told in Urdu. This is a real limit of the build, shown as it is.
 
 ## 5. The buyer receives Priya's parcel
 
@@ -60,7 +60,7 @@ PayPal's order trackers only say a parcel shipped, so the buyer, who receives th
 3. **Priya's phone** on `/demo` gets the news in Hindi, and **Live activity** says "The buyer received Priya's parcel". `get_order_status` gives the buyer's agent the same: her share delivered, and on time.
 4. Her trust passport is signed again with the delivery counted: **Live activity** shows her old and new score, and her stall page (`/stall/s_priya`) now reads 68 orders delivered, "1 of these orders came through OpenStall", the rest still marked as seeded demo numbers. In her stall's **For AI agents** box, **Check its signature** asks OpenStall to verify her card: it is signed again, and valid.
 
-The order completes once every parcel that shipped has arrived and the rest were released: the receipt then reads **Order complete**, with what was paid to the makers and what came back to the buyer. Amina's share stays reserved here, since no payout rail reaches Pakistan, so this order stays open.
+The order completes once every parcel that shipped has arrived and the rest were released: the receipt then reads **Order complete**, with what was paid to the makers and what came back to the buyer. Here Lucía and Grace have not shipped, so this order stays open.
 
 ## 6. Change one number in her passport
 

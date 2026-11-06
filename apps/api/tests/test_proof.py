@@ -15,7 +15,18 @@ from openstall_api.chat.handler import WELCOMES
 from openstall_api.events import EventType
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt
 from openstall_api.main import app
-from openstall_api.models import ChatMessage, ChatSession, Direction, Event, Order, OrderPart, OrderStatus, PartStatus, Seller
+from openstall_api.models import (
+    ChatMessage,
+    ChatSession,
+    Direction,
+    Event,
+    Order,
+    OrderPart,
+    OrderStatus,
+    PartStatus,
+    PayoutRailChoice,
+    Seller,
+)
 from openstall_api.proof import is_no, is_yes, typed_tracking
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
@@ -185,7 +196,30 @@ def test_the_receipt_page_and_the_buyer_agent_see_her_tracking(story):
     assert (share["carrier"], share["tracking_number"], share["status"]) == (INDIA_POST, PRIYA_TRACKING, "captured")
 
 
-def test_amina_confirms_but_is_not_paid_because_no_payout_rail_reaches_pakistan_yet(story, fakes):
+def test_amina_confirms_and_is_paid_to_her_bank_through_hyperwallet_simulated(story, fakes):
+    """Prompt 52: her share is captured like anyone's; her bank payout through Hyperwallet is simulated, and her
+    message says so."""
+    play("s_amina", receipt=True)
+
+    [reply] = play("s_amina", "جی ہاں")
+
+    assert reply == (
+        f"شکریہ! آپ کا ٹریکنگ نمبر {AMINA_TRACKING} محفوظ ہو گیا ہے، اور آپ کے 216.00 ڈالر ابھی ادا کیے جا رہے ہیں۔"
+    )
+    amina = part_of(story, "Amina")
+    assert (amina.tracking_number, amina.status) == (AMINA_TRACKING, PartStatus.CAPTURED)
+    assert captures(fakes) == 1
+    [paid] = events(story, EventType.PART_CAPTURED)
+    assert paid.payload_json["payout_rail"] == "hyperwallet"
+    assert chat_texts(story, "s_amina")[-1] == (
+        "آپ کو ادائیگی ہو گئی! آرڈر ord_demo کے 216.00 ڈالر Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں بھیج "
+        "دیے گئے ہیں۔\n(ٹیسٹ موڈ: نقلی PayPal، کوئی اصل رقم منتقل نہیں ہوئی۔)"
+    )
+
+
+def test_a_maker_no_payout_rail_reaches_confirms_but_is_not_paid(story, fakes):
+    story.get(Seller, "s_amina").payout_rail = PayoutRailChoice.PAYPAL  # PayPal Payouts cannot reach Pakistan
+    story.commit()
     [question] = play("s_amina", receipt=True)
     assert f"ٹریکنگ نمبر: {AMINA_TRACKING}" in question and f"کورئیر: {TCS}" in question
 

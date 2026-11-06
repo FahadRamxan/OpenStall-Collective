@@ -105,13 +105,17 @@ class AdvanceOut(BaseModel):
     state: Literal["asked", "accepted", "paid"]
     amount_usd: Decimal
     paid_at: datetime | None = None
+    payout_simulated: bool = False  # only recorded, not sent: Venmo on PayPal's sandbox, and Hyperwallet
 
     @classmethod
     def of(cls, advance: dict[str, Any] | None) -> "AdvanceOut | None":
         if not advance or advance.get("state") not in ("asked", "accepted", "paid"):
             return None
         return cls(
-            state=advance["state"], amount_usd=Decimal(str(advance["amount_usd"])), paid_at=advance.get("paid_at")
+            state=advance["state"],
+            amount_usd=Decimal(str(advance["amount_usd"])),
+            paid_at=advance.get("paid_at"),
+            payout_simulated=bool(advance.get("payout_simulated")),
         )
 
 
@@ -232,6 +236,10 @@ def payout_words(part: OrderPart, settings: Settings) -> tuple[PayoutRail, str, 
     # "Paid to" only once her share is captured; until then the chip says where the money will go.
     paid = part.status in (PartStatus.CAPTURED, PartStatus.DELIVERED)
     words = f"Paid to {name}" if paid else f"Paid to {name} when she ships"
+    if rail.kind == "hyperwallet":
+        # Simulated in every mode: no Hyperwallet account is connected yet, and PayPal confirms nothing about it.
+        bank = "Paid to her bank through Hyperwallet" if paid else "Paid to her bank through Hyperwallet when she ships"
+        return rail.kind, f"{bank} (simulated)", False
     if settings.OPENSTALL_MODE == "fake":
         return rail.kind, f"{words} (simulated)", True
     if rail.kind == "venmo" and venmo_payouts_simulated(settings.PAYPAL_API_BASE):

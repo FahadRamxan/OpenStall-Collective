@@ -50,7 +50,9 @@ class AdvancePhrases:
     offer: str  # {amount}, {order_id}, {share}, {rest}
     accepted: str  # {amount}
     paid: str  # {amount}, {rail}
+    paid_bank: str  # {amount}: to her bank through Hyperwallet
     simulated: str  # added to `paid` in test mode
+    hyperwallet: str  # added to `paid_bank` in sandbox mode: Hyperwallet is simulated
     declined: str
     low_score: str  # {score}
     no_share: str
@@ -65,7 +67,9 @@ PHRASES: dict[str, AdvancePhrases] = {
         "you would not have to pay it back. Reply YES to take it, or NO.",
         accepted="Thank you! Your {amount} advance is on its way.",
         paid="Your advance of {amount} for materials has been sent to your {rail} account.",
+        paid_bank="Your advance of {amount} for materials has been sent to your bank account through Hyperwallet.",
         simulated="(Test mode: simulated PayPal, no real money moved.)",
+        hyperwallet="(Hyperwallet is simulated here: no real money reached your bank.)",
         declined="All right: no advance. You are paid your whole share when you send your courier receipt.",
         low_score="An advance needs a trust score of 0.90 or more, and yours is {score}. Every delivery on time raises "
         "it.",
@@ -81,7 +85,10 @@ PHRASES: dict[str, AdvancePhrases] = {
         "رقم واپس نہیں کرنی ہوگی۔ لینے کے لیے \"ہاں\" لکھیں، ورنہ \"نہیں\"۔",
         accepted="شکریہ! آپ کی {amount} کی پیشگی رقم بھیجی جا رہی ہے۔",
         paid="سامان کے لیے آپ کی {amount} کی پیشگی رقم آپ کے {rail} اکاؤنٹ میں بھیج دی گئی ہے۔",
+        paid_bank="سامان کے لیے آپ کی {amount} کی پیشگی رقم Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں بھیج دی "
+        "گئی ہے۔",
         simulated="(ٹیسٹ موڈ: نقلی PayPal، کوئی اصل رقم منتقل نہیں ہوئی۔)",
+        hyperwallet="(یہاں Hyperwallet نقلی ہے: آپ کے بینک میں کوئی اصل رقم نہیں پہنچی۔)",
         declined="ٹھیک ہے: کوئی پیشگی نہیں۔ کورئیر رسید بھیجنے پر آپ کو پورا حصہ ملے گا۔",
         low_score="پیشگی رقم کے لیے اعتماد کا اسکور کم از کم 0.90 ہونا چاہیے، اور آپ کا {score} ہے۔ ہر بروقت ڈیلیوری "
         "سے یہ "
@@ -97,7 +104,10 @@ PHRASES: dict[str, AdvancePhrases] = {
         "यह रकम लौटानी नहीं होगी। लेने के लिए \"हाँ\" लिखें, वरना \"नहीं\"।",
         accepted="धन्यवाद! आपकी {amount} की अग्रिम राशि भेजी जा रही है।",
         paid="सामान के लिए आपकी {amount} की अग्रिम राशि आपके {rail} खाते में भेज दी गई है।",
+        paid_bank="सामान के लिए आपकी {amount} की अग्रिम राशि Hyperwallet के ज़रिए आपके बैंक खाते में भेज दी गई "
+        "है।",
         simulated="(टेस्ट मोड: नकली PayPal, कोई असली पैसा नहीं भेजा गया।)",
+        hyperwallet="(यहाँ Hyperwallet नकली है: आपके बैंक में कोई असली पैसा नहीं पहुँचा।)",
         declined="ठीक है: कोई अग्रिम नहीं। कूरियर रसीद भेजने पर आपको पूरा हिस्सा मिलेगा।",
         low_score="अग्रिम राशि के लिए भरोसे का स्कोर कम से कम 0.90 होना चाहिए, और आपका {score} है। हर समय पर डिलीवरी "
         "से "
@@ -113,7 +123,10 @@ PHRASES: dict[str, AdvancePhrases] = {
         "Si no pudieras entregar, no tendrías que devolverlo. Responde SÍ para aceptarlo, o NO.",
         accepted="¡Gracias! Tu anticipo de {amount} va en camino.",
         paid="Tu anticipo de {amount} para materiales se envió a tu cuenta de {rail}.",
+        paid_bank="Tu anticipo de {amount} para materiales se envió a tu cuenta bancaria a través de "
+        "Hyperwallet.",
         simulated="(Modo de prueba: PayPal simulado, no se movió dinero real.)",
+        hyperwallet="(Aquí Hyperwallet es simulado: no llegó dinero real a tu banco.)",
         declined="Muy bien: sin anticipo. Recibes tu parte completa cuando mandes tu recibo de paquetería.",
         low_score="Un anticipo necesita una puntuación de confianza de 0.90 o más, y la tuya es {score}. Cada "
         "entrega a "
@@ -246,12 +259,18 @@ def pay_advance_after(
                 "payout_batch_id": payment.payout_batch_id,
                 "payout_simulated": payment.payout_simulated,
             }
-            simulated = get_settings().OPENSTALL_MODE == "fake"
+            simulated = (
+                " (simulated PayPal)"
+                if get_settings().OPENSTALL_MODE == "fake"
+                else " (simulated Hyperwallet)"
+                if payment.payout_rail == "hyperwallet"
+                else ""
+            )
             record_event(
                 session,
                 EventType.ADVANCE_PAID,
                 f"OpenStall paid {name} a ${amount:,.2f} advance for materials, ahead of her share of order "
-                f"{part.order_id}{' (simulated PayPal)' if simulated else ''}: her payout when she ships is that "
+                f"{part.order_id}{simulated}: her payout when she ships is that "
                 "much less",
                 entity_id=part.id,
                 payload={"order_id": part.order_id, "amount_usd": amount, "payout_batch_id": payment.payout_batch_id},
@@ -263,9 +282,14 @@ def pay_advance_after(
         log.warning("The advance on share %s could not be paid: %s", part_id, trouble)
         return False
     words = PHRASES[code]
-    text = words.paid.format(amount=format_money(code, amount), rail=RAIL_NAMES[rail.kind])
+    if rail.kind == "hyperwallet":
+        text = words.paid_bank.format(amount=format_money(code, amount))
+    else:
+        text = words.paid.format(amount=format_money(code, amount), rail=RAIL_NAMES[rail.kind])
     if get_settings().OPENSTALL_MODE == "fake":
         text = f"{text}\n{words.simulated}"
+    elif rail.kind == "hyperwallet":
+        text = f"{text}\n{words.hyperwallet}"
     send_to_seller(
         seller_id,
         text,

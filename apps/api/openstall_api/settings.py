@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     PAYMENT_PATH: PaymentPath = "payouts"
     # Sandbox personal accounts the seeded makers are paid to, in sandbox mode only (made in the Developer Dashboard
     # with country IN, MX and GB). Empty: that maker's payout rail is "not connected yet", and her share is never
-    # captured. Grace is paid on Venmo, which the sandbox simulates; Amina has no PayPal rail (prompt 52).
+    # captured. Grace is paid on Venmo, which the sandbox simulates; Amina is paid to her bank through Hyperwallet,
+    # which is simulated (prompt 52).
     PAYPAL_SANDBOX_PAYEE_PRIYA: str | None = None
     PAYPAL_SANDBOX_PAYEE_LUCIA: str | None = None
     PAYPAL_SANDBOX_PAYEE_NOOR: str | None = None

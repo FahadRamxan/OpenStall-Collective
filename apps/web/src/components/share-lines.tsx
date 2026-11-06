@@ -83,12 +83,15 @@ export function DeliveryLine({ part }: { part: OrderPart }) {
  * buyer is never charged for it: her share is captured whole when she ships, and her payout then is less.
  */
 export function AdvanceLine({ part, simulated }: { part: OrderPart; simulated: boolean }) {
+  // Test mode simulates PayPal; elsewhere a payout can still be only recorded (Venmo on the sandbox, Hyperwallet).
+  const how = (test: boolean, recorded?: boolean) =>
+    test ? " (simulated PayPal)" : recorded ? " (simulated payout)" : "";
   const advance = part.advance;
   if (!advance) return null;
   const amount = formatUsd(advance.amount_usd);
   const words =
     advance.state === "paid"
-      ? `Advance for materials: ${amount}, paid by OpenStall${simulated ? " (simulated PayPal)" : ""}, not the buyer`
+      ? `Advance for materials: ${amount}, paid by OpenStall${how(simulated, advance.payout_simulated)}, not the buyer`
       : advance.state === "accepted"
         ? `Advance for materials: ${amount}, on its way`
         : `Advance for materials offered: ${amount}`;

@@ -40,6 +40,19 @@ describe("AdvanceLine", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels a payout that was only recorded outside test mode: Venmo on the sandbox, and Hyperwallet", () => {
+    render(
+      <AdvanceLine
+        part={part({ state: "paid", amount_usd: "54.00", paid_at: "2026-11-10T10:00:00Z", payout_simulated: true })}
+        simulated={false}
+      />,
+    );
+
+    expect(
+      screen.getByText("Advance for materials: $54.00, paid by OpenStall (simulated payout), not the buyer"),
+    ).toBeInTheDocument();
+  });
+
   it("says when one is offered or on its way, and nothing without one", () => {
     const { rerender, container } = render(
       <AdvanceLine part={part({ state: "asked", amount_usd: "50.75", paid_at: null })} simulated={false} />,

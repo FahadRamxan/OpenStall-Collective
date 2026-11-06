@@ -4,10 +4,14 @@
 |----------------------------|------------------------------------------------------------------|
 | India, Mexico, UK, others  | PayPal Payouts to her PayPal account                             |
 | United States, with handle | Payouts to Venmo (recipient_wallet Venmo, USD and US only)       |
-| Pakistan                   | Not connected yet: Pakistan is not on PayPal's country list.     |
-|                            | Prompt 52 adds Hyperwallet (simulated).                          |
+| Pakistan                   | Hyperwallet to her bank account, simulated (prompt 52): PayPal   |
+|                            | Payouts does not reach Pakistan, and no Hyperwallet account is   |
+|                            | connected yet, so it runs only where no money is real.           |
 
-A share is never captured when her rail is unavailable, so a maker is never left half paid.
+A share is never captured when her rail is unavailable, so a maker is never left half paid. On the Hyperwallet
+rail her share is captured like any other, and her bank payout is simulated and labelled so. That is only
+allowed in test mode and on PayPal's sandbox: on PayPal's live host she has no rail until Hyperwallet is
+connected, rather than a payout that never happens.
 
 Venmo items use recipient_type USER_HANDLE with a note, which Venmo requires. Never PHONE (the PayPal sandbox does not
 support it) and never VENMO_HANDLE (that value appears in the AI-Toolkit's payouts.md but not in the API reference).
@@ -31,6 +35,7 @@ __all__ = [
     "payout_item",
     "rail_for",
     "receiver",
+    "sandbox_host",
     "venmo_payouts_simulated",
 ]
 
@@ -41,7 +46,7 @@ RAIL_NAMES: dict[PayoutRail, str] = {
     "hyperwallet": "Hyperwallet",
     "unavailable": "no payout rail",
 }
-# Countries PayPal Payouts cannot reach. Pakistan gets Hyperwallet in prompt 52.
+# Countries PayPal Payouts cannot reach: their makers are paid to their bank through Hyperwallet (prompt 52).
 NO_PAYPAL_PAYOUTS = frozenset({"PK"})
 DEFAULT_NOTE = "Your share of an OpenStall Collective order."
 NO_SANDBOX_PAYPAL_ACCOUNT = "no sandbox PayPal account linked yet"
@@ -71,17 +76,21 @@ def rail_for(
     *,
     override: PayoutRail | None = None,
     payee_required: bool = False,
+    live_money: bool = False,
 ) -> Rail:
     """The rail a maker is paid on. `override` is a seller's own choice, when an operator set one.
 
     `payee_required`: real money paths (the sandbox) need her PayPal account on the PayPal rail. Without one she is
     unavailable rather than captured and then left unpaid. Fake mode simulates the payout, so it needs none.
+
+    `live_money`: PayPal's live host, where money is real. Hyperwallet is only simulated, so there she has no
+    rail rather than a pretend payout.
     """
     country = (country or "").strip().upper()
     if override is not None:
         kind = override
     elif country in NO_PAYPAL_PAYOUTS:
-        kind = "unavailable"
+        kind = "hyperwallet"
     elif country == "US" and venmo_handle:
         kind = "venmo"
     else:
@@ -91,7 +100,9 @@ def rail_for(
     if kind == "unavailable" or (kind in ("paypal", "venmo") and country in NO_PAYPAL_PAYOUTS):
         return _not_connected(COUNTRY_NAMES.get(country, country or "country unknown"))
     if kind == "hyperwallet":
-        return _not_connected("Hyperwallet is not connected yet")
+        if live_money:
+            return _not_connected("Hyperwallet is simulated only, so not where money is real")
+        return Rail("hyperwallet")  # simulated: no Hyperwallet account is connected yet
     if kind == "venmo":
         if not venmo_handle:
             return _not_connected("no Venmo handle linked yet")
@@ -136,7 +147,12 @@ def payout_item(share: Share) -> dict[str, Any]:
     )
 
 
-def venmo_payouts_simulated(api_base: str) -> bool:
-    """Whether Venmo payouts are simulated on this PayPal host: always in the sandbox, which refuses them."""
+def sandbox_host(api_base: str) -> bool:
+    """Whether this PayPal host is the sandbox, where no money is real."""
     host = urlsplit(api_base).hostname or ""
     return "sandbox" in host
+
+
+def venmo_payouts_simulated(api_base: str) -> bool:
+    """Whether Venmo payouts are simulated on this PayPal host: always in the sandbox, which refuses them."""
+    return sandbox_host(api_base)

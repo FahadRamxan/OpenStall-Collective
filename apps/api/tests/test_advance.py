@@ -14,7 +14,18 @@ from sqlalchemy import select
 from openstall_api.advance import asks_for_advance
 from openstall_api.events import EventType
 from openstall_api.main import app
-from openstall_api.models import ChatMessage, ChatSession, Direction, Event, Order, OrderPart, PartStatus, Passport
+from openstall_api.models import (
+    ChatMessage,
+    ChatSession,
+    Direction,
+    Event,
+    Order,
+    OrderPart,
+    PartStatus,
+    Passport,
+    PayoutRailChoice,
+    Seller,
+)
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 
 client = TestClient(app)
@@ -140,8 +151,26 @@ def test_one_advance_per_share(story, fakes):
     assert len(calls(fakes, "pay_advance")) == 1
 
 
+def test_amina_s_advance_goes_to_her_bank_through_hyperwallet_simulated(story, fakes):
+    """Prompt 52: Hyperwallet (simulated) reaches Pakistan, so Amina's record earns her an advance too."""
+    [offer] = play("s_amina", "کیا مجھے سامان کے لیے کچھ پیشگی مل سکتا ہے؟")
+    assert "54.00" in offer  # a quarter of her $216.00
+
+    play("s_amina", "ہاں")
+
+    [advance] = calls(fakes, "pay_advance")
+    assert (advance.share.payout_rail, advance.amount_usd) == ("hyperwallet", Decimal("54.00"))
+    assert share(story, "Amina").advance_json["payout_simulated"] is True
+    assert any("Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں" in text for text in told(story, "s_amina"))
+    order = client.get(f"/api/orders/{DEMO_ORDER_ID}").json()
+    amina = next(part for part in order["parts"] if part["seller"]["id"] == "s_amina")
+    assert amina["advance"]["payout_simulated"] is True
+
+
 def test_who_cannot_have_one(story, fakes):
-    # Amina: no payout rail reaches Pakistan yet.
+    # No payout rail reaches her: an override to PayPal, which cannot pay out in Pakistan.
+    story.get(Seller, "s_amina").payout_rail = PayoutRailChoice.PAYPAL
+    story.commit()
     [no_rail] = play("s_amina", ASK)
     assert no_rail == (
         "آپ کے ملک میں ادائیگی کا انتظام ابھی مکمل نہیں ہوا، اس لیے OpenStall آپ کو پیشگی رقم نہیں بھیج سکتا۔"

@@ -32,6 +32,7 @@ from openstall_paypal import (
     Tracking,
     carrier_code,
     rail_for,
+    sandbox_host,
     tracker_for,
 )
 
@@ -218,7 +219,8 @@ def load_part(session: Session, part_id: str) -> OrderPart:
 
 def seller_rail(seller: Seller, settings: Settings | None = None) -> Rail:
     """The rail she is paid on (spec 3.5a). In sandbox mode the PayPal rail needs her (sandbox) PayPal account;
-    fake mode simulates every payout, so it needs none."""
+    fake mode simulates every payout, so it needs none. Hyperwallet, which is simulated, never runs on PayPal's
+    live host."""
     settings = settings or get_settings()
     return rail_for(
         seller.country,
@@ -227,6 +229,7 @@ def seller_rail(seller: Seller, settings: Settings | None = None) -> Rail:
         seller.paypal_merchant_id,
         override=seller.payout_rail.value if seller.payout_rail else None,
         payee_required=settings.OPENSTALL_MODE == "sandbox",
+        live_money=settings.OPENSTALL_MODE == "sandbox" and not sandbox_host(settings.PAYPAL_API_BASE),
     )
 
 
@@ -289,7 +292,8 @@ def pay_share(session: Session, part_id: str, gateway: PaymentGateway) -> OrderP
             f"${part.amount_usd - share.paid_ahead_usd:,.2f} sent now)"
             if share.paid_ahead_usd
             else ""
-        ),
+        )
+        + (", to her bank through Hyperwallet (simulated)" if share.payout_rail == "hyperwallet" else ""),
         entity_id=part.id,
         payload={
             "order_id": part.order_id,

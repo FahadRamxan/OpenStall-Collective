@@ -23,6 +23,7 @@ from openstall_api.models import (
     Event,
     Order,
     OrderPart,
+    PayoutRailChoice,
     Seller,
     utcnow,
 )
@@ -227,7 +228,17 @@ def test_once_paypal_holds_the_order_each_maker_is_told_in_her_language(story, f
     assert all(part.notified_at is not None for part in parts(story).values())
 
 
-def test_amina_is_asked_to_wait_because_no_payout_rail_reaches_pakistan_yet(story):
+def test_amina_is_promised_payment_on_her_receipt_as_hyperwallet_reaches_pakistan(story):
+    reserve()
+
+    [amina] = chat_of(story, "s_amina")
+    assert "رسید کی تصویر یہاں بھیجیں، اسی وقت آپ کو ادائیگی ہو جائے گی" in amina.text
+    assert "ادائیگی کا انتظام ابھی مکمل نہیں ہوا" not in amina.text
+
+
+def test_a_maker_no_payout_rail_reaches_is_asked_to_wait(story):
+    story.get(Seller, "s_amina").payout_rail = PayoutRailChoice.PAYPAL  # PayPal Payouts cannot reach Pakistan
+    story.commit()
     reserve()
 
     [amina] = chat_of(story, "s_amina")

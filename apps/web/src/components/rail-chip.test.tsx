@@ -42,6 +42,24 @@ describe("RailChip", () => {
     expect(screen.getByText("Paid to Venmo (simulated)")).toBeInTheDocument();
   });
 
+  it("says her bank through Hyperwallet for a maker in Pakistan, simulated, with no PayPal tick", () => {
+    const { container } = render(
+      <RailChip
+        part={{
+          ...PRIYA,
+          status: "captured",
+          payout_rail: "hyperwallet",
+          payout_label: "Paid to her bank through Hyperwallet (simulated)",
+          payout_via_paypal: false,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Paid to her bank through Hyperwallet (simulated)")).toBeInTheDocument();
+    expect(container.querySelector("[data-rail]")).toHaveAttribute("data-rail", "hyperwallet");
+    expect(container.querySelector("svg")).toBeNull();
+  });
+
   it("is honest about a maker no rail can reach yet", () => {
     const { container } = render(
       <RailChip

@@ -512,6 +512,22 @@ def test_on_the_sandbox_a_venmo_share_is_captured_and_her_payout_simulated(fake:
     assert (payment.payout_rail, payment.payout_simulated) == ("venmo", True)
 
 
+def test_a_hyperwallet_share_is_captured_and_no_paypal_payout_is_sent(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    """Prompt 52: her capture is real; her bank payout through Hyperwallet is simulated, as no Hyperwallet
+    account is connected, so no PayPal payout goes out and she needs no PayPal account."""
+    capture = fake.on("POST", "/v2/payments/authorizations/AUTH-ALL/capture", answer(201, {"id": "CAPTURE-A"}))
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
+    amina = Share("op_amina", "AUTH-ALL", Decimal("216.00"), payout_rail="hyperwallet", last=False)
+
+    payment = PayoutsGateway(client, sdk).pay_share(amina)
+
+    assert capture.called and not payout.called
+    assert sent(capture)[0]["amount"] == {"currency_code": "USD", "value": "216.00"}
+    assert sent(capture)[0]["final_capture"] is False
+    assert (payment.capture_id, payment.payout_batch_id) == ("CAPTURE-A", None)
+    assert (payment.payout_rail, payment.payout_simulated) == ("hyperwallet", True)
+
+
 def test_no_capture_call_when_rail_unavailable(fake: FakePayPal, paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
     payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
     amina = Share("op_amina", "AUTH-ALL", Decimal("216.00"), payee_email="amina@example.com", payout_rail="unavailable")
@@ -925,6 +941,16 @@ def test_a_share_paid_ahead_is_captured_whole_and_paid_the_rest(fake: FakePayPal
     assert sent(capture)[0]["amount"] == {"currency_code": "USD", "value": "203.00"}
     body, _ = payout_sent(payout)
     assert body["items"][0]["amount"] == {"currency": "USD", "value": "152.25"}
+
+
+def test_an_advance_through_hyperwallet_sends_no_payout(paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    payout = paypal.post("/v1/payments/payouts").respond(201, json={"batch_header": {"payout_batch_id": "B"}})
+    amina = Share("op_amina", "AUTH-ALL", Decimal("216.00"), payout_rail="hyperwallet")
+
+    paid = PayoutsGateway(client, sdk).pay_advance(Advance(amina, Decimal("54.00")))
+
+    assert paid == AdvancePayment(None, "hyperwallet", payout_simulated=True)
+    assert not payout.called
 
 
 def test_the_multiparty_path_pays_no_advances(client: PayPalClient, sdk: PayPalSdk) -> None:
