@@ -52,6 +52,10 @@ class EventType(StrEnum):
     TOPUP_CREATED = "topup.created"
     ADVANCE_REQUESTED = "advance.requested"  # she asked; OpenStall offered it (advance.py)
     ADVANCE_PAID = "advance.paid"  # OpenStall paid it out, ahead of her proof
+    # A buyer's PayPal dispute on a maker's share (disputes.py): seen, answered with her proof, decided by PayPal.
+    DISPUTE_OPENED = "dispute.opened"
+    DISPUTE_ANSWERED = "dispute.answered"
+    DISPUTE_RESOLVED = "dispute.resolved"
     PAYMENT_WEBHOOK = "payment.webhook"
     MESSAGE_RECEIVED = "message.received"
     MESSAGE_SENT = "message.sent"

@@ -174,6 +174,21 @@ class AdvancePayment:
     payout_simulated: bool = False
 
 
+@dataclass(frozen=True)
+class DisputeEvidence:
+    """What proves a maker shipped, for a buyer's PayPal dispute on her share (prompt 56; disputes.py sends it as
+    PROOF_OF_FULFILLMENT)."""
+
+    dispute_id: str
+    part_id: str  # our share it is about
+    carrier: str  # her courier, in words
+    tracking_number: str
+    notes: str  # what happened, in words for PayPal's reviewer
+    photo: bytes | None = None  # her courier receipt photo, when she sent one
+    photo_name: str | None = None
+    photo_type: str | None = None
+
+
 @runtime_checkable
 class PaymentGateway(Protocol):
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
@@ -194,6 +209,11 @@ class PaymentGateway(Protocol):
 
     def release_share(self, share: Share) -> None:
         """Give one seller's share back to the buyer. Refused once the share is paid."""
+        ...
+
+    def answer_dispute(self, evidence: DisputeEvidence) -> None:
+        """Answer a buyer's PayPal dispute on a share with her proof of shipping (prompt 56). Moves no money:
+        PayPal decides."""
         ...
 
     def pay_advance(self, advance: Advance) -> AdvancePayment:
@@ -274,6 +294,7 @@ class FakeGateway:
         self._payments: dict[str, Payment] = {}
         self._advances: dict[str, AdvancePayment] = {}
         self._trackers: dict[str, list[str]] = {}  # PayPal order id -> its tracker ids, oldest first
+        self._disputes: dict[str, dict[str, Any]] = {}  # dispute id -> PayPal's dispute, as it would show it
 
     def take_outbox(self) -> list[dict[str, Any]]:
         """The webhook events waiting to be sent, oldest first; the outbox is then empty."""
@@ -474,6 +495,60 @@ class FakeGateway:
             payment = AdvancePayment(f"FAKE-ADVANCE-{_digest(share.part_id)}", share.payout_rail)
         self._advances[share.part_id] = payment
         return payment
+
+    def answer_dispute(self, evidence: DisputeEvidence) -> None:
+        """Simulated PayPal takes her proof, and decides at once in the seller's favour: tracking for a parcel the
+        buyer says never came is what PayPal asks for. CUSTOMER.DISPUTE.RESOLVED follows."""
+        self.calls.append(("answer_dispute", evidence))
+        dispute = self._disputes.get(evidence.dispute_id)
+        if dispute is None:
+            raise PaymentError("INVALID_RESOURCE_ID", f"no dispute {evidence.dispute_id}")
+        if dispute["status"] != "WAITING_FOR_SELLER_RESPONSE":
+            raise PaymentError("NOT_AUTHORIZED", f"dispute {evidence.dispute_id} is not waiting for the seller")
+        dispute.update(
+            status="RESOLVED",
+            dispute_outcome={"outcome_code": "RESOLVED_SELLER_FAVOUR"},
+            links=[link for link in dispute["links"] if link["rel"] == "self"],
+        )
+        self._send_event(
+            "CUSTOMER.DISPUTE.RESOLVED",
+            "dispute",
+            dict(dispute),
+            f"Dispute {evidence.dispute_id} was resolved in the seller's favour",
+        )
+
+    # The buyer's side, as on the simulated PayPal page: not ours, so not recorded in calls.
+
+    def open_dispute(
+        self, capture_id: str, amount_usd: Decimal, reason: str = "MERCHANDISE_OR_SERVICE_NOT_RECEIVED"
+    ) -> str:
+        """The buyer opens a dispute on a capture, as PayPal's resolution centre lets her. CUSTOMER.DISPUTE.CREATED
+        follows, waiting for the seller's response. Opening it again changes nothing."""
+        dispute_id = f"PP-D-FAKE-{_digest(capture_id)}"
+        if dispute_id in self._disputes:
+            return dispute_id
+        dispute: dict[str, Any] = {
+            "dispute_id": dispute_id,
+            "reason": reason,
+            "status": "WAITING_FOR_SELLER_RESPONSE",
+            "dispute_life_cycle_stage": "INQUIRY",
+            "dispute_channel": "INTERNAL",
+            "dispute_amount": _money(amount_usd),
+            "disputed_transactions": [{"seller_transaction_id": capture_id}],
+            "links": [
+                {"rel": "self", "method": "GET", "href": f"/v1/customer/disputes/{dispute_id}"},
+                {
+                    "rel": "provide_evidence",
+                    "method": "POST",
+                    "href": f"/v1/customer/disputes/{dispute_id}/provide-evidence",
+                },
+            ],
+        }
+        self._disputes[dispute_id] = dispute
+        self._send_event(
+            "CUSTOMER.DISPUTE.CREATED", "dispute", dict(dispute), f"A dispute was opened on capture {capture_id}"
+        )
+        return dispute_id
 
     def release_share(self, share: Share) -> None:
         self.calls.append(("release_share", share))

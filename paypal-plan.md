@@ -45,6 +45,13 @@ Operations table below and pass exactly the keywords that row lists, each row mu
 take those parameters by its own signatures, and the commit named under "Toolchain and baseline" must be the one
 `pyproject.toml` pins and the one installed. A new SDK call needs its row here first.
 
+Prompt 56 (disputes) adds nothing on the SDK side: APIMatic's PayPal SDK has no Disputes controller (it has
+orders, payments, subscriptions, transaction_search and vault), so `SandboxGateway.answer_dispute` posts
+`/v1/customer/disputes/{id}/provide-evidence` on our own `PayPalClient`, as multipart/form-data: the evidence
+JSON as the part `input` (PayPal's examples; the spec names only `evidence-file`) and her receipt photo as
+`evidence-file`. That route takes no PayPal-Request-Id, so a claim on the dispute id keeps it to one send.
+Check the part name on the first real sandbox dispute.
+
 ## Repo survey (pattern + exemplar)
 
 - Host is **sync**: FastAPI endpoints are `def`, run in the thread pool (exemplar: apps/api/openstall_api/orders_api.py).

@@ -17,7 +17,7 @@ import pytest
 import respx
 from paypal.core import HttpRequest, HttpResponse, JsonBody, RetryOptions, TransportError
 
-from openstall_paypal import Advance, AdvancePayment
+from openstall_paypal import Advance, AdvancePayment, DisputeEvidence
 from openstall_paypal import (
     RETRY_POLICY,
     WHOLE_ORDER,
@@ -956,3 +956,38 @@ def test_an_advance_through_hyperwallet_sends_no_payout(paypal: respx.MockRouter
 def test_the_multiparty_path_pays_no_advances(client: PayPalClient, sdk: PayPalSdk) -> None:
     with pytest.raises(PaymentError, match="payouts path"):
         MultipartyGateway(client, sdk).pay_advance(Advance(Share("op_1", "AUTH-1", Decimal("10.00")), Decimal("2.50")))
+
+
+# Disputes (prompt 56): her proof of shipping, on our own client, as multipart/form-data.
+
+
+def test_a_dispute_is_answered_with_her_proof_as_multipart(paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = paypal.post("/v1/customer/disputes/PP-D-27/provide-evidence").respond(
+        200, json={"links": [{"rel": "self", "href": "/v1/customer/disputes/PP-D-27"}]}
+    )
+    evidence = DisputeEvidence(
+        "PP-D-27", "op_amina", "TCS", "7712345678", "Shipped.", photo=b"PNG-bytes", photo_name="r.png", photo_type="image/png"
+    )
+
+    PayoutsGateway(client, sdk).answer_dispute(evidence)
+
+    request = route.calls.last.request
+    assert request.headers["Content-Type"].startswith("multipart/form-data; boundary=")
+    assert "PayPal-Request-Id" not in request.headers  # this route takes none: the caller's claim guards it
+    body = request.content
+    assert b'name="input"' in body and b"Content-Type: application/json" in body
+    assert b'"evidence_type": "PROOF_OF_FULFILLMENT"' in body
+    assert b'"tracking_number": "7712345678"' in body
+    assert b'name="evidence-file"; filename="r.png"' in body and b"PNG-bytes" in body
+
+
+def test_paypal_refusing_the_evidence_is_a_payment_error_with_its_issue(paypal: respx.MockRouter, client: PayPalClient, sdk: PayPalSdk) -> None:
+    paypal.post("/v1/customer/disputes/PP-D-27/provide-evidence").respond(
+        422, json={"name": "UNPROCESSABLE_ENTITY", "message": "x", "details": [{"issue": "NOT_ELIGIBLE"}], "debug_id": "d"}
+    )
+
+    with pytest.raises(PaymentError) as error:
+        PayoutsGateway(client, sdk).answer_dispute(DisputeEvidence("PP-D-27", "op_amina", "TCS", "1", "Shipped."))
+
+    assert error.value.issue == "NOT_ELIGIBLE"
+

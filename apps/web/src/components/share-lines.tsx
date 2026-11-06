@@ -98,6 +98,22 @@ export function AdvanceLine({ part, simulated }: { part: OrderPart; simulated: b
   return <p className="mt-2 text-xs font-semibold text-accent">{words}</p>;
 }
 
+/**
+ * A buyer's PayPal dispute on her share (prompt 56), in the API's words: answered with her proof of shipping, decided
+ * by PayPal, or waiting for a person. The words say when PayPal is simulated.
+ */
+export function DisputeLine({ part }: { part: OrderPart }) {
+  const dispute = part.dispute;
+  if (!dispute) return null;
+  const tone =
+    dispute.state === "needs_person" || dispute.outcome === "buyer"
+      ? "text-danger"
+      : dispute.outcome === "seller"
+        ? "text-success"
+        : "text-foreground";
+  return <p className={`mt-2 text-xs font-semibold ${tone}`}>{dispute.words}</p>;
+}
+
 /** Whether she was told about her share: where, in which language, and a link to her chat. */
 export function NoticeLine({ part }: { part: OrderPart }) {
   const notice = part.notice;

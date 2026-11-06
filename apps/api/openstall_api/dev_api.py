@@ -26,6 +26,7 @@ from openstall_api.quotes_api import QuoteOut
 from openstall_api.seed import DEMO_REQUEST, story_order
 from openstall_api.tracking import track_on_paypal
 from openstall_api.webhooks import deliver_fake_webhooks
+from openstall_paypal import FakeGateway
 
 router = APIRouter(prefix="/api/dev", tags=["dev"], dependencies=[Depends(fake_mode_only)])
 
@@ -100,6 +101,41 @@ def simulate_proof(
     session.expire_all()
     background.add_task(deliver_fake_webhooks)  # simulated PayPal's capture and payout confirmations follow
     return order_out(session, _load(session, part.order_id))
+
+
+class OpenDispute(BaseModel):
+    """Why the buyer disputes, as PayPal's dispute reasons (openstall_paypal.disputes.REASONS)."""
+
+    reason: str = Field(default="MERCHANDISE_OR_SERVICE_NOT_RECEIVED", pattern=r"^[A-Z_]{2,64}$")
+
+
+@router.post("/parts/{part_id}/dispute")
+def simulate_dispute(
+    part_id: str,
+    session: SessionDep,
+    registry: Annotated[AdapterRegistry, Depends(get_registry)],
+    body: OpenDispute | None = None,
+) -> OrderOut:
+    """Fake mode: the buyer opens a PayPal dispute on a maker's paid share, as PayPal's resolution centre lets them
+    (prompt 56). Simulated PayPal sends CUSTOMER.DISPUTE.CREATED to our webhook, which answers it with her proof
+    of shipping; simulated PayPal then decides. A share that is not paid has no payment to dispute: 409."""
+    part = session.get(OrderPart, part_id)
+    if part is None:
+        raise HTTPException(status_code=404, detail=f"There is no order share called {part_id!r}.")
+    if part.status not in (PartStatus.CAPTURED, PartStatus.DELIVERED) or not part.capture_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{part.seller.name}'s share is {part.status.value}: a dispute is about a payment, and hers is "
+            "not taken.",
+        )
+    gateway = registry.payment_gateway
+    assert isinstance(gateway, FakeGateway)  # this router exists only in fake mode
+    gateway.open_dispute(part.capture_id, part.amount_usd, (body or OpenDispute()).reason)
+    order_id = part.order_id
+    session.commit()
+    deliver_fake_webhooks()  # the dispute reaches our webhook, is answered, and simulated PayPal decides
+    session.expire_all()
+    return order_out(session, _load(session, order_id))
 
 
 class PlayMessage(BaseModel):

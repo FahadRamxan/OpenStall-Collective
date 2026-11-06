@@ -92,8 +92,11 @@ class FakeWebhookVerifier:
 
 def fake_event(event_type: str, resource_type: str, resource: dict[str, Any], summary: str) -> dict[str, Any]:
     """A webhook event shaped like PayPal's. Its id comes from what it says, so a repeat has the same id."""
-    # A payout item's event names it by payout_item_id; it has no id of its own.
-    about = resource.get("id") or resource.get("payout_item_id")
+    # A payout item's event names it by payout_item_id and a dispute's by dispute_id: neither has an id of its own.
+    # A dispute's status is part of what it says, so each change of it is a new event.
+    about = resource.get("id") or resource.get("payout_item_id") or resource.get("dispute_id")
+    if resource.get("dispute_id"):
+        about = f"{about}|{resource.get('status')}"
     digest = hashlib.sha256(f"{event_type}|{about}".encode()).hexdigest()[:20].upper()
     return {
         "id": f"WH-FAKE-{digest}",

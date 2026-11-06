@@ -83,6 +83,32 @@ class ProofOut(BaseModel):
         )
 
 
+class DisputeOut(BaseModel):
+    """A buyer's PayPal dispute on her share (disputes.py), and where it stands, in words."""
+
+    dispute_id: str
+    reason: str  # PayPal's reason, such as MERCHANDISE_OR_SERVICE_NOT_RECEIVED
+    state: Literal["open", "waiting", "answered", "needs_person", "resolved"]
+    outcome: Literal["seller", "buyer", "other"] | None = None  # once PayPal decided
+    words: str  # for the receipt, /demo and the buyer's agent
+
+    @classmethod
+    def of(cls, record: dict[str, Any] | None) -> "DisputeOut | None":
+        from openstall_api.disputes import dispute_words  # disputes imports payments, which this module does
+
+        words = dispute_words(record)
+        if not record or words is None:
+            return None
+        state = record.get("state")
+        return cls(
+            dispute_id=str(record["dispute_id"]),
+            reason=str(record.get("reason") or "OTHER"),
+            state=state if state in ("waiting", "answered", "needs_person", "resolved") else "open",
+            outcome=record.get("outcome") if record.get("outcome") in ("seller", "buyer", "other") else None,
+            words=words,
+        )
+
+
 class DropOut(BaseModel):
     """She said she cannot make her share (healing.py): asked to confirm, kept after all, or dropped; and the
     top-up order that took her units, once there is one."""
@@ -137,6 +163,7 @@ class PartOut(BaseModel):
     proof: ProofOut | None  # her receipt photo and what was read, from the moment she sends it
     drop: DropOut | None = None  # she said she cannot make it (healing.py); None while she has not
     advance: AdvanceOut | None = None  # a materials advance on her share (advance.py)
+    dispute: "DisputeOut | None" = None  # a buyer's PayPal dispute on her share (disputes.py)
     tracking_on_paypal: bool  # her tracking is on her capture at PayPal (simulated PayPal in fake mode)
     # When the buyer confirmed her parcel arrived (prompt 34), and whether by its delivery date. None before.
     delivered_at: datetime | None = None
@@ -274,6 +301,7 @@ def _part(
         proof=ProofOut.of(part.proof_json),
         drop=DropOut.of(part.drop_json),
         advance=AdvanceOut.of(part.advance_json),
+        dispute=DisputeOut.of(part.dispute_json),
         tracking_on_paypal=part.paypal_tracker_id is not None,
         delivered_at=delivered_utc(part),
         on_time=on_time(part),

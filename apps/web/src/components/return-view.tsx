@@ -9,6 +9,7 @@ import { RailChip } from "@/components/rail-chip";
 import {
   AdvanceLine,
   DeliveryLine,
+  DisputeLine,
   MakersTold,
   NoticeLine,
   PART_TONES,
@@ -27,6 +28,7 @@ import {
   getOrder,
   isSimulated,
   reserveOrder,
+  simulateDispute,
   simulateProof,
   type Order,
   type OrderPart,
@@ -252,12 +254,16 @@ function Receipt({
                   <NoticeLine part={part} />
                   <AdvanceLine part={part} simulated={simulated} />
                   <ProofLine part={part} simulated={simulated} />
+                  <DisputeLine part={part} />
                   <DeliveryLine part={part} />
                   {part.status === "captured" ? (
                     <ConfirmDelivery orderId={order.id} part={part} onOrder={onOrder} />
                   ) : null}
                   {simulated && part.status === "authorized" ? (
                     <SimulateProof part={part} onOrder={onOrder} />
+                  ) : null}
+                  {simulated && isPaid(part) && !part.dispute ? (
+                    <SimulateDispute part={part} onOrder={onOrder} />
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-end">
@@ -349,6 +355,40 @@ function SimulateProof({ part, onOrder }: { part: OrderPart; onOrder: (order: Or
       {proof.state === "failed" ? (
         <p role="alert" className="mt-1 text-xs font-semibold text-danger">
           {proof.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Fake mode only: the buyer opens a PayPal dispute on a paid share, saying the parcel never came (prompt 56).
+ * OpenStall answers it with her proof of shipping, and simulated PayPal decides.
+ */
+function SimulateDispute({ part, onOrder }: { part: OrderPart; onOrder: (order: Order) => void }) {
+  const [dispute, setDispute] = useState<ProofState>({ state: "idle" });
+  async function open() {
+    setDispute({ state: "sending" });
+    try {
+      onOrder(await simulateDispute(part.id));
+    } catch (error) {
+      setDispute({ state: "failed", message: errorMessage(error) });
+    }
+  }
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={open}
+        disabled={dispute.state === "sending"}
+        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border px-4 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {dispute.state === "sending" ? "Opening the dispute…" : "Dispute this parcel at PayPal"}
+        <span className="rounded-full bg-warning-soft px-2 py-0.5 text-xs text-warning">Simulated</span>
+      </button>
+      {dispute.state === "failed" ? (
+        <p role="alert" className="mt-1 text-xs font-semibold text-danger">
+          {dispute.message}
         </p>
       ) : null}
     </div>

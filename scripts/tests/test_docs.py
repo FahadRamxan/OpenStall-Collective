@@ -50,6 +50,7 @@ UI_LABELS = [
     "Buy with simulated PayPal",
     "Run it with an AI agent",
     "Order complete",
+    "Dispute this parcel at PayPal",
     "API online",
     "API offline",
 ]

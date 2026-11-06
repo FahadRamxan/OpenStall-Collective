@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { AdvanceLine } from "@/components/share-lines";
+import { AdvanceLine, DisputeLine } from "@/components/share-lines";
 import type { OrderPart } from "@/lib/orders";
 
 function part(advance: OrderPart["advance"]): OrderPart {
@@ -63,6 +63,51 @@ describe("AdvanceLine", () => {
     expect(screen.getByText("Advance for materials: $50.75, on its way")).toBeInTheDocument();
 
     rerender(<AdvanceLine part={part(null)} simulated={false} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("DisputeLine", () => {
+  it("says where a buyer's PayPal dispute stands, in the API's words", () => {
+    const { rerender } = render(
+      <DisputeLine
+        part={{
+          ...part(null),
+          status: "captured",
+          dispute: {
+            dispute_id: "PP-D-1",
+            reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+            state: "resolved",
+            outcome: "seller",
+            words: "PayPal dispute (the parcel did not arrive): decided in her favour (simulated PayPal)",
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.getByText("PayPal dispute (the parcel did not arrive): decided in her favour (simulated PayPal)"),
+    ).toHaveClass("text-success");
+
+    rerender(
+      <DisputeLine
+        part={{
+          ...part(null),
+          dispute: {
+            dispute_id: "PP-D-2",
+            reason: "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+            state: "needs_person",
+            outcome: null,
+            words: "PayPal dispute: the buyer says the item is not as described. Needs a person: why",
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/Needs a person/)).toHaveClass("text-danger");
+  });
+
+  it("shows nothing without a dispute", () => {
+    const { container } = render(<DisputeLine part={part(null)} />);
+
     expect(container).toBeEmptyDOMElement();
   });
 });

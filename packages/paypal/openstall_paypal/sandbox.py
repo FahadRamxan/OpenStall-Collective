@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from dataclasses import replace
 from decimal import Decimal
 from typing import Self, cast
+from urllib.parse import quote
 
 from paypal.core import UnsetType
 from paypal.models import (
@@ -54,6 +55,7 @@ from openstall_paypal.client import PayPalClient, PayPalError, PayPalUnavailable
 from openstall_paypal.gateway import (
     Advance,
     AdvancePayment,
+    DisputeEvidence,
     WHOLE_ORDER,
     Checkout,
     CheckoutRequest,
@@ -255,6 +257,17 @@ class SandboxGateway:
         if isinstance(capture.id, UnsetType):  # it may have been captured: never assume it was not
             raise PaymentUnavailable("PAYPAL_UNREADABLE", f"PayPal sent no capture id for share {share.part_id}")
         return capture.id
+
+    def answer_dispute(self, evidence: DisputeEvidence) -> None:
+        """Her proof of shipping for a buyer's dispute, on our own client: APIMatic's SDK has no disputes. Never
+        resent blindly: the caller holds a claim on it (disputes.py in the API)."""
+        from openstall_paypal.disputes import multipart_parts  # disputes imports the gateway module
+
+        with paypal_errors():
+            self.client.post_multipart(
+                f"/v1/customer/disputes/{quote(evidence.dispute_id, safe='')}/provide-evidence",
+                multipart_parts(evidence),
+            )
 
     def void(self, share: Share) -> None:
         try:

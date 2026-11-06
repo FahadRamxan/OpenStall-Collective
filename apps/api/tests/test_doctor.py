@@ -61,7 +61,8 @@ def test_the_products_table_comes_with_the_report():
     by_key = {product["key"]: product for product in products}
     assert (by_key["orders"]["state"], by_key["orders"]["state_words"]) == ("proven", "Proven on the sandbox")
     assert by_key["hyperwallet"]["state_words"] == "Simulated"
-    assert by_key["disputes"]["state_words"] == "Not built yet"
+    assert by_key["disputes"]["state_words"] == "Built, not yet run on the sandbox"
+    assert by_key["braintree"]["state_words"] == "Not built yet"
     assert by_key["tracking"]["calls"] == ["POST /v2/checkout/orders/{id}/track"]
 
 
@@ -100,7 +101,7 @@ def test_sandbox_mode_reads_the_webhook_back_and_finds_it_complete(use_settings)
     assert checks["PayPal keys and token"] == ("ok", "PayPal gave a token for the app's client id.")
     assert checks["PayPal webhook"] == (
         "ok",
-        f"Webhook {WEBHOOK_ID} sends every event OpenStall needs (9) to {HOOK_URL}.",
+        f"Webhook {WEBHOOK_ID} sends every event OpenStall needs ({len(SUBSCRIBED_EVENTS)}) to {HOOK_URL}.",
     )
     assert checks["Makers' payout accounts"][0] == "ok"
 

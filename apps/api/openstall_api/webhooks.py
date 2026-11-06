@@ -26,6 +26,7 @@ from openstall_api.models import Event, Order, OrderPart, PartStatus, ProcessedW
 from openstall_api.orders import move_part
 from openstall_api.payments import settle_order
 from openstall_api.settings import get_settings
+from openstall_paypal.disputes import disputed_captures
 from openstall_paypal import (
     FakeGateway,
     FakeWebhookVerifier,
@@ -36,6 +37,9 @@ from openstall_paypal import (
 )
 
 log = logging.getLogger(__name__)
+
+# What a dispute event leaves for after its commit: ("answer", share) or ("tell_resolved", share).
+FollowUp = tuple[Literal["answer", "tell_resolved"], str]
 
 MAX_BYTES = 1024 * 1024  # PayPal's events are a few kilobytes
 PROVIDER = "paypal"
@@ -64,6 +68,9 @@ SUBSCRIBED_EVENTS = (
     "PAYMENT.PAYOUTSBATCH.SUCCESS",
     "PAYMENT.PAYOUTS-ITEM.SUCCEEDED",
     "PAYMENT.PAYOUTS-ITEM.FAILED",
+    "CUSTOMER.DISPUTE.CREATED",  # prompt 56: answered with the maker's proof of shipping
+    "CUSTOMER.DISPUTE.UPDATED",
+    "CUSTOMER.DISPUTE.RESOLVED",
 )
 
 
@@ -81,9 +88,12 @@ def webhook_verifier() -> WebhookVerifier:
 
 
 def resource_id(resource: Mapping[str, Any]) -> str | None:
-    """PayPal's id for what the event is about: an authorization, a capture, a payout item or a batch."""
-    found = resource.get("id") or resource.get("payout_item_id") or (resource.get("batch_header") or {}).get(
-        "payout_batch_id"
+    """PayPal's id for what the event is about: an authorization, a capture, a payout item, a batch or a dispute."""
+    found = (
+        resource.get("id")
+        or resource.get("payout_item_id")
+        or (resource.get("batch_header") or {}).get("payout_batch_id")
+        or resource.get("dispute_id")
     )
     return str(found)[:64] if found else None
 
@@ -118,6 +128,7 @@ def receive_paypal_webhook(raw: bytes, headers: Mapping[str, str]) -> Literal["p
                 },
             )
         raise WebhookRefused("PayPal did not sign this event")
+    follow: FollowUp | None = None
     try:
         with session_scope() as session:
             if session.scalar(select(ProcessedWebhook.id).where(ProcessedWebhook.event_id == str(event["id"]))):
@@ -134,9 +145,13 @@ def receive_paypal_webhook(raw: bytes, headers: Mapping[str, str]) -> Literal["p
                 )
             )
             session.flush()  # a repeat arriving at the same moment fails here, before anything changes
-            apply_paypal_event(session, str(event["event_type"]), resource)
+            follow = apply_paypal_event(session, str(event["event_type"]), resource)
     except IntegrityError:
         return "repeat"
+    if follow is not None:  # after the commit: a dispute answered with her proof, or her news (prompt 56)
+        from openstall_api.disputes import after_dispute_event
+
+        after_dispute_event(follow)
     return "processed"
 
 
@@ -155,7 +170,7 @@ def _names(parts: Iterable[OrderPart]) -> str:
     return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any]) -> None:
+def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any]) -> "FollowUp | None":
     """What a verified event changes, and its line in the live feed. In fake mode the event came from the fake
     gateway, so the line names simulated PayPal, never PayPal itself."""
     order_id: str | None = None
@@ -210,9 +225,22 @@ def apply_paypal_event(session: Session, kind: str, resource: Mapping[str, Any])
         summary = f"{who} paid out {part.seller.name}'s share" if part else f"{who} paid out a share"
     elif kind == "PAYMENT.PAYOUTSBATCH.SUCCESS":
         summary = f"{who} finished a payout batch"
+    elif kind.startswith("CUSTOMER.DISPUTE."):  # prompt 56: a buyer's dispute on a maker's capture
+        from openstall_api.disputes import on_dispute_event  # disputes imports this module's neighbours
+
+        follow = on_dispute_event(session, kind, resource)
+        captures = disputed_captures(resource)
+        part = session.scalar(select(OrderPart).where(OrderPart.capture_id.in_(captures))) if captures else None
+        order_id = part.order_id if part else None
+        summary = (
+            f"{who} sent news of the dispute on {part.seller.name}'s share" if part else f"{who} sent news of a dispute"
+        )
+        record_event(session, EventType.PAYMENT_WEBHOOK, summary, entity_id=order_id, payload={"event_type": kind})
+        return follow
     else:
         summary = f"{who} sent {kind}; nothing to do"
     record_event(session, EventType.PAYMENT_WEBHOOK, summary, entity_id=order_id, payload={"event_type": kind})
+    return None
 
 
 @dataclass(frozen=True)

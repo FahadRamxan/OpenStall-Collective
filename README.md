@@ -87,6 +87,7 @@ Being built step by step; each step is tested, wired into the web app, tested in
 - **Snap the receipt, get paid.** A maker whose share PayPal holds sends a photo of her courier receipt, on WhatsApp or in the web chat. The model reads the courier and the tracking number, and she is asked in her language to confirm them; a number it cannot read, she types. Only her "yes" moves money: her share is then captured from the order's one PayPal authorization and paid out, and she is told she is paid. Her tracking then goes on that payment at PayPal, with PayPal's own code for her courier, so the buyer sees it on their PayPal order. A maker no payout rail reaches yet keeps her confirmed tracking and is told she is paid once it does. The receipt page shows each maker's tracking with her receipt photo, and `get_order_status` gives the agent the tracking. In test mode, `/seller-chat` plays a seeded maker: send her receipt photo and reply as her.
 - **The order heals itself.** A maker who cannot make her share says so in her chat, in her language ("I can't make this order"), and is asked to confirm: nothing moves on her words alone. Her yes sends her share back to the buyer, never charged, and OpenStall asks every other matching maker's agent for her units, by the same deadline and at most the buyer's price. What they offer becomes a top-up order that points at the first; the buyer approves it on its own page, like any order, and its makers are told then. The receipt, `/demo`'s Payments panel and `get_order_status` show the top-up and its approval link. In test mode, **Grace can't make it** on her phone on `/demo` plays it.
 - **Delivery and the end of an order.** PayPal's order trackers only say a parcel shipped, so the buyer, who receives the parcels, confirms each one on the receipt (**Confirm delivery**). Her share is then delivered, with the day it arrived and whether by its delivery date (for her trust passport); she is told in her language; no money moves, since she was paid when she shipped. Once every parcel that shipped has arrived and the rest were released, the order is complete, and the receipt shows what was paid to the makers and what came back to the buyer. `get_order_status` and the live feed follow it.
+- **Disputes answered with the proof.** When a buyer opens a PayPal dispute saying a maker's parcel never came, PayPal's webhook brings it to OpenStall, which finds her share by its capture and answers the dispute with her proof of shipping (`provide-evidence`: her courier, her tracking number, the buyer's own confirmation that it arrived if they gave one, and her courier receipt photo), once, after the webhook's commit. She is told in her language that PayPal has her proof and she need do nothing, and again when PayPal decides. A dispute her proof does not answer (an item not as described, say) waits for a person, and the receipt says why. A dispute PayPal decides for the buyer counts against her trust passport. Nothing moves money on OpenStall's side: PayPal decides. In test mode, **Dispute this parcel at PayPal** on a paid share of the receipt plays it, and simulated PayPal decides at once.
 - **Signed trust passports anyone can check.** A maker's trust card (`/passport/{seller_id}`, the same as the MCP tool `get_trust_card`) is her signed passport itself: OpenStall signs exactly its fields with Ed25519. The public key is at `/passport/public-key`; `/passport/{seller_id}/verify` checks her stored card, and `POST /passport/verify` checks any card sent to it, so a card with one number changed fails. Her stall's For AI agents box links **Check its signature**. Test mode signs with a fixed test key, and says so.
 - **The tamper check, live on `/demo`.** **Check a trust passport** loads a maker's signed trust card and checks its signature twice: in your browser, with OpenStall's public key and the browser's own Ed25519 (Web Crypto), and by OpenStall's `POST /passport/verify`. Change any number and press **Check the signature**: both say it no longer matches. **Put it back**, and it checks out again.
 - **Try to break it, on `/demo`.** Seven attacks, each a real attempt through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total sent by the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, and a trust card with one number raised. **Try every attack**: each is refused by that code, and the live feed records each refusal (`security.rejected`). Nothing an attack touches is kept. `POST /api/guardrails/run` runs them all (in sandbox mode, with the demo token).
@@ -112,6 +113,7 @@ Pay-on-proof, on the payouts path (one platform order, each maker paid separatel
 - **Payouts:** each maker paid on her payout rail, PayPal or, for a US maker, Venmo (simulated on the sandbox, which refuses Venmo payouts); a maker in Pakistan, where Payouts does not reach, is paid to her bank through Hyperwallet (simulated: no Hyperwallet account is connected).
 - **Order tracking:** each maker's tracking number and courier attached to her capture on the PayPal order.
 - **Webhooks:** every event verified with PayPal (`verify-webhook-signature`) and applied exactly once.
+- **Disputes:** a buyer's dispute that a parcel never came is answered with the maker's proof of shipping (`POST /v1/customer/disputes/{id}/provide-evidence`, on our own client, as APIMatic's SDK has no disputes).
 - **APIMatic's PayPal Python SDK** for every Orders and Payments call ([below](#built-with-apimatics-paypal-context-plugin)). Every write carries an idempotency key made from our own ids, and is never resent blindly.
 
 Every PayPal product OpenStall uses or plans to, and how far it has got (`packages/paypal/openstall_paypal/products.py`; [/status](http://localhost:3000/status#paypal-products) shows the evidence for each):
@@ -127,7 +129,7 @@ Every PayPal product OpenStall uses or plans to, and how far it has got (`packag
 | Hyperwallet | Simulated |
 | Webhooks | Built, not yet run on the sandbox |
 | JavaScript SDK buttons | Built, not yet run on the sandbox |
-| Disputes | Not built yet |
+| Disputes | Built, not yet run on the sandbox |
 | Braintree | Not built yet |
 | PayPal's MCP server | Not built yet |
 | Venmo and Pay Later at checkout | Not built yet |
@@ -152,7 +154,7 @@ Every PayPal product OpenStall uses or plans to, and how far it has got (`packag
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **46 done, 3 partly done, 9 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 6: **47 done, 3 partly done, 8 not started.** [CLAUDE.md](CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -166,9 +168,9 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44 | | 45 design pass |
 | Hardening and submission | | 49: this README and [the judges' walkthrough](docs/judges.md); the hosted demo's address and the sandbox buyer login come at submission | 46–48, 50 |
-| More of PayPal | 51, 52, 53, 58 | | 54 Braintree, 55 ops agent, 56 disputes, 57 Venmo and Pay Later |
+| More of PayPal | 51, 52, 53, 56, 58 | | 54 Braintree, 55 ops agent, 57 Venmo and Pay Later |
 
-Next: the hosted demo once there is a Render account, and the Devpost draft; then disputes answered with the proof (56).
+Next: the hosted demo once there is a Render account, and the Devpost draft; then the security limits (46), the design pass (45) and the whole story end to end (47).
 
 ## Run it locally, in more detail
 

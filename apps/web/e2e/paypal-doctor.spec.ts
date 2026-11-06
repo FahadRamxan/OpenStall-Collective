@@ -37,7 +37,8 @@ test("the PayPal doctor checks the setup, and each PayPal product says how far i
   await expect(product(page, "Order tracking")).toContainText("Built, not yet run on the sandbox");
   await expect(product(page, "Payouts to Venmo")).toContainText("Simulated");
   await expect(product(page, "Hyperwallet")).toContainText("Simulated");
-  await expect(product(page, "Disputes")).toContainText("Not built yet");
+  await expect(product(page, "Disputes")).toContainText("Built, not yet run on the sandbox");
+  await expect(product(page, "Braintree")).toContainText("Not built yet");
   await page.screenshot({ path: path.join(SCREENSHOTS, "paypal-doctor-1280.png"), fullPage: true });
 
   await page.setViewportSize({ width: 375, height: 812 });

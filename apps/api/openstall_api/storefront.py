@@ -24,6 +24,7 @@ from sqlalchemy import select
 from starlette.applications import Starlette
 
 from openstall_api import collective, quotes, search
+from openstall_api.disputes import dispute_words
 from openstall_api.adapters import get_registry
 from openstall_api.allocation import PlanOut, stored_plan
 from openstall_api.catalog import CatalogEntry, NotFound, TrustSummary, catalog_entry
@@ -392,6 +393,11 @@ class ShareStatus(BaseModel):
         "charged, and her units were asked of the other makers (see top_ups).",
     )
     paid_through_paypal: bool = Field(description="Whether her payout goes through PayPal Payouts.")
+    dispute: str | None = Field(
+        default=None,
+        description="A PayPal dispute the payer opened on her share, and where it stands, in words: OpenStall "
+        "answers a parcel the payer says never came with her proof of shipping. None without one.",
+    )
 
 
 class TopUpStatus(BaseModel):
@@ -506,6 +512,7 @@ def get_order_status(
                     payout_words=words,
                     paid_through_paypal=via_paypal,
                     dropped_out=(part.drop_json or {}).get("state") == DROPPED,
+                    dispute=dispute_words(part.dispute_json),
                 )
             )
         top_ups = session.scalars(

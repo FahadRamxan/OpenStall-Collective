@@ -64,6 +64,8 @@ The order completes once every parcel that shipped has arrived and the rest were
 
 Before or after the story, `/status` has the **PayPal doctor**: whether this setup is ready to hold a buyer's money and pay the makers, check by check (in test mode nothing reaches PayPal, and the APIMatic cross-check still runs), and **PayPal products**, every PayPal product with how far it has got: proven on the sandbox, built, simulated, or not built yet.
 
+Then press **Dispute this parcel at PayPal** on Priya's row (simulated): the buyer tells PayPal the parcel never came. OpenStall answers the dispute with her proof of shipping (her courier and tracking number, and the buyer's own confirmation that it arrived), simulated PayPal decides in her favour, her row says so, and **Priya's phone** gets both in Hindi. Her payment stands: nothing moves on OpenStall's side, PayPal decides.
+
 ## 6. Change one number in her passport
 
 Back on `/demo`, **Check a trust passport** (after the makers' phones) loads Priya's signed trust card and checks its signature twice: in your browser, with OpenStall's public key, and by OpenStall itself. Both say "Signature valid: OpenStall signed exactly this card."

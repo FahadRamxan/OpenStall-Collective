@@ -15,7 +15,7 @@ Her trust passport is then worked out again and signed again, in the same transa
 spec 3.7), from two parts: the history she came with (for the seeded makers, the made-up numbers in the seed table,
 which keep the passport marked seeded_demo; for anyone else, none), and every parcel of hers a buyer received
 through OpenStall, on time or not. Worked out from those facts each time, never added to, so it always says the same
-for the same deliveries. Disputes are not built (prompt 56): a delivery counts as undisputed. Photo originality stays
+for the same deliveries. A dispute PayPal decided for the buyer (prompt 56) counts as disputed. Photo originality stays
 as it was: nothing measures it yet (prompt 35), so a maker with no passport gets none at her first delivery; her
 deliveries stay on her shares, and count once she has one.
 """
@@ -167,12 +167,20 @@ def refresh_passport(session: Session, seller_id: str, now: datetime | None = No
     if total == 0:
         return False
     kept = sum(1 for part in delivered if on_time(part) is not False)  # no promised date: nothing broken
+    # Her shares whose PayPal dispute was decided for the buyer (disputes.py).
+    lost = sum(
+        1
+        for part in session.scalars(select(OrderPart).where(OrderPart.seller_id == seller_id))
+        if (part.dispute_json or {}).get("outcome") == "buyer"
+    )
     old = passport.metrics_json
     metrics = {
         **{key: value for key, value in old.items() if key not in NOT_METRICS},
         "orders_delivered": total,
         "on_time_rate": round((float(history.get("on_time_rate", 0)) * before_count + kept) / total, RATE_PLACES),
-        "dispute_rate": round(float(history.get("dispute_rate", 0)) * before_count / total, RATE_PLACES),
+        "dispute_rate": round(
+            min(1.0, (float(history.get("dispute_rate", 0)) * before_count + lost) / total), RATE_PLACES
+        ),
         "live_deliveries": len(delivered),
         "live_on_time": kept,
     }

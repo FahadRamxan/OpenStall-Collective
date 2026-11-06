@@ -65,6 +65,14 @@ export type OrderPart = {
   /** She said she cannot make it: null while she has said nothing of the kind. */
   drop?: PartDrop | null;
   /** A materials advance on her share, paid by OpenStall ahead of her proof (prompt 37). */
+  /** A buyer's PayPal dispute on her share (prompt 56), and where it stands, in words. */
+  dispute?: {
+    dispute_id: string;
+    reason: string;
+    state: "open" | "waiting" | "answered" | "needs_person" | "resolved";
+    outcome: "seller" | "buyer" | "other" | null;
+    words: string;
+  } | null;
   advance?: {
     state: "asked" | "accepted" | "paid";
     amount_usd: string;
@@ -206,7 +214,7 @@ export async function getLatestOrder(init: RequestInit = {}): Promise<Order | nu
 /**
  * Events after which the latest order may read differently: an order or one of its shares changed, a maker was
  * told about her share (or could not be), her proof of shipping moved on (read, confirmed, on PayPal), or a top-up
- * was drafted for a maker who dropped out, or a materials advance was offered or paid.
+ * was drafted for a maker who dropped out, a materials advance was offered or paid, or a PayPal dispute moved on.
  */
 export function changesOrders(event: FeedEvent): boolean {
   return (
@@ -214,6 +222,7 @@ export function changesOrders(event: FeedEvent): boolean {
     event.type.startsWith("part.") ||
     event.type.startsWith("topup.") ||
     event.type.startsWith("advance.") ||
+    event.type.startsWith("dispute.") ||
     event.type.startsWith("message.order_notice") ||
     event.type.startsWith("tracking.")
   );
@@ -242,6 +251,14 @@ export function reserveOrder(id: string, init: RequestInit = {}): Promise<Order>
  */
 export function simulateProof(partId: string): Promise<Order> {
   return apiPost<Order>(`/api/dev/parts/${encodeURIComponent(partId)}/proof`, {});
+}
+
+/**
+ * Fake mode only: the buyer opens a PayPal dispute on one maker's paid share, saying the parcel never came (prompt
+ * 56). OpenStall answers it with her proof, and simulated PayPal decides. Returns the order as it is then.
+ */
+export function simulateDispute(partId: string): Promise<Order> {
+  return apiPost<Order>(`/api/dev/parts/${encodeURIComponent(partId)}/dispute`, {});
 }
 
 /**

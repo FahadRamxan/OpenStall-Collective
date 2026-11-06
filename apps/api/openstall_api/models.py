@@ -317,6 +317,9 @@ class OrderPart(Base):
     drop_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # A materials advance on this share (advance.py): offered, accepted, then paid by OpenStall ahead of her proof.
     advance_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # A buyer's PayPal dispute on this share (disputes.py): PayPal's dispute, where our answer stands, and how
+    # PayPal decided. None while there is none.
+    dispute_json: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     # PayPal's tracker for her shipment, once her tracking is on her capture at PayPal (prompt 33, tracking.py).
     paypal_tracker_id: Mapped[str | None] = mapped_column(String(128))
     delivery_date: Mapped[date | None] = mapped_column(Date)

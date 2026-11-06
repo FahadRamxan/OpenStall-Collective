@@ -143,11 +143,13 @@ PRODUCTS: tuple[Product, ...] = (
     Product(
         key="disputes",
         name="Disputes",
-        used_for="Answering a buyer's dispute with the maker's proof of shipping",
-        calls=(),
-        code="",
-        state="not built",
-        evidence="Prompt 56. The sandbox token's scopes include disputes",
+        used_for="A buyer's dispute that a parcel never came, answered with the maker's proof of shipping: her courier, "
+        "her tracking number and her courier receipt photo",
+        calls=("POST /v1/customer/disputes/{id}/provide-evidence",),
+        code="apps/api/openstall_api/disputes.py, packages/paypal/openstall_paypal/disputes.py",
+        state="built",
+        evidence="A sandbox dispute needs the sandbox buyer to open one in PayPal's resolution centre, so it has not run "
+        "there yet. The evidence's JSON part is named input, as in PayPal's own examples; the spec does not name it",
         prompts="56",
     ),
     Product(

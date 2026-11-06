@@ -5,6 +5,7 @@ import { RailChip } from "@/components/rail-chip";
 import {
   AdvanceLine,
   DeliveryLine,
+  DisputeLine,
   MakersTold,
   NoticeLine,
   PART_TONES,
@@ -154,6 +155,7 @@ function Payments({ order }: { order: Order }) {
                 <NoticeLine part={part} />
                 <AdvanceLine part={part} simulated={simulated} />
                 <ProofLine part={part} simulated={simulated} />
+                <DisputeLine part={part} />
                 <DeliveryLine part={part} />
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:flex-col sm:items-end">
