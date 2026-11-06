@@ -407,7 +407,9 @@ function Phone({
       <ol
         aria-label={perspective === "seller" ? "Your messages with OpenStall" : `Messages with ${title}`}
         aria-busy={loading}
-        className="flex max-h-[32rem] min-h-64 flex-col gap-3 overflow-y-auto bg-background px-4 py-5"
+        // It scrolls, so a keyboard must be able to reach it and scroll it too.
+        tabIndex={0}
+        className="flex max-h-[32rem] min-h-64 flex-col gap-3 overflow-y-auto bg-background px-4 py-5 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >
         {count === 0 && !loading ? <li className="m-auto max-w-xs text-center text-sm text-muted">{empty}</li> : null}
         {messages.map((message) => (
@@ -471,7 +473,8 @@ function PendingBubble({ item }: { item: Pending }) {
     .join(" and ");
   return (
     <li className="flex flex-col items-end">
-      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-accent-soft px-4 py-2.5 text-sm leading-6 opacity-70 shadow-xs">
+      {/* Marked as on its way by a dashed edge, not by fading: its words stay as readable as any message. */}
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm border border-dashed border-accent bg-accent-soft px-4 py-2.5 text-sm leading-6 shadow-xs">
         {attached ? <p className="text-xs text-muted">With {attached}</p> : null}
         {item.text ? <p className="break-words whitespace-pre-line">{item.text}</p> : null}
       </div>

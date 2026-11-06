@@ -246,17 +246,16 @@ function TrustRecord({ name, trust }: { name: string; trust: TrustSummary }) {
       </p>
       <dl className="mt-6 grid gap-5 sm:grid-cols-3">
         {rates.map(({ label, value, good }) => (
-          <div key={label}>
-            <div className="flex items-baseline justify-between">
-              <dt className="text-sm font-medium">{label}</dt>
-              <dd className="font-semibold tabular-nums">{percent(value)}</dd>
-            </div>
-            <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-full bg-border">
+          // Each group holds its dt and dd directly, as a definition list must; the bar only repeats the number.
+          <div key={label} className="grid grid-cols-[1fr_auto] items-baseline gap-x-3">
+            <dt className="text-sm font-medium">{label}</dt>
+            <dd className="font-semibold tabular-nums">{percent(value)}</dd>
+            <dd aria-hidden="true" className="col-span-2 mt-2 h-2 overflow-hidden rounded-full bg-border">
               <div
                 className={`h-full rounded-full ${good ? "bg-success" : "bg-warning"}`}
                 style={{ width: percent(Math.max(value, good ? 0 : 0.02)) }}
               />
-            </div>
+            </dd>
           </div>
         ))}
       </dl>

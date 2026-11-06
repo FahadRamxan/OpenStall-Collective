@@ -165,7 +165,9 @@ function Phone({
       <ol
         ref={list}
         aria-label={`Messages on ${name}'s phone`}
-        className="flex max-h-80 min-h-40 flex-1 flex-col gap-2 overflow-y-auto bg-background px-3 py-3"
+        // It scrolls, so a keyboard must be able to reach it and scroll it too.
+        tabIndex={0}
+        className="flex max-h-80 min-h-40 flex-1 flex-col gap-2 overflow-y-auto bg-background px-3 py-3 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >
         {messages.length === 0 ? (
           <li className="m-auto max-w-56 text-center text-xs text-muted">
