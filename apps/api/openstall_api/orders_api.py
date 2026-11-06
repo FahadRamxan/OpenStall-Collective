@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from openstall_allocator import usd
@@ -368,18 +368,26 @@ def _load(session: Session, order_id: str) -> Order:
 
 @router.get("/orders")
 def recent_orders(
-    session: SessionDep, limit: Annotated[int, Query(ge=1, le=50)] = 10, top_ups: bool = True
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+    top_ups: bool = True,
+    stall: bool = True,
 ) -> list[OrderOut]:
     """The most recent orders, newest first. A new draft arrives on the event stream as order.drafted. With
     top_ups=false, top-up orders are left out: /demo follows the order a top-up repairs, which lists its top-ups
-    (healing.py)."""
+    (healing.py). With stall=false, a person's purchases on stall pages are left out too: /demo follows the
+    collective orders."""
     query = (
         select(Order)
         .options(selectinload(Order.parts).selectinload(OrderPart.seller), selectinload(Order.request))
         .order_by(Order.created_at.desc(), Order.id.desc())
         .limit(limit)
     )
-    rows = session.scalars(query if top_ups else query.where(Order.parent_order_id.is_(None)))
+    if not top_ups:
+        query = query.where(Order.parent_order_id.is_(None))
+    if not stall:
+        query = query.where(or_(Order.source.is_(None), Order.source != "stall"))
+    rows = session.scalars(query)
     return [order_out(session, order) for order in rows]
 
 

@@ -184,11 +184,11 @@ export type Order = {
 };
 
 /**
- * The latest order, or null when there is none yet. Top-up orders are left out: /demo follows the order a top-up
- * repairs, which lists its top-ups (`top_ups`).
+ * The latest collective order, or null when there is none yet. Top-up orders are left out (/demo follows the order a
+ * top-up repairs, which lists its top-ups), and so are a person's purchases on stall pages.
  */
 export async function getLatestOrder(init: RequestInit = {}): Promise<Order | null> {
-  const [latest] = await apiGet<Order[]>("/api/orders?limit=1&top_ups=false", init);
+  const [latest] = await apiGet<Order[]>("/api/orders?limit=1&top_ups=false&stall=false", init);
   return latest ?? null;
 }
 

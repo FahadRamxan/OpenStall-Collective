@@ -361,6 +361,8 @@ function OrderCell({ data }: ICellRendererParams<DashboardOrder>) {
         </p>
       ) : data.requested_by_agent ? (
         <p className="text-xs text-muted">Drafted by an AI agent</p>
+      ) : data.from_stall ? (
+        <p className="text-xs text-muted">Bought on a stall</p>
       ) : null}
     </div>
   );

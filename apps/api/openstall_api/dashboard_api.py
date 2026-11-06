@@ -59,6 +59,7 @@ class OrderRow(BaseModel):
     makers: int
     top_up_of: str | None  # the order a top-up repairs (healing.py)
     requested_by_agent: bool
+    from_stall: bool  # a person bought it on a stall page (prompt 42)
 
 
 class ShareRow(BaseModel):
@@ -215,6 +216,7 @@ def _order_row(order: Order) -> OrderRow:
         makers=len(order.parts),
         top_up_of=order.parent_order_id,
         requested_by_agent=order.source == "mcp",
+        from_stall=order.source == "stall",
     )
 
 

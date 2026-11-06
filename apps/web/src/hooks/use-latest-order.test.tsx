@@ -46,7 +46,7 @@ describe("LatestOrderProvider", () => {
 
     expect(await screen.findAllByText("ord_story")).toHaveLength(2);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch.mock.calls[0][0]).toBe("http://api.test/api/orders?limit=1&top_ups=false");
+    expect(fetch.mock.calls[0][0]).toBe("http://api.test/api/orders?limit=1&top_ups=false&stall=false");
 
     stream.events = [event(4, "offer.accepted")];
     view.rerender(

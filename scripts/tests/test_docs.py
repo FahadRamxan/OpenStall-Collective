@@ -45,6 +45,7 @@ UI_LABELS = [
     "Try to break it",
     "Try every attack",
     "Demand Radar tip",
+    "Buy with simulated PayPal",
     "Order complete",
     "API online",
     "API offline",

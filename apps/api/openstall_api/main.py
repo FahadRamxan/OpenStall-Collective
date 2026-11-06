@@ -26,6 +26,7 @@ from openstall_api.quotes_api import router as quotes_router
 from openstall_api.passports_api import router as passports_router
 from openstall_api.search_api import router as search_router
 from openstall_api.seller_chat_api import router as seller_chat_router
+from openstall_api.stall_api import router as stall_router
 from openstall_api.settings import get_settings
 from openstall_api.status import router as status_router
 from openstall_api.webhooks_api import router as webhooks_router
@@ -78,6 +79,7 @@ app.include_router(search_router)
 app.include_router(demo_router)
 app.include_router(guardrails_router)
 app.include_router(dashboard_router)
+app.include_router(stall_router)
 app.include_router(offers_router)
 app.include_router(quotes_router)
 app.include_router(orders_router)

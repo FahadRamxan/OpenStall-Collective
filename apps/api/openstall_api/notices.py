@@ -206,7 +206,7 @@ def facts_of(part: OrderPart) -> NoticeFacts:
         amount=part.amount_usd,
         ship_by=ship_by(part),
         deliver_by=part.delivery_date,
-        ship_to=request.ship_to if request else None,
+        ship_to=request.ship_to if request else order.ship_to,
         paid_on_proof=seller_rail(part.seller).available,
     )
 

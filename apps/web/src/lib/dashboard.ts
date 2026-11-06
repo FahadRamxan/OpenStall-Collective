@@ -19,6 +19,8 @@ export type DashboardOrder = {
   /** The order a top-up repairs. */
   top_up_of: string | null;
   requested_by_agent: boolean;
+  /** A person bought it on a stall page. */
+  from_stall?: boolean;
 };
 
 /** One maker's share of an order: her payout, and her parcel's tracking. */

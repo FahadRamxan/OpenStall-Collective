@@ -274,8 +274,11 @@ class Order(Base):
     total_usd: Mapped[Decimal] = mapped_column(Money())
     paypal_order_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Who drafted it: "mcp" for a buyer agent's create_collective_order, None for a seeded or demo order (prompt 28).
+    # Who drafted it: "mcp" for a buyer agent's create_collective_order, "stall" for a person buying on a stall page
+    # (prompt 42), "replan" for a top-up (prompt 39), None for a seeded or demo order (prompt 28).
     source: Mapped[str | None] = mapped_column(String(16))
+    # Where a stall purchase ships, as the buyer gave it; an order from a quote ships to its request's city.
+    ship_to: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     request: Mapped[QuoteRequest | None] = relationship()

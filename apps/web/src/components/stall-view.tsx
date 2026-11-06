@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { ForAgents } from "@/components/for-agents";
+import { StallBuy } from "@/components/stall-buy";
 import { ApiError, errorMessage } from "@/lib/api";
 import {
   formatUsd,
@@ -113,7 +114,7 @@ function Stall({ seller }: { seller: SellerDetail }) {
           <ul className="space-y-10">
             {seller.products.map((product) => (
               <li key={product.id}>
-                <ProductPanel product={product} />
+                <ProductPanel product={product} maker={seller.name} />
               </li>
             ))}
           </ul>
@@ -127,7 +128,7 @@ function Stall({ seller }: { seller: SellerDetail }) {
   );
 }
 
-function ProductPanel({ product }: { product: Product }) {
+function ProductPanel({ product, maker }: { product: Product; maker: string }) {
   const [shown, setShown] = useState(0);
   const photo = product.photos[shown];
   return (
@@ -194,6 +195,7 @@ function ProductPanel({ product }: { product: Product }) {
           <Fact label="From" value={product.ship_from_city} />
           <Fact label="Kind" value={sentenceCase(product.category)} />
         </dl>
+        <StallBuy product={product} maker={maker} />
       </div>
     </article>
   );

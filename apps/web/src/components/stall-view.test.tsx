@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StallView } from "@/components/stall-view";
 import type { SellerDetail } from "@/lib/catalog";
 
+// The buy box talks to PayPal; it has its own tests.
+vi.mock("@/components/stall-buy", () => ({ StallBuy: () => null }));
+
 const params = { id: "s_noor" };
 vi.mock("next/navigation", () => ({ useParams: () => params }));
 
