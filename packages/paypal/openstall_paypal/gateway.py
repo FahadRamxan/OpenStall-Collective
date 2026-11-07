@@ -295,6 +295,7 @@ class FakeGateway:
         self._advances: dict[str, AdvancePayment] = {}
         self._trackers: dict[str, list[str]] = {}  # PayPal order id -> its tracker ids, oldest first
         self._disputes: dict[str, dict[str, Any]] = {}  # dispute id -> PayPal's dispute, as it would show it
+        self._captured: dict[str, tuple[str, Decimal]] = {}  # capture id -> (our part id, amount), payouts path
 
     def take_outbox(self) -> list[dict[str, Any]]:
         """The webhook events waiting to be sent, oldest first; the outbox is then empty."""
@@ -443,6 +444,7 @@ class FakeGateway:
         if share.last:
             hold.state = "CAPTURED"
         capture_id = f"{share.hold_id}-CAP-{hold.captures}"
+        self._captured[capture_id] = (share.part_id, share.amount_usd)
         self._capture_event(share, capture_id, final_capture=share.last)
         if share.payout_rail == "hyperwallet":
             # Her bank payout through Hyperwallet is simulated: no PayPal payout, so no payout event follows.
@@ -604,6 +606,44 @@ class FakeGateway:
         if tracker not in trackers:
             trackers.append(tracker)
         return tracker
+
+    def paypal_view(self, paypal_order_id: str) -> dict[str, Any]:
+        """The order as PayPal's Orders API shows it (GET /v2/checkout/orders/{id}): its status, the amount, the
+        authorization with its state, each capture, and the trackers. For test mode's stand-in of PayPal's MCP
+        server (prompt 55), which answers get_order with it. Raises PaymentError for an unknown order."""
+        order = self._order(paypal_order_id)
+        holds = set(order.holds.values())
+        authorizations = [
+            {"id": hold, "status": self._authorizations[hold].state, "amount": _money(self._authorizations[hold].amount)}
+            for hold in sorted(holds)
+            if hold in self._authorizations
+        ]
+        captures = [
+            {"id": capture_id, "status": "COMPLETED", "amount": _money(amount), "invoice_id": part_id}
+            for capture_id, (part_id, amount) in self._captured.items()
+            if capture_id.split("-CAP", 1)[0] in holds
+        ]
+        unit: dict[str, Any] = {
+            "reference_id": WHOLE_ORDER,
+            "custom_id": order.request.order_id,
+            "amount": _money(order.request.total_usd),
+            "payments": {"authorizations": authorizations, "captures": captures},
+        }
+        trackers = self._trackers.get(paypal_order_id, [])
+        if trackers:
+            unit["shipping"] = {"trackers": [{"id": tracker, "status": "SHIPPED"} for tracker in trackers]}
+        return {"id": paypal_order_id, "intent": "AUTHORIZE", "status": order.status, "purchase_units": [unit]}
+
+    def captures(self) -> list[dict[str, Any]]:
+        """Each capture taken on the payouts path, as a transaction (for test mode's stand-in MCP server)."""
+        return [
+            {"transaction_id": capture_id, "invoice_id": part_id, "transaction_amount": _money(amount)}
+            for capture_id, (part_id, amount) in self._captured.items()
+        ]
+
+    def disputes(self) -> list[dict[str, Any]]:
+        """Every dispute buyers opened, as PayPal shows each one (for test mode's stand-in MCP server)."""
+        return [dict(dispute) for dispute in self._disputes.values()]
 
     def authorization(self, hold_id: str) -> tuple[Decimal, Decimal, str]:
         """The payouts path's hold as tests see it: (amount held, amount captured, state)."""

@@ -12,7 +12,8 @@ The attacks:
 - a forged PayPal webhook saying the order was paid: every webhook is verified first (webhooks.py);
 - an order reserved that no person approved, and a maker paid before she proved she shipped (payments.py);
 - a trust card with one number raised: its Ed25519 signature no longer holds (passports.py);
-- a flood of calls to the MCP storefront from one address: the limits middleware (limits.py, prompt 46).
+- a flood of calls to the MCP storefront from one address: the limits middleware (limits.py, prompt 46);
+- a refund through PayPal's MCP server: the ops agent's gate refuses every tool that writes (prompt 55).
 """
 
 import json
@@ -39,6 +40,7 @@ from openstall_api.adapters import AdapterRegistry
 from openstall_api.db import new_session, session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.limits import LIMITS, LimitsMiddleware
+from openstall_paypal.paypal_mcp import ToolRefused, call_read_tool
 from openstall_api.models import DataSource, Order, PartStatus, Passport, Product, ProductStatus
 from openstall_api.offer_rules import listing_of, seller_policy
 from openstall_api.orders import server_total
@@ -92,6 +94,11 @@ ATTACKS: tuple[Attack, ...] = (
         "A share is captured only once she has confirmed her tracking",
     ),
     Attack(
+        "refund_through_paypal_mcp",
+        "An AI agent refunds a payment through PayPal's MCP server",
+        "The ops agent is offered only PayPal's read tools; one that writes is refused before it is sent",
+    ),
+    Attack(
         "flood",
         "Flood the MCP storefront from one address",
         "Each client gets 120 MCP calls a minute; the rest are refused with 429 Too Many Requests",
@@ -132,6 +139,8 @@ async def run_attack(key: str, registry: AdapterRegistry) -> Outcome:
             tried = await _capture_tool()
         elif key == "flood":
             tried = await _flood()
+        elif key == "refund_through_paypal_mcp":
+            tried = await _refund_through_paypal_mcp(registry)
         else:
             tried = SYNC_ATTACKS[key](registry)
     except NotTried as missing:
@@ -320,7 +329,30 @@ SYNC_ATTACKS: dict[str, Callable[[AdapterRegistry], Tried]] = {
     "pay_before_proof": _pay_before_proof,
     "tampered_passport": _tampered_passport,
 }
-assert set(SYNC_ATTACKS) | {"capture_tool", "flood"} == set(BY_KEY)
+assert set(SYNC_ATTACKS) | {"capture_tool", "flood", "refund_through_paypal_mcp"} == set(BY_KEY)
+
+
+async def _refund_through_paypal_mcp(registry: AdapterRegistry) -> Tried:
+    """Through the ops agent's own gate (paypal_mcp.call_read_tool), on a session with PayPal's MCP server: test
+    mode's stand-in, which lists create_refund as PayPal's does. Nothing is sent: the gate refuses first."""
+    from openstall_api.paypal_ops import paypal_mcp  # paypal_ops imports the demo controls, as this module's API does
+
+    tried = 'An AI agent with PayPal\'s MCP server calls "create_refund" for a maker\'s capture.'
+    if registry.settings.OPENSTALL_MODE != "fake":
+        raise NotTried("In sandbox mode this attack would start PayPal's real server: it runs in test mode only.")
+    async with paypal_mcp(registry) as client:
+        listed = {tool.name for tool in (await client.list_tools()).tools}
+        try:
+            await call_read_tool(client, "create_refund", {"capture_id": "CAPTURE-OF-A-MAKER"})
+        except ToolRefused as refused:
+            return Tried(
+                tried,
+                "refused",
+                f"Refused before anything was sent ({refused.issue}): the server lists create_refund"
+                f"{'' if 'create_refund' in listed else ' (not here)'}, but the ops agent is offered only tools "
+                "that read, and its gate refuses every other.",
+            )
+    return Tried(tried, "got_through", "The refund was sent to PayPal's MCP server.")
 
 
 async def _flood() -> Tried:

@@ -109,13 +109,20 @@ Call = Callable[[ToolCall], Awaitable[ToolResult]]
 
 
 async def run_buyer_agent(
-    model: BuyerModel, request: str, tools: Sequence[ToolSpec], call: Call, *, max_turns: int = MAX_TURNS
+    model: BuyerModel,
+    request: str,
+    tools: Sequence[ToolSpec],
+    call: Call,
+    *,
+    max_turns: int = MAX_TURNS,
+    system: str = SYSTEM,
 ) -> AgentRun:
     """Let the agent work on `request` with `tools`, running each call it makes through `call`, until it stops or
-    `max_turns` have passed. The model's own requests run in a thread: they take seconds."""
+    `max_turns` have passed. The model's own requests run in a thread: they take seconds. `system`: the agent's
+    instructions; the PayPal ops agent (ops_agent.py) runs on this loop with its own."""
     run = AgentRun(agent=model.label, request=request)
     conversation = model.conversation()
-    turn = await asyncio.to_thread(conversation.begin, SYSTEM, request, tools)
+    turn = await asyncio.to_thread(conversation.begin, system, request, tools)
     for _ in range(max_turns):
         if turn.said.strip():
             run.said.append(turn.said.strip())

@@ -88,13 +88,15 @@ Still on `/demo`, with the story's order approved:
 
 ## 8. Try to break it
 
-On `/demo`, **Try to break it** (after the trust passports) lists eight attacks on OpenStall's guardrails. Each is a real attempt, made through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total from the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, a flood of 150 calls to the MCP storefront from one address in a minute (the first 120 are answered, the rest get 429), and a trust card with one number raised.
+On `/demo`, **Try to break it** (after the trust passports) lists nine attacks on OpenStall's guardrails. Each is a real attempt, made through the same code a real request goes through: a price talked down to $1.00, an AI agent capturing the payment through MCP, a smaller total from the browser, a forged PayPal webhook, an order reserved that no person approved, a maker paid before she shipped, a flood of 150 calls to the MCP storefront from one address in a minute (the first 120 are answered, the rest get 429), a trust card with one number raised, and an AI agent calling `create_refund` on PayPal's own MCP server for a maker's capture (refused before anything is sent: the ops agent is offered only PayPal's tools that read).
 
-Press **Try every attack**. Each row says what was tried and what refused it, and the panel reads "8 of 8 attacks refused". **Live activity** records each refusal. Nothing an attack touches is kept: an attack that needs an order drafts one in a transaction that is rolled back.
+Press **Try every attack**. Each row says what was tried and what refused it, and the panel reads "9 of 9 attacks refused". **Live activity** records each refusal. Nothing an attack touches is kept: an attack that needs an order drafts one in a transaction that is rolled back.
 
 ## 9. The dashboard and Demand Radar
 
 Open **Dashboard** in the header (`/dashboard`). On top, the **Demand Radar tip**, for the biggest group: "23 agents searched for ceramic mugs this week. Nobody sells them." (seeded demo searches, and the page says so). Below it, AG Grid tables: **Orders** (yours from the steps above, top-ups marked), **Payouts**, **Tracking** (Priya's India Post number, on PayPal, delivered on time), **Trust passports** (each signature checked), and **Demand Radar**: each group of searches that found nothing this week, and the maker who could make them. Press **Send the tip to Noor**: open **Seller chat** and pick Noor, and the tip is there, in Urdu.
+
+At the bottom, **PayPal ops agent** works through PayPal's own MCP server (test mode's stand-in here, which says so). Press **Check the latest order with PayPal**: OpenStall's records for the latest order sit beside PayPal's, line by line (the status, the amount, the authorization, each capture, its tracking, any dispute), each marked agrees or differs. Then press **Ask the ops agent**: the agent answers the sample question from the tools it chose, and the panel lists what it read. It is offered only tools that read: it can never pay, refund or accept a claim.
 
 ## 10. More to try
 

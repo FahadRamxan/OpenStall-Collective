@@ -143,13 +143,13 @@ PRODUCTS: tuple[Product, ...] = (
     Product(
         key="disputes",
         name="Disputes",
-        used_for="A buyer's dispute that a parcel never came, answered with the maker's proof of shipping: her courier, "
-        "her tracking number and her courier receipt photo",
+        used_for="A buyer's dispute that a parcel never came, answered with the maker's proof of shipping: her "
+        "courier, her tracking number and her courier receipt photo",
         calls=("POST /v1/customer/disputes/{id}/provide-evidence",),
         code="apps/api/openstall_api/disputes.py, packages/paypal/openstall_paypal/disputes.py",
         state="built",
-        evidence="A sandbox dispute needs the sandbox buyer to open one in PayPal's resolution centre, so it has not run "
-        "there yet. The evidence's JSON part is named input, as in PayPal's own examples; the spec does not name it",
+        evidence="A sandbox dispute needs the sandbox buyer to open one in PayPal's resolution centre, so it has not "
+        "run there yet. The evidence's JSON part is named input, as in PayPal's own examples: the spec names none",
         prompts="56",
     ),
     Product(
@@ -165,11 +165,14 @@ PRODUCTS: tuple[Product, ...] = (
     Product(
         key="mcp",
         name="PayPal's MCP server",
-        used_for="An ops agent that works through PayPal's own MCP server",
-        calls=(),
-        code="",
-        state="not built",
-        evidence="Prompt 55",
+        used_for="The ops agent: OpenStall's records checked against PayPal, and an operator's questions answered, "
+        "through the server's read tools only; a tool that pays, refunds or accepts a claim is never offered",
+        calls=("npx @paypal/mcp@1.8.1 (stdio): get_order, list_disputes, get_dispute, get_shipment_tracking",),
+        code="packages/paypal/openstall_paypal/paypal_mcp.py, apps/api/openstall_api/paypal_ops.py",
+        state="proven",
+        evidence="Run on the sandbox on November 8 with scripts/paypal_ops.py: the server listed its 28 tools, and a "
+        "real sandbox order's check agreed on its status, amount and disputes. list_transactions needs the app's "
+        "Transaction Search permission, which is off",
         prompts="55",
     ),
     Product(

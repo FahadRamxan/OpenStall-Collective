@@ -1,6 +1,7 @@
 """The APIMatic cross-check (prompt 53): paypal-plan.md, the gateway's SDK calls and the installed SDK agree, and each
 kind of drift between them is found."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,7 @@ def test_each_product_says_how_far_it_has_got_and_why() -> None:
     for product in PRODUCTS:
         assert product.state in STATE_WORDS and product.evidence and product.used_for
         if product.state == "proven":
-            assert "November 3" in product.evidence, product.key  # proven means run on the sandbox, on a day
+            assert re.search(r"November \d+", product.evidence), product.key  # proven means run on the sandbox, on a day
         if product.state == "not built":
             assert (product.calls, product.code) == ((), ""), product.key
             assert f"Prompt {product.prompts}" in product.evidence, product.key

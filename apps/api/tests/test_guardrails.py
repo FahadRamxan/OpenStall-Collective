@@ -61,6 +61,7 @@ def test_the_panel_lists_every_attack_and_what_refuses_it(db):
         "forged_webhook",
         "reserve_unapproved",
         "pay_before_proof",
+        "refund_through_paypal_mcp",
         "flood",
         "tampered_passport",
     ]
@@ -128,10 +129,12 @@ def test_without_the_seeded_world_the_attacks_that_need_it_are_not_tried(db):
     assert outcomes["capture_tool"]["result"] == "refused"
     assert outcomes["forged_webhook"]["result"] == "refused"
     assert outcomes["flood"]["result"] == "refused"  # it needs nothing seeded
+    assert outcomes["refund_through_paypal_mcp"]["result"] == "refused"  # nor does this
     for key in ("below_floor", "changed_total", "reserve_unapproved", "pay_before_proof", "tampered_passport"):
         assert outcomes[key]["result"] == "not_tried", key
-    # Only refusals are recorded: the capture tool's, the forged webhook's, and the flood's with its limit.
-    assert len(rejections(db)) == 4
+    # Only refusals are recorded: the capture tool's, the forged webhook's, the refund's, and the flood's with its
+    # limit.
+    assert len(rejections(db)) == 5
 
 
 def test_in_sandbox_mode_the_panel_needs_the_demo_token(db, use_settings):

@@ -86,6 +86,7 @@ ROUTE_LIMITS: tuple[tuple[str, str, str], ...] = (
     ("POST", "/api/stall-orders", "stall_order"),
     ("POST", "/api/demo/", "demo"),
     ("POST", "/api/guardrails/", "demo"),
+    ("POST", "/api/paypal/ops/", "demo"),
 )
 
 

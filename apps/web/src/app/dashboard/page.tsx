@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { DashboardView } from "@/components/dashboard-view";
+import { PayPalOpsPanel } from "@/components/paypal-ops-panel";
 import { EventStreamProvider } from "@/hooks/use-event-stream";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -21,6 +22,7 @@ export default function DashboardPage() {
       </div>
       <EventStreamProvider>
         <DashboardView />
+        <PayPalOpsPanel />
       </EventStreamProvider>
     </section>
   );

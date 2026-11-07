@@ -6,11 +6,14 @@ import { expect, test, type Page } from "@playwright/test";
 // APIMatic cross-check still runs, on the repository's paypal-plan.md, the gateway's code and the installed SDK.
 const SCREENSHOTS = path.join(__dirname, "screenshots");
 
+// A product's row by the name its row header starts with: the header also holds what it is used for, which may name
+// another product ("disputes" in the MCP server's). The names asked for here are plain words.
 function product(page: Page, name: string) {
+  const starts = new RegExp(`^${name}`);
   return page
     .getByRole("table", { name: "PayPal products" })
     .getByRole("row")
-    .filter({ has: page.getByRole("rowheader", { name }) });
+    .filter({ has: page.getByRole("rowheader", { name: starts }) });
 }
 
 test("the PayPal doctor checks the setup, and each PayPal product says how far it has got", async ({ page }) => {

@@ -262,6 +262,9 @@ two takers cannot both win. `ClaimHeld` is answered with 409 by `orders_api.paym
   contains our tracking number. The first is not relied on for safety: an answer without a new tracker is read as
   unknown, never as success. If the second is wrong, a retry after a lost answer could add the tracking twice
   (PayPal does not dedupe this route); check the ids on the first real run and record them here.
+- **Outside this sheet: PayPal's MCP server (prompt 55).** The ops agent reads orders, disputes and tracking through
+  PayPal's own MCP server (`@paypal/mcp` 1.8.1), not through this SDK, and only with tools that read; it is not an
+  SDK call, so the cross-check does not list it. Payments and orders still move only through the operations above.
 - Not run: the claims tests on Postgres. There is no Postgres server on the development machine; the Postgres path
   is covered by a test that runs it on SQLite and counts one pooled connection per request.
 

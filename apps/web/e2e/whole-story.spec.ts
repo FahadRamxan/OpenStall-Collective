@@ -83,7 +83,9 @@ async function playTheStory(page: Page, run: number): Promise<Story> {
   const total = status.match(/drafted: (\$[\d,]+\.\d\d)/)?.[1] ?? "";
   expect(total).not.toBe("");
   const allocation = page.getByRole("region", { name: "Allocation", exact: true });
-  await expect(allocation).toContainText(/All 40 from \d+ makers, \$[\d,]+\.\d\d/);
+  // The panel follows the live feed and may still show the seeded plan for a moment: wait for this request's plan,
+  // whose total is the order's.
+  await expect(allocation).toContainText(`makers, ${total}`);
   const split = ((await allocation.textContent()) ?? "").match(/All 40 from \d+ makers, \$[\d,]+\.\d\d/)?.[0] ?? "";
   await expect(page.getByRole("region", { name: "Offers", exact: true })).toContainText("Valid");
 

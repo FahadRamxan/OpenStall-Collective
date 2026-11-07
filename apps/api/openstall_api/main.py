@@ -17,6 +17,7 @@ from openstall_api.demo_api import router as demo_router
 from openstall_api.dev_api import router as dev_router
 from openstall_api.limits import LimitsMiddleware, TooMany
 from openstall_api.doctor import router as doctor_router
+from openstall_api.paypal_ops import router as paypal_ops_router
 from openstall_api.events_api import router as events_router
 from openstall_api.fake_paypal_api import router as fake_paypal_router
 from openstall_api.feeds_api import router as feeds_router
@@ -88,6 +89,7 @@ def health() -> dict[str, str]:
 
 app.include_router(status_router)
 app.include_router(doctor_router)
+app.include_router(paypal_ops_router)
 app.include_router(events_router)
 app.include_router(catalog_router)
 app.include_router(search_router)

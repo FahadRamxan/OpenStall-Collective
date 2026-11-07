@@ -13,11 +13,11 @@ test("every attack on the guardrail panel is refused, and the live feed says so"
   const panel = page.getByRole("region", { name: "Try to break it" });
   await panel.scrollIntoViewIfNeeded();
   const attacks = panel.getByRole("list", { name: "Attacks" }).getByRole("listitem");
-  await expect(attacks).toHaveCount(8);
+  await expect(attacks).toHaveCount(9);
 
   await panel.getByRole("button", { name: "Try every attack" }).click();
 
-  await expect(panel.getByRole("status")).toHaveText("8 of 8 attacks refused");
+  await expect(panel.getByRole("status")).toHaveText("9 of 9 attacks refused");
   for (const row of await attacks.all()) {
     await expect(row.getByText("Refused", { exact: true })).toBeVisible();
   }
@@ -33,6 +33,8 @@ test("every attack on the guardrail panel is refused, and the live feed says so"
   await expect(passport).toContainText("Refused: the signature does not match.");
   const flood = panel.getByRole("listitem", { name: "Flood the MCP storefront from one address" });
   await expect(flood).toContainText("the other 30 got 429 Too Many Requests");
+  const refund = panel.getByRole("listitem", { name: "An AI agent refunds a payment through PayPal's MCP server" });
+  await expect(refund).toContainText("Refused before anything was sent (TOOL_REFUSED)");
   await page.screenshot({ path: path.join(SCREENSHOTS, "guardrails-1280.png"), fullPage: false });
 
   const feed = page.getByRole("region", { name: "Live activity" });
