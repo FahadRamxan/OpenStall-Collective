@@ -40,11 +40,21 @@ describe("FakePayPalView", () => {
     render(<FakePayPalView />);
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Simulated PayPal (test mode)");
-    expect(screen.getByRole("note")).toHaveTextContent("No PayPal account is used and no money moves.");
+    expect(screen.getByRole("note")).toHaveTextContent("No PayPal or Venmo account is used and no money moves.");
     const shares = within(await screen.findByRole("list", { name: "What you approve" })).getAllByRole("listitem");
     expect(shares[0]).toHaveTextContent("12 × Hand-embroidered cushion cover, Amina$216.00");
     expect(screen.getByText("$392.00")).toBeInTheDocument();
     expect(screen.getByText(/Approving reserves \$392.00/)).toBeInTheDocument();
+  });
+
+  it("stands in for Venmo when the order was made for Venmo", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...ORDER, funding: "venmo" })));
+
+    render(<FakePayPalView />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Simulated Venmo (test mode)" })).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("This page stands in for Venmo while OpenStall runs in fake mode.");
+    expect(screen.getByText(/asks you to approve order/)).toHaveTextContent("with Venmo.");
   });
 
   it("Approve approves the order and returns to OpenStall the way PayPal does", async () => {

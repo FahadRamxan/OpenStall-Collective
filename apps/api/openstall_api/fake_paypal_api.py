@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from openstall_api.adapters import AdapterRegistry, get_registry
 from openstall_api.events_api import fake_mode_only
 from openstall_api.webhooks import deliver_fake_webhooks
-from openstall_paypal import FakeGateway, FakeOrderView, PaymentError, PayPalOrderStatus
+from openstall_paypal import FakeGateway, FakeOrderView, Funding, PaymentError, PayPalOrderStatus
 
 router = APIRouter(prefix="/api/dev/fake-paypal", tags=["dev"], dependencies=[Depends(fake_mode_only)])
 
@@ -34,6 +34,7 @@ class FakePayPalOrder(BaseModel):
     total_usd: Decimal
     shares: list[FakeShare]
     cancel_url: str
+    funding: Funding = "paypal"  # "venmo": the page stands in for Venmo (prompt 57)
 
 
 class Redirect(BaseModel):
@@ -74,6 +75,7 @@ def view_order(token: str, gateway: GatewayDep) -> FakePayPalOrder:
             for part in view.request.parts
         ],
         cancel_url=view.request.cancel_url,
+        funding=view.request.funding,
     )
 
 

@@ -37,6 +37,7 @@ export function FakePayPalView() {
     return () => controller.abort();
   }, [token]);
 
+  const service = load.state === "loaded" && load.order.funding === "venmo" ? "Venmo" : "PayPal";
   return (
     <div className="mx-auto max-w-lg">
       <p
@@ -44,10 +45,13 @@ export function FakePayPalView() {
         className="flex flex-wrap items-center gap-2 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm leading-6"
       >
         <Badge tone="warning">Test mode</Badge>
-        <span>This page stands in for PayPal while OpenStall runs in fake mode. No PayPal account is used and no money moves.</span>
+        <span>
+          This page stands in for {service} while OpenStall runs in fake mode. No PayPal or Venmo account is used and no
+          money moves.
+        </span>
       </p>
       <div className="mt-6 rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Simulated PayPal (test mode)</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Simulated {service} (test mode)</h1>
         {!token ? (
           <Problem message="This link has no checkout in it. Go back to the order and press Approve." />
         ) : load.state === "loading" ? (
@@ -92,7 +96,8 @@ function Checkout({ order }: { order: FakePayPalOrder }) {
   return (
     <>
       <p className="mt-2 text-muted">
-        OpenStall Collective asks you to approve order <span className="font-mono">{order.order_id}</span>.
+        OpenStall Collective asks you to approve order <span className="font-mono">{order.order_id}</span>
+        {order.funding === "venmo" ? " with Venmo" : ""}.
       </p>
       <p className="mt-6 text-sm font-semibold text-muted">Total</p>
       <p className="text-4xl font-semibold tracking-tight tabular-nums">{total}</p>

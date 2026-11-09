@@ -23,6 +23,7 @@ from openstall_paypal import (
     Checkout,
     CheckoutPart,
     CheckoutRequest,
+    Funding,
     PaymentError,
     PaymentGateway,
     PaymentUnavailable,
@@ -88,7 +89,7 @@ def share_description(part: OrderPart) -> str:
     return f"{part.quantity} × {title}, {part.seller.name}"
 
 
-def checkout_request(order: Order, web_base_url: str) -> CheckoutRequest:
+def checkout_request(order: Order, web_base_url: str, funding: Funding = "paypal") -> CheckoutRequest:
     """The whole order for PayPal: one share per seller, amounts from our own rows, never from a caller."""
     return CheckoutRequest(
         order_id=order.id,
@@ -104,23 +105,28 @@ def checkout_request(order: Order, web_base_url: str) -> CheckoutRequest:
         ),
         return_url=f"{web_base_url}/approve/{order.id}/return",
         cancel_url=f"{web_base_url}/approve/{order.id}?cancelled=1",
+        funding=funding,
     )
 
 
-def start_checkout(session: Session, order_id: str, gateway: PaymentGateway, web_base_url: str) -> Checkout:
+def start_checkout(
+    session: Session, order_id: str, gateway: PaymentGateway, web_base_url: str, funding: Funding = "paypal"
+) -> Checkout:
     """Create the PayPal order for the whole amount and say where the human approves it. The caller commits.
 
     Pressing Approve again returns the same PayPal order (the gateway's idempotency key is our order id). If the
     human already approved it and only the reservation is missing, they go straight to the return page instead.
+    Venmo (prompt 57) is its own PayPal order, made for Venmo, under its own key: the order then points at the one
+    the buyer is approving now, which is the one reserved.
     """
     order = load_order(session, order_id)
     if order.status not in CHECKOUT_FROM:
         raise WrongStatus(f"Order {order.id} is {STATUS_WORDS[order.status]}, so it cannot go to PayPal again.")
-    request = checkout_request(order, web_base_url)
+    request = checkout_request(order, web_base_url, funding)
     with paypal_claim(
         session,
-        f"checkout:{order.id}",
-        f"openstall-checkout-{order.id}",
+        f"checkout:{request.key}",
+        f"openstall-checkout-{request.key}",
         busy=f"Order {order.id} is being sent to PayPal by another request. Try again in a moment.",
     ) as claim:
         checkout = gateway.create_checkout(request)
@@ -136,10 +142,10 @@ def start_checkout(session: Session, order_id: str, gateway: PaymentGateway, web
         record_event(
             session,
             EventType.ORDER_CHECKOUT_STARTED,
-            f"Order {order.id} went to PayPal: ${request.total_usd:,.2f} to reserve for {makers} "
-            f"{'maker' if makers == 1 else 'makers'}",
+            f"Order {order.id} went to PayPal{' to be paid with Venmo' if funding == 'venmo' else ''}: "
+            f"${request.total_usd:,.2f} to reserve for {makers} {'maker' if makers == 1 else 'makers'}",
             entity_id=order.id,
-            payload={"paypal_order_id": checkout.paypal_order_id, "total_usd": request.total_usd},
+            payload={"paypal_order_id": checkout.paypal_order_id, "total_usd": request.total_usd, "funding": funding},
         )
     return checkout
 
@@ -199,12 +205,15 @@ def reserve_order(session: Session, order_id: str, gateway: PaymentGateway) -> O
         )
     move_order(order, OrderStatus.AUTHORIZED)
     order.approved_at = datetime.now(UTC)
+    order.paid_with = reservation.paid_with or state.paid_with
+    with_venmo = ", paid with Venmo" if order.paid_with == "venmo" else ""
     record_event(
         session,
         EventType.ORDER_AUTHORIZED,
-        f"PayPal reserved ${order.total_usd:,.2f} for order {order.id}. Nothing is taken until each maker ships",
+        f"PayPal reserved ${order.total_usd:,.2f} for order {order.id}{with_venmo}. Nothing is taken until each "
+        "maker ships",
         entity_id=order.id,
-        payload={"paypal_order_id": paypal_order_id, "total_usd": order.total_usd},
+        payload={"paypal_order_id": paypal_order_id, "total_usd": order.total_usd, "paid_with": order.paid_with},
     )
     return order
 

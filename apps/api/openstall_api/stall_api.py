@@ -17,6 +17,7 @@ from openstall_api.db import get_session
 from openstall_api.orders_api import OrderOut, _load, order_out
 from openstall_api.settings import Settings, get_settings
 from openstall_api.stall_orders import MAX_UNITS, StallOrderError, stall_order
+from openstall_paypal import sandbox_host
 
 router = APIRouter(prefix="/api", tags=["stall"])
 
@@ -49,10 +50,22 @@ class PayPalConfig(BaseModel):
     client_id: str | None
     currency: Literal["USD"] = "USD"
     intent: Literal["authorize"] = "authorize"  # approving reserves the money; each share is captured on proof
+    # Venmo's button, for a buyer in the US (prompt 57), and Pay Later's, off until it is proven with intent authorize.
+    venmo: bool = False
+    pay_later: bool = False
+    # PayPal's sandbox shows Venmo only to a buyer it takes to be in the US, so the JS SDK is told so there; never on
+    # PayPal's live host, where PayPal works out the buyer's country itself.
+    buyer_country: Literal["US"] | None = None
 
 
 @router.get("/paypal/config")
 def paypal_config(settings: Annotated[Settings, Depends(get_settings)]) -> PayPalConfig:
     if settings.OPENSTALL_MODE == "fake":
-        return PayPalConfig(mode="fake", client_id=None)
-    return PayPalConfig(mode="sandbox", client_id=settings.PAYPAL_CLIENT_ID or None)
+        return PayPalConfig(mode="fake", client_id=None, venmo=settings.PAYPAL_VENMO)
+    return PayPalConfig(
+        mode="sandbox",
+        client_id=settings.PAYPAL_CLIENT_ID or None,
+        venmo=settings.PAYPAL_VENMO,
+        pay_later=settings.PAYPAL_PAY_LATER,
+        buyer_country="US" if sandbox_host(settings.PAYPAL_API_BASE) else None,
+    )

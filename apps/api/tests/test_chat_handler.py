@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from openstall_agents.listing_reader import QUESTIONS
-from openstall_api.chat.handler import WELCOME
+from openstall_api.chat.handler import THANKS, WELCOME, turn
+from openstall_api.chat.voice import Heard
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
@@ -211,3 +212,17 @@ def test_the_web_chat_refuses_what_it_cannot_take(db, data, files, problem):
 
     assert response.status_code == 422
     assert problem in response.text
+
+
+@pytest.mark.parametrize("language", ["en", "ur", "hi", "es"])
+def test_with_nothing_to_ask_yet_she_is_thanked_in_her_own_language(language):
+    """A voice note before her listing can be read (no draft yet, no live listing) is answered in her language, not
+    always in English: the reply a seller gets in sandbox mode while her listing cannot be read."""
+    voice_note = [{"content_type": "audio/ogg", "key": "uploads/note.ogg"}]
+
+    replies = turn(None, False, "", voice_note, Heard(texts=("her words",), language=language), language=language)
+
+    expected = THANKS[language].format(what="your voice note")
+    assert [reply.text for reply in replies] == [expected]
+    assert ("Thank you, I have your voice note." in expected) == (language == "en")
+

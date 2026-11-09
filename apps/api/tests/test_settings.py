@@ -22,6 +22,8 @@ ENVIRONMENT = {
     "PAYPAL_API_BASE": "https://api-m.paypal.example",
     "PAYPAL_WEBHOOK_ID": "made-up-webhook-id",
     "PAYMENT_PATH": "multiparty",
+    "PAYPAL_VENMO": "false",
+    "PAYPAL_PAY_LATER": "true",
     "PAYPAL_SANDBOX_PAYEE_PRIYA": "priya-made-up@personal.example.com",
     "PAYPAL_SANDBOX_PAYEE_LUCIA": "lucia-made-up@personal.example.com",
     "PAYPAL_SANDBOX_PAYEE_NOOR": "noor-made-up@personal.example.com",
@@ -89,6 +91,7 @@ def test_with_nothing_set_the_app_runs_locally_in_fake_mode(use_settings, monkey
     assert settings.WEB_BASE_URL == "http://localhost:3000"
     assert settings.PAYPAL_API_BASE == "https://api-m.sandbox.paypal.com"
     assert settings.PAYMENT_PATH == "payouts"
+    assert (settings.PAYPAL_VENMO, settings.PAYPAL_PAY_LATER) == (True, False)
     assert settings.PAYPAL_SANDBOX_PAYEE_PRIYA is None
     assert settings.TWILIO_WHATSAPP_FROM == "whatsapp:+14155238886"
     assert settings.LLM_MODEL == "claude-sonnet-5-5"

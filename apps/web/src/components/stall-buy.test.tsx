@@ -111,6 +111,31 @@ describe("StallBuy", () => {
     expect(go).toHaveBeenCalledWith("/approve/ord_stall/return");
   });
 
+  it("in sandbox mode, a buyer who presses Venmo gets an order made for Venmo", async () => {
+    const calls = api({ mode: "sandbox", client_id: "made-up-client-id", currency: "USD", intent: "authorize", venmo: true });
+    let options: PayPalButtonsOptions | null = null;
+    const render_ = vi.fn(async () => {});
+    window.paypal = {
+      Buttons: (given) => {
+        options = given;
+        return { render: render_, close: vi.fn(async () => {}) };
+      },
+    };
+    render(<StallBuy product={PRODUCT} maker="Priya" go={vi.fn()} />);
+
+    await waitFor(() => expect(render_).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("Ship to (city)"), { target: { value: "Austin" } });
+    const resolve = vi.fn(async () => {});
+    await waitFor(async () => {
+      await options!.onClick?.({}, { resolve, reject: vi.fn(async () => {}) });
+      expect(resolve).toHaveBeenCalled();
+    });
+    expect(await options!.createOrder({ paymentSource: "venmo" })).toBe("PAYPAL-1");
+
+    const checkout = calls.find((call) => call.path === "/api/orders/ord_stall/checkout");
+    expect(checkout?.body).toEqual({ funding: "venmo" });
+  });
+
   it("says so when sandbox mode has no PayPal client id", async () => {
     api({ mode: "sandbox", client_id: null, currency: "USD", intent: "authorize" });
 

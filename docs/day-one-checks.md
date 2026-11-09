@@ -8,7 +8,7 @@ Results of the October 30 checks from section 6 of the spec. Fill in each row as
 |---|---|---|---|
 | 1 | Register on Devpost | Eligibility checked Oct 30: Pakistan is not excluded. Registration pending | Representative: |
 | 2 | PayPal Developer account and sandbox REST app | Done Nov 3: the team's developer account, registered in Saudi Arabia (Pakistan is not on PayPal's country list) | Sandbox REST app `APP-782636354A163394T`; its keys are in `.env`, never in git |
-| 3 | Sandbox accounts: 1 platform, 4 sellers, 2 buyers | Partly: the app's default business account (platform) and one personal buyer (SA) | Still to create: personal accounts for Priya (IN), Lucía (MX) and Noor (GB) as payout receivers, and a US buyer for Venmo and Pay Later tests |
+| 3 | Sandbox accounts: 1 platform, 4 sellers, 2 buyers | Done Nov 9: the app's default business account (platform, SA), personal accounts for Priya (IN), Lucía (MX) and Noor (GB) as payout receivers, and buyers in SA and the US; Transaction Search turned on for the app | Amina (Hyperwallet) and Grace (Venmo) are paid on simulated rails, so they need no account. Venmo and Pay Later at checkout need a US business account, which the platform is not (SA) |
 | 4 | Create and capture one order with 2 or more payees | Answered Nov 3, no: Orders v2 (schema v2.36) does not support intent AUTHORIZE with more than one purchase unit, so a multi-payee order cannot do pay-on-proof | See "Payment path" |
 | 5 | Payouts path | Done Nov 3: one authorization, several partial captures, tracking on each capture, a final capture, a void and a payout all work in the sandbox | See "Sandbox proof" below |
 | 6 | Public repo with MIT license, `.gitignore`, `.env.example` | Repo created Oct 30. Scaffold committed locally; push waits for collaborator access | https://github.com/FahadRamxan/OpenStall-Collective |
@@ -78,13 +78,15 @@ Sandbox emails and merchant IDs only.
 
 | Role | Sandbox email | Merchant ID | Country |
 |---|---|---|---|
-| Platform | The default business account of app `APP-782636354A163394T` | | |
-| Seller: Amina | | | |
-| Seller: Priya | | | |
-| Seller: Lucía | | | |
-| Seller: Grace | | | |
+| Platform | sb-0yrcl53692583@business.example.com, the default business account of app `APP-782636354A163394T` | | SA |
+| Seller: Amina | None: paid to her bank through Hyperwallet, simulated | | PK |
+| Seller: Priya | sb-e437yj53750314@personal.example.com (`PAYPAL_SANDBOX_PAYEE_PRIYA`) | | IN |
+| Seller: Lucía | sb-abthj53620158@personal.example.com (`PAYPAL_SANDBOX_PAYEE_LUCIA`) | | MX |
+| Seller: Noor | sb-oalci53802401@personal.example.com (`PAYPAL_SANDBOX_PAYEE_NOOR`) | | GB |
+| Seller: Grace | None: paid on Venmo, which PayPal's sandbox does not run, so simulated | | US |
 | Buyer 1 | sb-3xa9q53624080@personal.example.com | Payer id MH7HMZY6WN7NL | SA |
-| Buyer 2 | | | |
+| Buyer 2 (for judges) | sb-tvcbp53813145@personal.example.com: its login goes in the Devpost testing instructions only | | US |
+| Spare | sb-mkuak53624076@personal.example.com | | SA |
 
 ## Model providers
 

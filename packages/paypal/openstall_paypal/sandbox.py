@@ -42,6 +42,8 @@ from paypal.models import (
     PayPalWallet,
     PayPalWalletExperienceContext,
     PurchaseUnitRequest,
+    VenmoWalletExperienceContext,
+    VenmoWalletRequest,
 )
 from paypal.models.enums import (
     CheckoutPaymentIntent,
@@ -49,6 +51,8 @@ from paypal.models.enums import (
     OrderStatus,
     PayPalExperienceUserAction,
     PayPalWalletContextShippingPreference,
+    VenmoWalletExperienceContextShippingPreference,
+    VenmoWalletExperienceContextUserAction,
 )
 
 from openstall_paypal.client import PayPalClient, PayPalError, PayPalUnavailable
@@ -59,6 +63,7 @@ from openstall_paypal.gateway import (
     WHOLE_ORDER,
     Checkout,
     CheckoutRequest,
+    Funding,
     OrderState,
     Payment,
     PaymentError,
@@ -93,6 +98,45 @@ def approval_link(order: Order) -> str:
     if not href:
         raise PaymentError("NO_APPROVAL_LINK", f"PayPal created order {order_id_of(order)} without an approval link")
     return href
+
+
+def paid_with(order: Order | OrderAuthorizeResponse) -> Funding | None:
+    """What the order is paid with, as PayPal's answer says: Venmo or a PayPal wallet; None when it says neither."""
+    source = order.payment_source
+    if isinstance(source, UnsetType):
+        return None
+    if not isinstance(source.venmo, UnsetType):
+        return "venmo"
+    if not isinstance(source.paypal, UnsetType):
+        return "paypal"
+    return None
+
+
+def payment_source(request: CheckoutRequest) -> PaymentSource:
+    """How the buyer approves: PayPal's checkout page, which sends them back to our return page, or Venmo, for a buyer
+    in the US, approved in PayPal's JS SDK (Venmo's experience context has no return or cancel URL). The agent's
+    request already says where the order goes, so neither asks for a shipping address."""
+    if request.funding == "venmo":
+        return PaymentSource(
+            venmo=VenmoWalletRequest(
+                experience_context=VenmoWalletExperienceContext(
+                    brand_name=BRAND_NAME,
+                    shipping_preference=VenmoWalletExperienceContextShippingPreference.NO_SHIPPING,
+                    user_action=VenmoWalletExperienceContextUserAction.PAY_NOW,
+                )
+            )
+        )
+    return PaymentSource(
+        paypal=PayPalWallet(
+            experience_context=PayPalWalletExperienceContext(
+                brand_name=BRAND_NAME,
+                shipping_preference=PayPalWalletContextShippingPreference.NO_SHIPPING,
+                user_action=PayPalExperienceUserAction.PAY_NOW,
+                return_url=request.return_url,
+                cancel_url=request.cancel_url,
+            )
+        )
+    )
 
 
 def holds_of(order: Order | OrderAuthorizeResponse) -> dict[str, str]:
@@ -170,34 +214,28 @@ class SandboxGateway:
         return OrderRequest(
             intent=CheckoutPaymentIntent.AUTHORIZE,
             purchase_units=self.purchase_units(request),
-            payment_source=PaymentSource(
-                paypal=PayPalWallet(
-                    experience_context=PayPalWalletExperienceContext(
-                        brand_name=BRAND_NAME,
-                        # The agent's request already says where it goes.
-                        shipping_preference=PayPalWalletContextShippingPreference.NO_SHIPPING,
-                        user_action=PayPalExperienceUserAction.PAY_NOW,
-                        return_url=request.return_url,
-                        cancel_url=request.cancel_url,
-                    )
-                )
-            ),
+            payment_source=payment_source(request),
         )
 
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
         body = self.order_body(request)  # first, so a seller with no PayPal account stops it before PayPal is asked
         order = self.sdk.call(
             lambda: self.sdk.client.orders.create_order(
-                body, pay_pal_request_id=f"openstall-checkout-{request.order_id}", prefer=REPRESENTATION
+                body, pay_pal_request_id=f"openstall-checkout-{request.key}", prefer=REPRESENTATION
             )
         )
         if isinstance(order.id, UnsetType):  # it may have been created: read it back rather than guess
             raise PaymentUnavailable("PAYPAL_UNREADABLE", f"PayPal sent no order id for order {request.order_id}")
+        if request.funding == "venmo":
+            # Approved in PayPal's JS SDK by its order id: Venmo has no page to send the buyer to, so no link is
+            # needed; one PayPal sends anyway is kept.
+            links = {} if isinstance(order.links, UnsetType) else {link.rel: link.href for link in order.links}
+            return Checkout(order.id, links.get("payer-action") or links.get("approve") or "")
         return Checkout(order.id, approval_link(order))
 
     def get_order(self, paypal_order_id: str) -> OrderState:
         order = self.sdk.call(lambda: self.sdk.client.orders.get_order(paypal_order_id))
-        return OrderState(order_status(order), holds_of(order), trackers_of(order))
+        return OrderState(order_status(order), holds_of(order), trackers_of(order), paid_with=paid_with(order))
 
     def add_tracking(self, tracking: Tracking) -> str:
         """Her tracking on her capture (`create_order_tracking`). This route takes no PayPal-Request-Id, so the caller
@@ -242,7 +280,7 @@ class SandboxGateway:
         holds = holds_of(answer)
         if not holds:
             raise PaymentError("NO_AUTHORIZATION", f"PayPal authorized order {paypal_order_id} but sent no authorization")
-        return Reservation(paypal_order_id, holds)
+        return Reservation(paypal_order_id, holds, paid_with=paid_with(answer))
 
     def capture(self, share: Share, body: CaptureRequest) -> str:
         """Capture from the share's authorization; PayPal's capture id."""

@@ -216,6 +216,12 @@ function Receipt({
           Test mode: a simulated PayPal stands in for PayPal, and no money moves.
         </p>
       ) : null}
+      {order.paid_with === "venmo" ? (
+        <p className="mt-3 text-sm font-medium">
+          Approved with Venmo{simulated ? " (simulated)" : ""}: PayPal holds the money the same way, and each maker is
+          paid when she ships.
+        </p>
+      ) : null}
       <p role="status" className="mt-3 text-sm font-medium">
         {awaitingPayPal(order) ? (
           <span className="text-muted">Waiting for {payPal} to confirm each share…</span>

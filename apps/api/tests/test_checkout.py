@@ -166,6 +166,58 @@ def test_approving_on_the_simulated_page_returns_like_paypal_does(demo_order, fa
     assert fakes.payment_gateway.view(token).status == "APPROVED"
 
 
+# Venmo at the approval (prompt 57).
+
+
+def test_a_venmo_checkout_is_its_own_paypal_order_and_says_so_in_the_feed(demo_order, fakes):
+    paypal_order = checkout().json()["paypal_order_id"]
+    venmo = client.post(f"/api/orders/{DEMO_ORDER_ID}/checkout", json={"funding": "venmo"})
+
+    assert venmo.status_code == 200
+    assert venmo.json()["paypal_order_id"] != paypal_order
+    request = fakes.payment_gateway.calls[-1][1]
+    assert request.funding == "venmo" and request.total_usd == Decimal("815.00")
+    demo_order.expire_all()
+    assert demo_order.get(Order, DEMO_ORDER_ID).paypal_order_id == venmo.json()["paypal_order_id"]  # the one approved now
+    assert checkout_events(demo_order)[-1].payload_json["summary"] == (
+        "Order ord_demo went to PayPal to be paid with Venmo: $815.00 to reserve for 4 makers"
+    )
+    assert client.get(f"/api/dev/fake-paypal/{venmo.json()['paypal_order_id']}").json()["funding"] == "venmo"
+
+
+def test_an_order_approved_with_venmo_is_reserved_and_says_it_was_paid_with_venmo(demo_order, fakes):
+    token = client.post(f"/api/orders/{DEMO_ORDER_ID}/checkout", json={"funding": "venmo"}).json()["paypal_order_id"]
+    client.post(f"/api/dev/fake-paypal/{token}/approve")
+
+    reserved = client.post(f"/api/orders/{DEMO_ORDER_ID}/reserve")
+
+    assert reserved.status_code == 200
+    assert reserved.json()["status"] == "authorized" and reserved.json()["paid_with"] == "venmo"
+    demo_order.expire_all()
+    [event] = demo_order.scalars(select(Event).where(Event.type == EventType.ORDER_AUTHORIZED))
+    assert event.payload_json["summary"] == (
+        "PayPal reserved $815.00 for order ord_demo, paid with Venmo. Nothing is taken until each maker ships"
+    )
+
+
+def test_an_order_approved_with_paypal_says_so_and_a_draft_says_nothing(demo_order):
+    assert client.get(f"/api/orders/{DEMO_ORDER_ID}").json()["paid_with"] is None
+    token = checkout().json()["paypal_order_id"]
+    client.post(f"/api/dev/fake-paypal/{token}/approve")
+
+    assert client.post(f"/api/orders/{DEMO_ORDER_ID}/reserve").json()["paid_with"] == "paypal"
+
+
+def test_venmo_is_refused_when_it_is_not_offered(demo_order, fakes, use_settings):
+    use_settings(PAYPAL_VENMO="false")
+
+    response = client.post(f"/api/orders/{DEMO_ORDER_ID}/checkout", json={"funding": "venmo"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Venmo is not offered here: approve with PayPal."
+    assert fakes.payment_gateway.calls == []
+
+
 def test_an_unknown_simulated_checkout_explains_what_to_do(db):
     response = client.get("/api/dev/fake-paypal/FAKE-0000")
 

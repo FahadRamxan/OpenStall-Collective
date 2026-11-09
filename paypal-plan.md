@@ -98,7 +98,7 @@ Check the part name on the first real sandbox dispute.
 
 | Operation | Positional | Keywords we pass | Returns (parsed) | Error union (`ApiError.error`) |
 | --- | --- | --- | --- | --- |
-| `orders.create_order` | `body: OrderRequest \| OrderRequestDict` | `pay_pal_request_id="openstall-checkout-{order_id}"`, `prefer="return=representation"` (default `"return=minimal"`) | `Order` | `CreateOrderErrorBody = Error \| RawError`; `Error` from 400, 401, 422 |
+| `orders.create_order` | `body: OrderRequest \| OrderRequestDict` | `pay_pal_request_id="openstall-checkout-{order_id}"` (`"openstall-checkout-{order_id}-venmo"` for a Venmo order, prompt 57: its own PayPal order, so trying one way then the other never returns the wrong one), `prefer="return=representation"` (default `"return=minimal"`) | `Order` | `CreateOrderErrorBody = Error \| RawError`; `Error` from 400, 401, 422 |
 | `orders.get_order` | `id_: str` | none (`fields` left default) | `Order` | `GetOrderErrorBody = Error \| RawError`; `Error` from 401, 404 |
 | `orders.authorize_order` | `id_: str` | `pay_pal_request_id="openstall-reserve-{paypal_order_id}"`, `prefer="return=representation"`, `body=OrderAuthorizeRequest()` (serializes to `{}`) | `OrderAuthorizeResponse` | `AuthorizeOrderErrorBody = Error \| RawError`; `Error` from 400, 401, 403, 404, 422, 500 |
 | `payments.capture_authorized_payment` | `authorization_id: str` | `pay_pal_request_id="openstall-capture-{part_id}"`, `prefer="return=representation"`, `body=CaptureRequest(...)` | `CapturedPayment` | `CaptureAuthorizedPaymentErrorBody = Error \| RawError`; `Error` from 400, 401, 403, 404, 409, 422; 500 is `RawError` |
@@ -124,9 +124,11 @@ also treat a `204` from PayPal as success, since we read nothing from a void's b
 | `Money` | `currency_code: str`, `value: str` | money is a `str` scaled to the currency: `f"{amount:.2f}"` for USD from a `Decimal` |
 | `PayeeBase` | none | `merchant_id` or `email_address` |
 | `ItemRequest` | `name: str`, `unit_amount: Money`, `quantity: str` | `name`, `sku`, `quantity="1"`, `unit_amount`, `category` |
-| `PaymentSource` | none | `paypal: PayPalWallet` |
+| `PaymentSource` | none | `paypal: PayPalWallet`, or `venmo: VenmoWalletRequest` for a Venmo order (prompt 57); never both |
 | `PayPalWallet` | none | `experience_context: PayPalWalletExperienceContext` |
 | `PayPalWalletExperienceContext` | none | `brand_name`, `shipping_preference`, `user_action`, `return_url`, `cancel_url`. Members with real defaults are **always sent**: `contact_preference="NO_CONTACT_INFO"`, `landing_page="NO_PREFERENCE"`, `payment_method_preference="UNRESTRICTED"` (and `shipping_preference`/`user_action`, which we set). |
+| `VenmoWalletRequest` | none | `experience_context: VenmoWalletExperienceContext` (`vault_id`, `email_address`, `attributes` left out) |
+| `VenmoWalletExperienceContext` | none | `brand_name`, `shipping_preference`, `user_action`. It has **no** `return_url` or `cancel_url`: a Venmo order is approved in PayPal's JS SDK by its id, never by a redirect, so `create_checkout` keeps any link PayPal sends and needs none. Its real default `user_action=CONTINUE` is overridden with `PAY_NOW`; `order_update_callback_config` is left out |
 | `OrderAuthorizeRequest` | none | nothing: `{}` |
 | `CaptureRequest` | none (`final_capture: bool = False` has a real default, always sent) | `invoice_id`, `final_capture`, and `amount` on the payouts path |
 | `OrderTrackerRequest` | `capture_id: str` (`notify_payer: bool = False` has a real default, always sent) | `capture_id`, `tracking_number`, `carrier: ShipmentCarrierOrStr`, `carrier_name_other` (only when `carrier` is `OTHER`), `notify_payer=False` (PayPal's app may still tell the payer; we send no extra email per parcel); `items` left out |
@@ -140,6 +142,8 @@ The request body is dumped with `UNSET` stripped (`core/bodies.py`, `strip_unset
 | `CheckoutPaymentIntent` | `AUTHORIZE` |
 | `PayPalWalletContextShippingPreference` | `NO_SHIPPING` |
 | `PayPalExperienceUserAction` | `PAY_NOW` |
+| `VenmoWalletExperienceContextShippingPreference` | `NO_SHIPPING` |
+| `VenmoWalletExperienceContextUserAction` | `PAY_NOW` (members `CONTINUE`, `PAY_NOW`) |
 | `ItemCategory` | `PHYSICAL_GOODS` |
 | `OrderStatus` (read) | `CREATED`, `SAVED`, `APPROVED`, `VOIDED`, `COMPLETED`, `PAYER_ACTION_REQUIRED`; an unknown wire value arrives as a `str` and is passed through as-is |
 | `ShipmentCarrier` (`paypal.models.enums.shipment_carrier`, 4,256 lines) | the demo's couriers, each checked to exist: `TCS` ("TCS courier"), `INDIA_POST`, `MEX_ESTAFETA` ("Estafeta"), `ROYAL_MAIL`, `PARCELFORCE`, `USPS`, `UPS`, `FEDEX`, `DHL`, `BLUEDART`, `IND_DELHIVERY`, `DTDC_IN`, `CORREOS_DE_MEXICO`; anything else is `OTHER` with the name in `carrier_name_other` (Leopards has no member; `OTHER` with "Leopards Courier" was accepted on the sandbox, docs/day-one-checks.md) |
@@ -151,6 +155,7 @@ The request body is dumped with `UNSET` stripped (`core/bodies.py`, `strip_unset
 | `Order` (create) | `id: Optional[str]`, `links: Optional[list[LinkDescription]]` | no `id` after a create: outcome unknown (`PaymentUnavailable`); no payer-action/approve link: `PaymentError("NO_APPROVAL_LINK")` |
 | `LinkDescription` | `href: str`, `rel: str` (**required**: the one 2xx shape here with required members, so a link without them fails to decode) | |
 | `Order` (get) | `status: Optional[OrderStatusOrStr]`, `purchase_units` | no `status`: outcome unknown (a read; `PaymentUnavailable`) |
+| `Order` / `OrderAuthorizeResponse` (paid with) | `payment_source: Optional[PaymentSourceResponse]` / `Optional[OrderAuthorizeResponsePaymentSource]`, each with `venmo` and `paypal` members | read by `sandbox.paid_with`: `venmo` set means Venmo, `paypal` set means a PayPal wallet, neither (or no `payment_source`) means unknown: `None`, never a guess |
 | `OrderAuthorizeResponse` | `purchase_units: Optional[list[PurchaseUnit]]` | no authorization: `PaymentError("NO_AUTHORIZATION")` (as today) |
 | `PurchaseUnit` | `reference_id: Optional[str]` (`"default"` when unset, as today), `payments: Optional[PaymentCollection]` | |
 | `PaymentCollection` | `authorizations: Optional[list[AuthorizationWithAdditionalData]]` | |

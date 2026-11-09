@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     PAYPAL_API_BASE: str = "https://api-m.sandbox.paypal.com"
     PAYPAL_WEBHOOK_ID: str | None = None
     PAYMENT_PATH: PaymentPath = "payouts"
+    # More ways for the buyer to approve (prompt 57). Venmo, for a buyer in the US, through PayPal's JS SDK. Pay Later
+    # stays off until an order that is only reserved (intent authorize) is proven with it on the sandbox.
+    PAYPAL_VENMO: bool = True
+    PAYPAL_PAY_LATER: bool = False
     # Sandbox personal accounts the seeded makers are paid to, in sandbox mode only (made in the Developer Dashboard
     # with country IN, MX and GB). Empty: that maker's payout rail is "not connected yet", and her share is never
     # captured. Grace is paid on Venmo, which the sandbox simulates; Amina is paid to her bank through Hyperwallet,

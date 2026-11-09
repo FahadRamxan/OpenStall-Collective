@@ -4,8 +4,8 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { errorMessage } from "@/lib/api";
 import { formatUsd, type Product } from "@/lib/catalog";
-import { reserveOrder, startCheckout } from "@/lib/orders";
-import { createStallOrder, getPayPalConfig, loadPayPal, type PayPalConfig } from "@/lib/stall-orders";
+import { reserveOrder, startCheckout, type Funding } from "@/lib/orders";
+import { createStallOrder, fundingOf, getPayPalConfig, loadPayPal, type PayPalConfig } from "@/lib/stall-orders";
 
 /** The most a person can buy at a stall; more goes through a quote, where the collective can split it. */
 export const MAX_UNITS = 50;
@@ -60,13 +60,13 @@ export function StallBuy({
   }
 
   /** Draft the purchase and send it to PayPal: the PayPal order to approve. */
-  async function toPayPal(): Promise<{ orderId: string; paypalOrderId: string; approvalUrl: string }> {
+  async function toPayPal(funding: Funding = "paypal"): Promise<{ orderId: string; paypalOrderId: string; approvalUrl: string }> {
     const order = await createStallOrder({
       product_id: product.id,
       quantity: chosen.current.quantity,
       ship_to: chosen.current.city.trim(),
     });
-    const checkout = await startCheckout(order.id);
+    const checkout = await startCheckout(order.id, funding);
     orderId.current = order.id;
     return { orderId: order.id, paypalOrderId: checkout.paypal_order_id, approvalUrl: checkout.approval_url };
   }
@@ -76,7 +76,7 @@ export function StallBuy({
     if (config?.mode !== "sandbox" || !config.client_id || !container) return;
     let drawn: { close?: () => Promise<void> } | null = null;
     let stopped = false;
-    loadPayPal(config.client_id)
+    loadPayPal(config)
       .then((paypal) => {
         if (stopped) return;
         drawn = paypal.Buttons({
@@ -86,10 +86,10 @@ export function StallBuy({
             setProblem(why);
             return why ? actions.reject() : actions.resolve();
           },
-          createOrder: async () => {
+          createOrder: async (data) => {
             setProblem(null);
             try {
-              return (await toPayPal()).paypalOrderId;
+              return (await toPayPal(fundingOf(data?.paymentSource))).paypalOrderId;
             } catch (error) {
               setProblem(errorMessage(error));
               throw error;

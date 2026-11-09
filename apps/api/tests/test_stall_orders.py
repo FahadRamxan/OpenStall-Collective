@@ -122,6 +122,9 @@ def test_the_page_learns_how_to_show_paypal_and_never_the_secret(db, use_setting
         "client_id": None,
         "currency": "USD",
         "intent": "authorize",
+        "venmo": True,
+        "pay_later": False,
+        "buyer_country": None,
     }
 
     use_settings(OPENSTALL_MODE="sandbox", PAYPAL_CLIENT_ID="made-up-client-id", PAYPAL_CLIENT_SECRET="made-up-secret")
@@ -129,3 +132,19 @@ def test_the_page_learns_how_to_show_paypal_and_never_the_secret(db, use_setting
 
     assert sandbox.json()["mode"] == "sandbox" and sandbox.json()["client_id"] == "made-up-client-id"
     assert "made-up-secret" not in sandbox.text
+    # PayPal's sandbox shows Venmo only to a buyer it takes to be in the US; Pay Later waits until it is proven.
+    assert (sandbox.json()["venmo"], sandbox.json()["pay_later"], sandbox.json()["buyer_country"]) == (True, False, "US")
+
+
+def test_venmo_and_pay_later_follow_their_settings_and_the_live_host_gets_no_buyer_country(db, use_settings):
+    use_settings(
+        OPENSTALL_MODE="sandbox",
+        PAYPAL_CLIENT_ID="made-up-client-id",
+        PAYPAL_CLIENT_SECRET="made-up-secret",
+        PAYPAL_API_BASE="https://api-m.paypal.com",
+        PAYPAL_VENMO="false",
+        PAYPAL_PAY_LATER="true",
+    )
+    config = client.get("/api/paypal/config").json()
+
+    assert (config["venmo"], config["pay_later"], config["buyer_country"]) == (False, True, None)

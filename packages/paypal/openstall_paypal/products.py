@@ -171,18 +171,24 @@ PRODUCTS: tuple[Product, ...] = (
         code="packages/paypal/openstall_paypal/paypal_mcp.py, apps/api/openstall_api/paypal_ops.py",
         state="proven",
         evidence="Run on the sandbox on November 8 with scripts/paypal_ops.py: the server listed its 28 tools, and a "
-        "real sandbox order's check agreed on its status, amount and disputes. list_transactions needs the app's "
-        "Transaction Search permission, which is off",
+        "real sandbox order's check agreed on its status, amount and disputes. On November 9, with Transaction Search "
+        "turned on, the ops agent ran on the real Claude: eight read-only calls, 9 transactions, no open disputes",
         prompts="55",
     ),
     Product(
         key="pay_later",
         name="Venmo and Pay Later at checkout",
-        used_for="More ways for the buyer to pay at the approval",
-        calls=(),
-        code="",
-        state="not built",
-        evidence="Prompt 57; Pay Later only if it is proven to work with intent authorize",
+        used_for="A buyer in the US approves with Venmo, on the approval page and a stall page: the order is made "
+        "for Venmo and is reserved, paid on proof and released like any order. Pay Later waits behind "
+        "PAYPAL_PAY_LATER until an order that is only reserved is proven with it",
+        calls=(
+            "https://www.paypal.com/sdk/js (enable-funding=venmo; buyer-country=US in the sandbox)",
+            "POST /v2/checkout/orders with payment_source.venmo",
+        ),
+        code="packages/paypal/openstall_paypal/sandbox.py, apps/web/src/components/approval-view.tsx",
+        state="built",
+        evidence="Built and tested in test mode, with a simulated Venmo page. Not run on the sandbox: PayPal offers "
+        "Venmo and Pay Later only to a US business account, and the sandbox app's is in Saudi Arabia",
         prompts="57",
     ),
 )

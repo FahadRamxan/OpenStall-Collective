@@ -28,6 +28,12 @@ PayoutRail = Literal["paypal", "venmo", "hyperwallet", "unavailable"]
 # Which payment path a gateway follows (docs/decisions.md, "Payment path: payouts only").
 PaymentPath = Literal["payouts", "multiparty"]
 
+# What the buyer approves the order with (prompt 57): a PayPal wallet (Pay Later is inside it), or Venmo, for a buyer
+# in the US. A Venmo order is made for Venmo (payment_source venmo) and approved with PayPal's JS SDK, as Venmo has no
+# redirect flow; everything after the approval is the same.
+Funding = Literal["paypal", "venmo"]
+FUNDING_NAMES: Mapping[Funding, str] = {"paypal": "PayPal", "venmo": "Venmo"}
+
 
 class PaymentError(Exception):
     """PayPal refused a request. `issue` is PayPal's issue code, for example "ORDER_NOT_APPROVED"."""
@@ -70,10 +76,17 @@ class CheckoutRequest:
     parts: tuple[CheckoutPart, ...]
     return_url: str
     cancel_url: str
+    funding: Funding = "paypal"
 
     @property
     def total_usd(self) -> Decimal:
         return sum((part.amount_usd for part in self.parts), Decimal("0.00"))
+
+    @property
+    def key(self) -> str:
+        """What makes this PayPal order ours: our order id, and the funding when it is not PayPal's wallet. A Venmo
+        order is its own PayPal order, so a buyer who tries one way and then the other gets each once."""
+        return self.order_id if self.funding == "paypal" else f"{self.order_id}-{self.funding}"
 
 
 @dataclass(frozen=True)
@@ -94,6 +107,7 @@ class Reservation:
 
     paypal_order_id: str
     holds: Mapping[str, str]
+    paid_with: Funding | None = None  # what PayPal says the buyer approved with; None when its answer does not say
 
     def hold_for(self, reference_id: str) -> str | None:
         return self.holds.get(reference_id) or self.holds.get(WHOLE_ORDER)
@@ -106,6 +120,7 @@ class OrderState:
     status: PayPalOrderStatus
     holds: Mapping[str, str]
     trackers: tuple[str, ...] = ()  # PayPal's tracker ids on the order, once makers' tracking is added
+    paid_with: Funding | None = None  # the order's payment source, as PayPal says it
 
 
 @dataclass(frozen=True)
@@ -309,7 +324,7 @@ class FakeGateway:
 
     def create_checkout(self, request: CheckoutRequest) -> Checkout:
         self.calls.append(("create_checkout", request))
-        paypal_order_id = "FAKE-" + hashlib.sha256(request.order_id.encode()).hexdigest()[:16].upper()
+        paypal_order_id = "FAKE-" + hashlib.sha256(request.key.encode()).hexdigest()[:16].upper()
         self._orders.setdefault(paypal_order_id, _FakeOrder(request))
         return Checkout(paypal_order_id, f"{self.web_base_url}/fake-paypal?token={paypal_order_id}")
 
@@ -337,13 +352,14 @@ class FakeGateway:
     def get_order(self, paypal_order_id: str) -> OrderState:
         self.calls.append(("get_order", paypal_order_id))
         order = self._order(paypal_order_id)
-        return OrderState(order.status, dict(order.holds), tuple(self._trackers.get(paypal_order_id, ())))
+        trackers = tuple(self._trackers.get(paypal_order_id, ()))
+        return OrderState(order.status, dict(order.holds), trackers, paid_with=order.request.funding)
 
     def reserve(self, paypal_order_id: str) -> Reservation:
         self.calls.append(("reserve", paypal_order_id))
         order = self._order(paypal_order_id)
         if order.status == "COMPLETED":  # already reserved: PayPal answers a repeated request with the first answer
-            return Reservation(paypal_order_id, dict(order.holds))
+            return Reservation(paypal_order_id, dict(order.holds), paid_with=order.request.funding)
         if order.status != "APPROVED":
             raise PaymentError("ORDER_NOT_APPROVED", f"the buyer has not approved order {paypal_order_id}")
         if self.path == "payouts":
@@ -351,7 +367,7 @@ class FakeGateway:
         else:
             self._reserve_each_share(paypal_order_id, order)
         order.status = "COMPLETED"
-        return Reservation(paypal_order_id, dict(order.holds))
+        return Reservation(paypal_order_id, dict(order.holds), paid_with=order.request.funding)
 
     def _authorization_event(self, hold: str, amount: Decimal, order: _FakeOrder, paypal_order_id: str) -> None:
         self._send_event(

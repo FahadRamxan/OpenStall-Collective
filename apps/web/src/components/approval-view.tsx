@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
 import { RailChip } from "@/components/rail-chip";
@@ -15,10 +15,12 @@ import {
   canCheckout,
   formatDay,
   getOrder,
+  reserveOrder,
   startCheckout,
   type Order,
   type OrderPart,
 } from "@/lib/orders";
+import { getPayPalConfig, loadPayPal, type PayPalButtons, type PayPalConfig } from "@/lib/stall-orders";
 
 type Load =
   | { state: "loading" }
@@ -227,6 +229,7 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
                 {checkout.message}
               </p>
             ) : null}
+            <VenmoOption orderId={order.id} />
           </>
         ) : order.status === "cancelled" ? (
           <p className="text-muted">This order was cancelled, so there is nothing to approve.</p>
@@ -242,6 +245,101 @@ function Approval({ order, cancelled }: { order: Order; cancelled: boolean }) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+type VenmoState = { state: "idle" } | { state: "opening" } | { state: "failed"; message: string };
+
+/**
+ * Venmo, for a buyer in the US (prompt 57). The order is made for Venmo and then reserved, paid on proof and released
+ * like any order. Test mode: a simulated Venmo page. Sandbox mode: PayPal's own Venmo button, approved in PayPal's JS
+ * SDK (Venmo has no page to send the buyer to), shown only where PayPal offers it: a US buyer paying a US business.
+ */
+function VenmoOption({ orderId }: { orderId: string }) {
+  const [config, setConfig] = useState<PayPalConfig | null>(null);
+  const [venmo, setVenmo] = useState<VenmoState>({ state: "idle" });
+  const [offered, setOffered] = useState(true);
+  const button = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getPayPalConfig({ signal: controller.signal })
+      .then((value) => setConfig(value))
+      .catch(() => setConfig(null)); // no config, no Venmo: PayPal's own button above still works
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const container = button.current;
+    if (config?.mode !== "sandbox" || !config.venmo || !config.client_id || !container) return;
+    let drawn: PayPalButtons | null = null;
+    let stopped = false;
+    loadPayPal(config)
+      .then((paypal) => {
+        if (stopped) return;
+        drawn = paypal.Buttons({
+          fundingSource: paypal.FUNDING?.VENMO ?? "venmo",
+          style: { shape: "pill", label: "pay" },
+          createOrder: async () => (await startCheckout(orderId, "venmo")).paypal_order_id,
+          onApprove: async () => {
+            await reserveOrder(orderId);
+            goTo(`/approve/${encodeURIComponent(orderId)}/return`);
+          },
+          onCancel: () => setVenmo({ state: "failed", message: "You closed Venmo before approving: nothing was reserved." }),
+          onError: (error) => setVenmo({ state: "failed", message: `Venmo stopped: ${errorMessage(error)}` }),
+        });
+        if (drawn.isEligible && !drawn.isEligible()) {
+          setOffered(false);
+          return;
+        }
+        void drawn.render(container);
+      })
+      .catch((error: unknown) => setVenmo({ state: "failed", message: errorMessage(error) }));
+    return () => {
+      stopped = true;
+      void drawn?.close?.();
+    };
+  }, [config, orderId]);
+
+  async function payWithSimulatedVenmo() {
+    setVenmo({ state: "opening" });
+    try {
+      goTo((await startCheckout(orderId, "venmo")).approval_url);
+    } catch (error) {
+      setVenmo({ state: "failed", message: errorMessage(error) });
+    }
+  }
+
+  if (!config?.venmo || (config.mode === "sandbox" && !config.client_id)) return null;
+  return (
+    <div className="mt-6 border-t border-border pt-5">
+      <p className="text-sm font-semibold">Or pay with Venmo</p>
+      <p id="venmo-note" className="mt-1 text-sm leading-6 text-muted">
+        For buyers in the US. The money is held the same way, and each maker is paid when she ships.
+      </p>
+      {config.mode === "fake" ? (
+        <button
+          type="button"
+          onClick={payWithSimulatedVenmo}
+          disabled={venmo.state === "opening"}
+          aria-describedby="venmo-note"
+          className="mt-3 inline-flex min-h-11 items-center rounded-full border border-border px-5 text-sm font-semibold hover:bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-70"
+        >
+          {venmo.state === "opening" ? "Opening simulated Venmo…" : "Pay with simulated Venmo"}
+        </button>
+      ) : offered ? (
+        <div ref={button} aria-label="Venmo's button" className="mt-3 max-w-xs" />
+      ) : (
+        <p className="mt-3 text-sm text-muted">
+          PayPal doesn&apos;t offer Venmo here: it is for a buyer in the US paying a US business.
+        </p>
+      )}
+      {venmo.state === "failed" ? (
+        <p role="alert" className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm">
+          {venmo.message}
+        </p>
+      ) : null}
     </div>
   );
 }

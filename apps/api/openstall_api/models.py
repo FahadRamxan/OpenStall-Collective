@@ -274,6 +274,8 @@ class Order(Base):
     total_usd: Mapped[Decimal] = mapped_column(Money())
     paypal_order_id: Mapped[str | None] = mapped_column(String(64), unique=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # What the buyer approved it with, as PayPal's reservation says: "paypal" or "venmo" (prompt 57).
+    paid_with: Mapped[str | None] = mapped_column(String(16))
     # Who drafted it: "mcp" for a buyer agent's create_collective_order, "stall" for a person buying on a stall page
     # (prompt 42), "replan" for a top-up (prompt 39), None for a seeded or demo order (prompt 28).
     source: Mapped[str | None] = mapped_column(String(16))

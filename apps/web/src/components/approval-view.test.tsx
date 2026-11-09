@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApprovalView } from "@/components/approval-view";
 import { goTo } from "@/lib/navigation";
 import { formatDay, type Order } from "@/lib/orders";
+import type { PayPalButtonsOptions } from "@/lib/stall-orders";
 
 const params = { orderId: "ord_demo" };
 const search = { params: new URLSearchParams() };
@@ -11,6 +12,27 @@ vi.mock("next/navigation", () => ({ useParams: () => params, useSearchParams: ()
 vi.mock("@/lib/navigation", () => ({ goTo: vi.fn() }));
 
 const CHECKOUT = { paypal_order_id: "FAKE-1", approval_url: "http://localhost:3000/fake-paypal?token=FAKE-1" };
+const FAKE_CONFIG = { mode: "fake", client_id: null, currency: "USD", intent: "authorize", venmo: true, pay_later: false, buyer_country: null };
+const SANDBOX_CONFIG = { ...FAKE_CONFIG, mode: "sandbox", client_id: "made-up-client-id", buyer_country: "US" };
+
+/** Answers by address: the order, how to show PayPal, and the checkout (a fresh copy each time, as a body reads once). */
+function stubApi({ order = ORDER as object, config = FAKE_CONFIG as object, checkout }: { order?: object; config?: object; checkout?: Response } = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void init;
+    const path = new URL(String(input)).pathname;
+    if (path === "/api/paypal/config") return Response.json(config);
+    if (path.endsWith("/checkout")) return checkout ? checkout.clone() : Response.json(CHECKOUT);
+    if (path.endsWith("/reserve")) return Response.json({ ...ORDER, status: "authorized" });
+    return Response.json(order);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function checkoutCall(fetchMock: ReturnType<typeof stubApi>) {
+  const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/checkout"));
+  return call ? { url: String(call[0]), init: call[1] as RequestInit } : null;
+}
 
 function share(name: string, quantity: number, price: string, amount: string, seller: string) {
   return {
@@ -66,6 +88,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  delete window.paypal;
 });
 
 describe("ApprovalView", () => {
@@ -172,31 +195,76 @@ describe("ApprovalView", () => {
   });
 
   it("Approve creates the PayPal order and goes to PayPal", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json(ORDER))
-      .mockResolvedValueOnce(Response.json(CHECKOUT));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubApi();
     render(<ApprovalView />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve and pay with PayPal" }));
 
     await vi.waitFor(() => expect(goTo).toHaveBeenCalledWith(CHECKOUT.approval_url));
-    const [url, init] = fetchMock.mock.calls[1];
-    expect(url).toBe("http://api.test/api/orders/ord_demo/checkout");
-    expect(init.method).toBe("POST");
+    const call = checkoutCall(fetchMock);
+    expect(call?.url).toBe("http://api.test/api/orders/ord_demo/checkout");
+    expect(call?.init.method).toBe("POST");
+    expect(JSON.parse(String(call?.init.body))).toEqual({}); // PayPal's own checkout: no funding named
     expect(screen.getByRole("button", { name: "Opening PayPal…" })).toBeDisabled();
+  });
+
+  it("offers Venmo in test mode: the order is made for Venmo and goes to the simulated Venmo page", async () => {
+    const venmo = { paypal_order_id: "FAKE-V", approval_url: "http://localhost:3000/fake-paypal?token=FAKE-V" };
+    const fetchMock = stubApi({ checkout: Response.json(venmo) });
+    render(<ApprovalView />);
+
+    const button = await screen.findByRole("button", { name: "Pay with simulated Venmo" });
+    expect(button).toHaveAccessibleDescription("For buyers in the US. The money is held the same way, and each maker is paid when she ships.");
+    fireEvent.click(button);
+
+    await vi.waitFor(() => expect(goTo).toHaveBeenCalledWith(venmo.approval_url));
+    expect(JSON.parse(String(checkoutCall(fetchMock)?.init.body))).toEqual({ funding: "venmo" });
+  });
+
+  it("offers no Venmo when OpenStall does not", async () => {
+    const fetchMock = stubApi({ config: { ...FAKE_CONFIG, venmo: false } });
+    render(<ApprovalView />);
+
+    await screen.findByRole("button", { name: "Approve and pay with PayPal" });
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/api/paypal/config"))).toBe(true),
+    );
+    expect(screen.queryByText("Or pay with Venmo")).not.toBeInTheDocument();
+  });
+
+  it("in sandbox mode, draws PayPal's Venmo button: it makes the order for Venmo, then reserves it once approved", async () => {
+    let options: PayPalButtonsOptions | null = null;
+    const drawn = vi.fn().mockResolvedValue(undefined);
+    window.paypal = {
+      FUNDING: { PAYPAL: "paypal", VENMO: "venmo", PAYLATER: "paylater" },
+      Buttons: (given) => {
+        options = given;
+        return { render: drawn, isEligible: () => true };
+      },
+    };
+    const fetchMock = stubApi({ config: SANDBOX_CONFIG, checkout: Response.json({ paypal_order_id: "VENMO-1", approval_url: "" }) });
+    render(<ApprovalView />);
+
+    await vi.waitFor(() => expect(drawn).toHaveBeenCalled());
+    expect(options!.fundingSource).toBe("venmo");
+    expect(await options!.createOrder()).toBe("VENMO-1");
+    expect(JSON.parse(String(checkoutCall(fetchMock)?.init.body))).toEqual({ funding: "venmo" });
+    await options!.onApprove();
+    expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/reserve") && init?.method === "POST")).toBe(true);
+    expect(goTo).toHaveBeenCalledWith("/approve/ord_demo/return");
+  });
+
+  it("in sandbox mode, says so when PayPal does not offer Venmo here", async () => {
+    window.paypal = { Buttons: () => ({ render: vi.fn(), isEligible: () => false }) };
+    stubApi({ config: SANDBOX_CONFIG });
+    render(<ApprovalView />);
+
+    expect(await screen.findByText(/PayPal doesn.t offer Venmo here: it is for a buyer in the US paying a US business./)).toBeInTheDocument();
   });
 
   it("says why checkout failed and lets the human try again", async () => {
     const refusal = { detail: "PayPal did not answer, so nothing was reserved or paid. Try again in a moment." };
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce(Response.json(ORDER))
-        .mockResolvedValueOnce(Response.json(refusal, { status: 503 })),
-    );
+    stubApi({ checkout: Response.json(refusal, { status: 503 }) });
     render(<ApprovalView />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve and pay with PayPal" }));
@@ -208,13 +276,7 @@ describe("ApprovalView", () => {
 
   it("after the human cancels at PayPal, says nothing was reserved, and Try again goes back", async () => {
     search.params = new URLSearchParams("cancelled=1");
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce(Response.json({ ...ORDER, status: "awaiting_approval" }))
-        .mockResolvedValueOnce(Response.json(CHECKOUT)),
-    );
+    stubApi({ order: { ...ORDER, status: "awaiting_approval" } });
     render(<ApprovalView />);
 
     const notice = await screen.findByRole("status");

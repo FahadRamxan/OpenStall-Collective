@@ -51,7 +51,7 @@ test("Approve, then approving at the simulated PayPal page, reserves every maker
 
   await expect(page).toHaveURL(/\/fake-paypal\?token=FAKE-[0-9A-F]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Simulated PayPal (test mode)");
-  await expect(page.getByRole("note")).toContainText("No PayPal account is used and no money moves.");
+  await expect(page.getByRole("note")).toContainText("No PayPal or Venmo account is used and no money moves.");
   await expect(page.getByText("$815.00", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "What you approve" }).getByRole("listitem")).toHaveCount(4);
   await page.screenshot({ path: path.join(SCREENSHOTS, "fake-paypal-1280.png"), fullPage: true });

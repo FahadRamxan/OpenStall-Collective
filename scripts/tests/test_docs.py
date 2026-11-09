@@ -53,6 +53,7 @@ UI_LABELS = [
     "Dispute this parcel at PayPal",
     "Check the latest order with PayPal",
     "Ask the ops agent",
+    "Pay with simulated Venmo",
     "API online",
     "API offline",
 ]

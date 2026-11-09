@@ -91,6 +91,20 @@ def test_reserving_needs_the_buyers_approval() -> None:
     assert error.value.issue == "ORDER_NOT_APPROVED"
 
 
+def test_a_venmo_checkout_is_its_own_simulated_order_and_says_it_was_paid_with_venmo() -> None:
+    gateway = FakeGateway()
+    paypal_order = gateway.create_checkout(ORDER)
+    venmo_order = gateway.create_checkout(replace(ORDER, funding="venmo"))
+
+    assert venmo_order.paypal_order_id != paypal_order.paypal_order_id
+    assert gateway.create_checkout(replace(ORDER, funding="venmo")) == venmo_order  # repeated: the same order
+    assert gateway.view(venmo_order.paypal_order_id).request.funding == "venmo"
+    gateway.approve(venmo_order.paypal_order_id)
+    assert gateway.reserve(venmo_order.paypal_order_id).paid_with == "venmo"
+    assert gateway.get_order(venmo_order.paypal_order_id).paid_with == "venmo"
+    assert gateway.get_order(paypal_order.paypal_order_id).paid_with == "paypal"
+
+
 def test_reserving_holds_each_share_and_a_repeat_returns_the_same_holds() -> None:
     gateway = FakeGateway(path="multiparty")
     reservation = reserved(gateway)
@@ -98,7 +112,7 @@ def test_reserving_holds_each_share_and_a_repeat_returns_the_same_holds() -> Non
 
     assert reservation.holds == {"op_001": f"{paypal_order_id}-AUTH-1", "op_002": f"{paypal_order_id}-AUTH-2"}
     assert gateway.reserve(paypal_order_id) == reservation
-    assert gateway.get_order(paypal_order_id) == OrderState("COMPLETED", reservation.holds)
+    assert gateway.get_order(paypal_order_id) == OrderState("COMPLETED", reservation.holds, paid_with="paypal")
 
 
 def test_a_share_is_paid_once_however_often_it_is_asked() -> None:

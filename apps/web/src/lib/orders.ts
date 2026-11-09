@@ -190,6 +190,8 @@ export type Order = {
   approved_at: string | null;
   paypal_order_id: string | null;
   parent_order_id: string | null;
+  /** What the buyer approved it with, as PayPal's reservation says: null until it is reserved. */
+  paid_with?: Funding | null;
   request: BuyerRequest | null;
   /** Drafted by a buyer agent through MCP (create_collective_order). */
   requested_by_agent?: boolean;
@@ -235,9 +237,12 @@ export function getOrder(id: string, init: RequestInit = {}): Promise<Order> {
 /** Where the human approves the order: PayPal, or the simulated PayPal page in fake mode. */
 export type Checkout = { paypal_order_id: string; approval_url: string };
 
+/** How the buyer approves (prompt 57): PayPal's checkout, or Venmo, for a buyer in the US. */
+export type Funding = "paypal" | "venmo";
+
 /** Creates the PayPal order for the whole total. Pressing Approve twice gives back the same PayPal order. */
-export function startCheckout(id: string): Promise<Checkout> {
-  return apiPost<Checkout>(`/api/orders/${encodeURIComponent(id)}/checkout`, {});
+export function startCheckout(id: string, funding: Funding = "paypal"): Promise<Checkout> {
+  return apiPost<Checkout>(`/api/orders/${encodeURIComponent(id)}/checkout`, funding === "paypal" ? {} : { funding });
 }
 
 /** Reserves the approved order at PayPal, once. Calling it again changes nothing and returns the order. */

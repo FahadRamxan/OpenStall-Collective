@@ -7,7 +7,7 @@ built. Payouts still go through our own PayPalClient, mocked with respx as befor
 
 import json
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urlsplit
@@ -21,6 +21,7 @@ from openstall_paypal import Advance, AdvancePayment, DisputeEvidence
 from openstall_paypal import (
     RETRY_POLICY,
     WHOLE_ORDER,
+    Checkout,
     CheckoutPart,
     CheckoutRequest,
     MultipartyGateway,
@@ -333,6 +334,50 @@ def test_on_the_payouts_path_one_authorization_holds_every_share(fake: FakePayPa
     reservation = PayoutsGateway(client, sdk).reserve("5O190127TN364715T")
 
     assert reservation.hold_for("op_001") == reservation.hold_for("op_002") == "AUTH-ALL"
+
+
+# Venmo at the approval (prompt 57): its own PayPal order, made for Venmo, approved in PayPal's JS SDK.
+VENMO_ORDER = replace(ORDER, funding="venmo")
+
+
+def test_a_venmo_checkout_is_its_own_order_made_for_venmo(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    route = fake.on("POST", "/v2/checkout/orders", answer(201, {"id": "VENMO-ORDER-1", "status": "PAYER_ACTION_REQUIRED", "links": []}))
+
+    checkout = PayoutsGateway(client, sdk).create_checkout(VENMO_ORDER)
+
+    body, key = sent(route)
+    assert body["intent"] == "AUTHORIZE"
+    assert key == "openstall-checkout-ord_demo-venmo"  # not the PayPal order's key: PayPal keeps both apart
+    assert "paypal" not in body["payment_source"]
+    assert body["payment_source"]["venmo"]["experience_context"] == {
+        "brand_name": "OpenStall Collective",
+        "shipping_preference": "NO_SHIPPING",
+        "user_action": "PAY_NOW",
+    }  # Venmo's experience context has no return or cancel URL: the JS SDK approves it by its id
+    assert checkout == Checkout("VENMO-ORDER-1", "")  # no link is needed, and none is an error here
+
+
+def test_a_venmo_checkout_keeps_a_link_paypal_sends(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:
+    fake.on("POST", "/v2/checkout/orders", answer(201, CREATED))
+
+    assert PayoutsGateway(client, sdk).create_checkout(VENMO_ORDER).approval_url == CREATED["links"][1]["href"]
+
+
+@pytest.mark.parametrize(
+    ("source", "funding"),
+    [({"venmo": {"user_name": "buyer"}}, "venmo"), ({"paypal": {"email_address": "b@example.com"}}, "paypal"), ({}, None)],
+)
+def test_the_reservation_says_what_paypal_says_it_was_paid_with(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk, source: dict[str, Any], funding: str | None) -> None:
+    fake.on(
+        "POST",
+        "/v2/checkout/orders/5O190127TN364715T/authorize",
+        answer(201, {**authorized((WHOLE_ORDER, "AUTH-ALL")), "payment_source": source}),
+    )
+    fake.on("GET", "/v2/checkout/orders/5O190127TN364715T", answer(200, {**authorized((WHOLE_ORDER, "AUTH-ALL")), "payment_source": source}))
+    gateway = PayoutsGateway(client, sdk)
+
+    assert gateway.reserve("5O190127TN364715T").paid_with == funding
+    assert gateway.get_order("5O190127TN364715T").paid_with == funding
 
 
 def test_an_authorization_without_holds_is_an_error(fake: FakePayPal, client: PayPalClient, sdk: PayPalSdk) -> None:

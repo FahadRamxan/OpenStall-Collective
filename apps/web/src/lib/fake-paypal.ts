@@ -8,6 +8,8 @@ export type FakePayPalOrder = {
   total_usd: string;
   shares: { reference_id: string; description: string; amount_usd: string }[];
   cancel_url: string;
+  /** "venmo": the page stands in for Venmo (prompt 57). */
+  funding?: "paypal" | "venmo";
 };
 
 export function getFakePayPalOrder(token: string, init: RequestInit = {}): Promise<FakePayPalOrder> {

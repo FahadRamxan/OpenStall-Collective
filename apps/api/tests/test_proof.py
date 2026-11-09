@@ -11,7 +11,7 @@ from mcp import Client
 from sqlalchemy import select
 
 from openstall_agents.adapters import LLMError
-from openstall_api.chat.handler import WELCOMES
+from openstall_api.chat.handler import THANKS, WELCOMES
 from openstall_api.events import EventType
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt
 from openstall_api.main import app
@@ -363,7 +363,7 @@ def test_saying_yes_again_after_she_is_paid_pays_nothing_more(story, fakes):
     replies = play("s_priya", "yes")
 
     assert captures(fakes) == 1
-    assert replies == ["Thank you, I have your message. Send more photos, or tell me the price and how many you can make each week."]
+    assert replies == [THANKS["hi"]]  # in Priya's language, Hindi, not English
 
 
 def test_a_web_chat_maker_sends_her_receipt_from_her_demo_phone(story, fakes):

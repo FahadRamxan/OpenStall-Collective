@@ -26,7 +26,14 @@ from openstall_api.payments import PAID, OrderNotFound, WrongStatus, reserve_ord
 from openstall_api.settings import Settings, get_settings
 from openstall_api.tracking import track_order
 from openstall_api.webhooks import PayPalConfirmation, confirmations, deliver_fake_webhooks
-from openstall_paypal import RAIL_NAMES, PaymentError, PaymentUnavailable, PayoutRail, venmo_payouts_simulated
+from openstall_paypal import (
+    RAIL_NAMES,
+    Funding,
+    PaymentError,
+    PaymentUnavailable,
+    PayoutRail,
+    venmo_payouts_simulated,
+)
 from openstall_trust import trust_score
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -240,6 +247,8 @@ class OrderOut(BaseModel):
     parent_order_id: str | None
     request: RequestOut | None
     parts: list[PartOut]
+    # What the buyer approved it with, as PayPal's reservation says (prompt 57); None until it is reserved.
+    paid_with: Funding | None = None
     # Drafted by a buyer agent through MCP (create_collective_order): /approve says so (prompt 28).
     requested_by_agent: bool = False
     # The approval link a buyer agent was given to send its human, once it was (MCP checkout).
@@ -343,6 +352,7 @@ def order_out(session: Session, order: Order) -> OrderOut:
         approved_at=order.approved_at,
         paypal_order_id=order.paypal_order_id,
         parent_order_id=order.parent_order_id,
+        paid_with="venmo" if order.paid_with == "venmo" else "paypal" if order.paid_with == "paypal" else None,
         request=(
             RequestOut(
                 summary=summary or f"{request.quantity} items",
@@ -475,9 +485,15 @@ def verify_total(order_id: str, body: TotalIn, session: SessionDep) -> TotalChec
     return TotalCheck(total_usd=expected)
 
 
+class CheckoutIn(BaseModel):
+    """How the buyer approves (prompt 57): PayPal's checkout, or Venmo through PayPal's JS SDK."""
+
+    funding: Funding = "paypal"
+
+
 class CheckoutOut(BaseModel):
     paypal_order_id: str
-    approval_url: str
+    approval_url: str  # empty for a Venmo order in sandbox mode: PayPal's JS SDK approves it by its id
 
 
 # PayPal refusals the human can do something about, in words they can act on.
@@ -513,10 +529,18 @@ def payment_errors() -> Iterator[None]:
 
 
 @router.post("/orders/{order_id}/checkout")
-def checkout(order_id: str, session: SessionDep, registry: RegistryDep) -> CheckoutOut:
-    """Spec 3.5: one PayPal order for the whole amount. Approving it at PayPal only reserves the money."""
+def checkout(
+    order_id: str, session: SessionDep, registry: RegistryDep, body: CheckoutIn | None = None
+) -> CheckoutOut:
+    """Spec 3.5: one PayPal order for the whole amount. Approving it at PayPal only reserves the money. With
+    `funding: "venmo"`, the order is made for Venmo, for a buyer in the US to approve in PayPal's JS SDK."""
+    funding = body.funding if body else "paypal"
+    if funding == "venmo" and not registry.settings.PAYPAL_VENMO:
+        raise HTTPException(status_code=409, detail="Venmo is not offered here: approve with PayPal.")
     with payment_errors():
-        result = start_checkout(session, order_id, registry.payment_gateway, registry.settings.WEB_BASE_URL)
+        result = start_checkout(
+            session, order_id, registry.payment_gateway, registry.settings.WEB_BASE_URL, funding
+        )
     session.commit()
     return CheckoutOut(paypal_order_id=result.paypal_order_id, approval_url=result.approval_url)
 

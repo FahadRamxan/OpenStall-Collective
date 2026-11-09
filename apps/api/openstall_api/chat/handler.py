@@ -61,6 +61,16 @@ WELCOMES = {
 assert WELCOMES.keys() == LOCALES.keys(), "every template language welcomes her in its own words"
 WELCOME = WELCOMES["en"]
 NUDGE = "Send more photos, or tell me the price and how many you can make each week."
+# The answer when there is nothing to ask her yet (no draft listing, no live one), in her template language. English
+# names what arrived; the others thank her for her message, whatever it was. The Urdu, Hindi and Spanish need a native
+# speaker's read, like every template.
+THANKS = {
+    "en": "Thank you, I have {what}. " + NUDGE,
+    "ur": "شکریہ، آپ کا پیغام مل گیا۔ مزید تصویریں بھیجیں، یا مجھے قیمت بتائیں اور یہ کہ آپ ہفتے میں کتنے بنا سکتی ہیں۔",
+    "hi": "धन्यवाद, आपका संदेश मिल गया। और फ़ोटो भेजें, या मुझे कीमत बताएँ और यह कि आप हफ़्ते में कितने बना सकती हैं।",
+    "es": "Gracias, ya recibí tu mensaje. Mándame más fotos, o dime el precio y cuántos puedes hacer por semana.",
+}
+assert THANKS.keys() == LOCALES.keys(), "every template language thanks her in its own words"
 
 
 @dataclass(frozen=True)
@@ -217,7 +227,7 @@ def turn(
     elif live_at is not None:
         replies.append(Reply(live_reply(language, live_at, again=True)))
     elif what and not first:
-        replies.append(Reply(f"Thank you, I have {what}. {NUDGE}"))
+        replies.append(Reply(THANKS.get(language, THANKS["en"]).format(what=what)))
     return replies
 
 

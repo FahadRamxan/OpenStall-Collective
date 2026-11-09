@@ -20,13 +20,13 @@ OpenStall pools makers who only use WhatsApp into one collective supplier that A
 
 1. **A stall from a chat.** A maker sends a photo and a voice note in Urdu. The voice note becomes text, her photo and words become a draft listing, and OpenStall asks her, in her language, one short question at a time for what is missing: her price, how many a week, delivery days, her city, then her limits (the lowest price she would take, the fewest days she needs). Her "ہاں" (yes) publishes it.
 2. **A buyer's AI agent asks for 40 cushion covers** at most $30 each, through the MCP storefront (search, product and trust cards, `request_quote`).
-3. **Seller agents negotiate within each maker's limits.** Each maker's agent proposes a price and a sentence to the buyer; code checks every price against her floor and the buyer's maximum, so no buyer's words can talk a price below her floor.
+3. **Seller agents bid within each maker's limits.** Each maker's agent proposes a price and a sentence to the buyer's agent; code checks every price against her floor and the buyer's maximum, and a refused price goes back to her agent with the reason (up to 3 rounds), so no buyer's words can talk a price below her floor.
 4. **The order is split across makers by plain code**: 12 from Amina, 11 from Priya, 10 from Lucía and 7 from Grace, $815.00, explained in two sentences whose every number code checks against the plan.
 5. **A person approves one PayPal checkout that only reserves the money**: one PayPal order, intent AUTHORIZE. No agent tool can approve, capture, refund or pay out.
 6. **Each maker is told on her phone, in her language** (Urdu, Hindi, Spanish or English), with the numbers from the order itself.
 7. **Pay-on-proof.** A maker photographs her courier receipt. The model reads the courier and tracking number, she confirms, and only then is her share captured from the one authorization and paid out on her rail. Her tracking goes on the PayPal order, so the buyer sees it at PayPal.
 8. **The order heals itself.** A maker who cannot deliver says so; on her yes her share is released, never charged, and the other makers' agents are asked for her units as a top-up order.
-9. **Signed trust passports.** Every delivery updates a maker's record (on-time rate, disputes, photo originality), signed with Ed25519, which any agent can verify; change one number and the signature fails, shown live in the browser.
+9. **Signed trust passports.** Every delivery updates a maker's record (orders delivered, on-time rate, disputes), signed with Ed25519, which any agent can verify; change one number and the signature fails, shown live in the browser. (Its photo-originality score is seeded demo data for now: no image check runs yet.)
 10. **Demand Radar.** Searches that found nothing are grouped and sent back as tips in her language: "23 agents searched for ceramic mugs this week. Nobody sells them." (seeded demo searches, marked so).
 
 ## How it uses PayPal
@@ -40,8 +40,9 @@ Pay-on-proof on the payouts path, proven step by step on PayPal's real sandbox:
 - **Webhooks:** every event verified with `verify-webhook-signature` and applied exactly once.
 - **Disputes:** a buyer's "never arrived" dispute answered with the maker's proof of shipping (`provide-evidence`).
 - **PayPal's JS SDK buttons** on each maker's stall page, intent authorize.
+- **Venmo at the approval**, for a buyer in the US: the order is made for Venmo and held, paid on proof and released like any order (simulated in test mode; PayPal offers it only to a US business account, which the sandbox app is not).
 - **PayPal's own MCP server** (`@paypal/mcp`): an ops agent reads each order, its disputes and its tracking back from PayPal and checks them against OpenStall's records, offered only PayPal's tools that read. Run on the sandbox: 28 tools listed, a real order's status, amount and disputes agreed.
-- **Every write carries an idempotency key from our own ids, and is never resent blindly**; a lost answer is read back from PayPal.
+- **Every write PayPal can deduplicate carries an idempotency key from our own ids, and none is resent blindly**: a lost answer is read back from PayPal, and tracking, which PayPal does not deduplicate, is checked against the order's trackers before it is sent.
 
 Proven on the real sandbox (docs/day-one-checks.md): one authorization, several partial captures with tracking on each, a final capture, a void, a payout, PayPal answering a resent capture with the first, and OpenStall's own Approve flow end to end.
 
@@ -58,6 +59,8 @@ Every Orders and Payments call goes through **APIMatic's PayPal Python SDK** (2.
 - **ElevenLabs Eleven v4 Turbo**: answers to a voice note spoken back in her language.
 - **OpenAI `whisper-1`**: an optional second speech-to-text provider.
 - **Claude Code with APIMatic's PayPal Context Plugin**: building the PayPal integration (above).
+
+**Run for real on November 9** (`claude-sonnet-5-5`): the five makers' agents made five valid offers in one round, each with her own sentence; the split's explanation passed the number check; the buyer's AI agent chose search, quote, draft order and checkout by itself in 12 seconds; the listing reader took $18.00 and 4 a week only from Amina's own Urdu words; and the ops agent answered from eight read-only PayPal calls.
 
 Where code decides, not the model: every price against her limits, the split (cheapest valid offers first, each maker up to what she can make by the deadline), every number in a sentence the model writes, every message to a maker (templates in her language), and every movement of money. Test mode runs deterministic stand-ins for every model, labelled as such.
 

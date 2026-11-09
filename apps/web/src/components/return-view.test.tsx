@@ -80,6 +80,18 @@ describe("ReturnView", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("says when the buyer approved with Venmo, and says nothing about it otherwise", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...RESERVED, paid_with: "venmo" })));
+    const view = render(<ReturnView />);
+
+    expect(await screen.findByText(/Approved with Venmo: PayPal holds the money the same way/)).toBeInTheDocument();
+    view.unmount();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...RESERVED, paid_with: "paypal" })));
+    render(<ReturnView />);
+    await screen.findByRole("heading", { level: 1, name: "PayPal is holding $392.00" });
+    expect(screen.queryByText(/Approved with Venmo/)).not.toBeInTheDocument();
+  });
+
   it("when PayPal does not have the approval, says so and links back to the order, without Try again", async () => {
     const detail = "PayPal does not have your approval for this order yet. Go back to the order and approve it.";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail }, { status: 409 })));
