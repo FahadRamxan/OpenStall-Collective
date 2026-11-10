@@ -76,7 +76,7 @@ function MakerCard({ seller }: { seller: SellerCard }) {
   return (
     <Link
       href={`/stall/${seller.id}`}
-      className="group block overflow-hidden rounded-2xl border border-border bg-background transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      className="lift group block overflow-hidden rounded-2xl border border-border bg-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-border/40">
         {seller.cover_photo ? (

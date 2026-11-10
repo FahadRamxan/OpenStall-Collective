@@ -1,8 +1,8 @@
 """The PayPal products OpenStall uses or plans to (prompt 53): what each one does here, the calls it makes, where it is
 in the code, and how far it has got.
 
-This one list feeds `GET /api/paypal/doctor`, the /status page, `scripts/doctor.py` and the README's table, which
-`scripts/tests/test_docs.py` checks against it. A product's state is only as strong as its evidence:
+This one list feeds `GET /api/paypal/doctor`, the /status page, `scripts/doctor.py` and the detailed guide's table
+(`docs/guide.md`), which `scripts/tests/test_docs.py` checks against it. A product's state is only as strong as its evidence:
 
 - proven: run against PayPal's real sandbox, with the date (docs/day-one-checks.md)
 - built: in the code and tested, but not yet run end to end against the sandbox, and why not

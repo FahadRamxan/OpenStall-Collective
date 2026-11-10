@@ -199,7 +199,7 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
   const voiceNote = message.media.some((item) => item.url && item.content_type.startsWith("audio/") && !item.spoken);
   const spoken = message.media.some((item) => item.url && item.spoken);
   return (
-    <li className={`flex flex-col ${hers ? "items-end" : "items-start"}`}>
+    <li className={`animate-pop-in flex flex-col ${hers ? "items-end origin-bottom-right" : "items-start origin-bottom-left"}`}>
       <div
         className={`max-w-[90%] rounded-2xl px-3 py-2 text-xs leading-5 shadow-xs ${
           hers ? "rounded-tr-sm bg-accent-soft" : "rounded-tl-sm bg-surface"

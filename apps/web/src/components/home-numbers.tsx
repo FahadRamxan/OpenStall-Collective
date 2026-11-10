@@ -52,10 +52,18 @@ export function HomeNumbers() {
   return (
     <>
       <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-xl border border-border bg-background p-4">
+        {tiles.map((tile, index) => (
+          <div
+            key={tile.label}
+            style={{ animationDelay: `${index * 70}ms` }}
+            className="lift animate-pop-in relative overflow-hidden rounded-2xl border border-border bg-background p-4 sm:p-5"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-accent via-[color-mix(in_srgb,var(--accent)_50%,var(--warm))] to-warm"
+            />
             <dt className="text-sm text-muted">{tile.label}</dt>
-            <dd className="mt-1 text-3xl font-semibold tracking-tight">{tile.value}</dd>
+            <dd className="mt-1.5 text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl">{tile.value}</dd>
             {tile.detail ? <dd className="mt-0.5 text-sm text-muted">{tile.detail}</dd> : null}
           </div>
         ))}

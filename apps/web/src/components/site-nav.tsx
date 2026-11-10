@@ -30,8 +30,10 @@ export function NavLinks({ currentPath }: { currentPath: string | null }) {
               <Link
                 href={href}
                 aria-current={current ? "page" : undefined}
-                className={`inline-flex min-h-11 items-center rounded-md px-2 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:min-h-0 sm:px-3 ${
-                  current ? "bg-accent-soft text-accent" : "text-muted hover:bg-border/60 hover:text-foreground"
+                className={`inline-flex min-h-11 items-center rounded-full px-2 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:min-h-0 sm:px-3.5 ${
+                  current
+                    ? "bg-accent-soft text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
+                    : "text-muted hover:bg-border/60 hover:text-foreground"
                 }`}
               >
                 {label}

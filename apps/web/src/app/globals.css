@@ -2,15 +2,18 @@
 
 /* Colour tokens. Components use them through Tailwind (bg-surface, text-muted, border-border...). */
 :root {
-  --background: #faf8f5;
+  --background: #f8f6f1;
   --surface: #ffffff;
-  --foreground: #1f1a17;
-  --muted: #5c534c;
-  --border: #e6e0d8;
+  --foreground: #1c1714;
+  --muted: #5a514a;
+  --border: #e8e1d7;
   --accent: #0e6e64;
-  --accent-strong: #0b5a52;
-  --accent-soft: #e3f1ee;
+  --accent-strong: #0a574f;
+  --accent-soft: #e1f2ee;
   --accent-foreground: #ffffff;
+  /* The warm second colour of the brand: makers, hand-made, the awning of a stall. Decoration only, never text. */
+  --warm: #f08a4b;
+  --sun: #f6c445;
   /* Status colours for badges: text on its -soft background is at least 4.5:1 in both themes. */
   --warning: #7a4b00;
   --warning-soft: #fdf3d7;
@@ -24,19 +27,26 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
+  /* Depth: soft, layered shadows, warm-tinted so they sit on the cream background. */
+  --shadow-card: 0 1px 2px rgb(60 40 20 / 0.06), 0 4px 16px -6px rgb(60 40 20 / 0.08);
+  --shadow-lift: 0 2px 4px rgb(60 40 20 / 0.06), 0 16px 32px -12px rgb(60 40 20 / 0.18);
+  --glow: rgb(14 110 100 / 0.16);
+  --glow-warm: rgb(240 138 75 / 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #14110f;
-    --surface: #1d1916;
-    --foreground: #f3eee8;
-    --muted: #b3a89d;
-    --border: #3a332d;
+    --background: #110f0d;
+    --surface: #1b1714;
+    --foreground: #f4efe9;
+    --muted: #b8ada2;
+    --border: #383029;
     --accent: #5fd3c4;
     --accent-strong: #8ae2d6;
-    --accent-soft: #123430;
+    --accent-soft: #10302c;
     --accent-foreground: #06201d;
+    --warm: #f29a63;
+    --sun: #f2c95c;
     --warning: #f5c76a;
     --warning-soft: #3a2a08;
     --success: #7fd69a;
@@ -48,6 +58,10 @@
     --series-3: #199e70;
     --series-4: #c98500;
     --series-5: #d55181;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px -6px rgb(0 0 0 / 0.5);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 18px 36px -12px rgb(0 0 0 / 0.65);
+    --glow: rgb(95 211 196 / 0.12);
+    --glow-warm: rgb(242 154 99 / 0.1);
   }
 }
 
@@ -61,6 +75,8 @@
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
   --color-accent-foreground: var(--accent-foreground);
+  --color-warm: var(--warm);
+  --color-sun: var(--sun);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --color-success: var(--success);
@@ -69,15 +85,204 @@
   --color-danger-soft: var(--danger-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Rounder corners everywhere, and every card's shadow, from one place. */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.375rem;
+  --shadow-xs: var(--shadow-card);
+  --shadow-sm: var(--shadow-card);
+  --shadow-md: var(--shadow-lift);
+  --animate-pop-in: pop-in 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 1rem;
+}
+/* On wider screens the header (and on /demo its step bar) is pinned: a panel jumped to lands below them. */
+@media (min-width: 40rem) {
+  html {
+    scroll-padding-top: 8rem;
+  }
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  /* Two soft glows behind every page: the brand's teal top left, and its warm colour top right. */
+  background-image:
+    radial-gradient(60rem 30rem at -10% -12rem, var(--glow), transparent 70%),
+    radial-gradient(48rem 26rem at 110% -10rem, var(--glow-warm), transparent 70%);
+  background-repeat: no-repeat;
   color: var(--foreground);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+/* Every card of the app: bordered surfaces get the soft shadow. */
+.bg-surface.border,
+.bg-background.border {
+  box-shadow: var(--shadow-card);
+}
+
+/* Buttons feel physical: a lift and a glow on hover, a press when clicked. */
+:is(a, button).bg-accent {
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+  box-shadow: 0 6px 18px -10px var(--accent);
+}
+:is(a, button).bg-accent:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -12px var(--accent);
+}
+:is(a, button).bg-accent:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+:is(a, button).rounded-full.border {
+  transition:
+    transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+:is(a, button).rounded-full.border:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+}
+:is(a, button).rounded-full.border:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* A card that rises a little under the pointer. */
+.lift {
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+/* Words in the brand's gradient: teal to warm. Large headings only, where contrast holds at every point. */
+.text-gradient {
+  background: linear-gradient(100deg, var(--accent) 10%, color-mix(in srgb, var(--accent) 55%, var(--warm)) 55%, var(--warm) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@media (prefers-color-scheme: dark) {
+  .text-gradient {
+    background: linear-gradient(100deg, var(--accent-strong), var(--sun) 60%, var(--warm));
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+
+/* Pages arrive with a short rise and fade, section after section. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+main > * {
+  animation: rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+main > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+main > *:nth-child(3) {
+  animation-delay: 0.12s;
+}
+main > *:nth-child(n + 4) {
+  animation-delay: 0.18s;
+}
+
+/* Cards that rise into view as the page scrolls to them, where the browser can tie an animation to scrolling. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+}
+
+/* New chat bubbles and feed lines pop in. */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+/* The live dot: a soft ring that grows and fades. */
+@keyframes ping-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Confetti for the moments worth celebrating: PayPal holding the money, an order complete. */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--spin));
+  }
 }
 
 /* Someone who asks for less motion gets none: no pulsing placeholders, no transitions (prompt 45). */
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
@@ -85,5 +290,12 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .reveal,
+  main > * {
+    animation: none !important;
+  }
+  .live-dot::after {
+    display: none;
   }
 }

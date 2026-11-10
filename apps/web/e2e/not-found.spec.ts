@@ -17,8 +17,8 @@ test("the 404 page uses the site's colours and font, not Next.js's defaults", as
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto(MISSING);
 
-  // --background in globals.css: #faf8f5.
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(250, 248, 245)");
+  // --background in globals.css: #f8f6f1.
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(248, 246, 241)");
   await expect(page.getByRole("heading", { level: 1 })).toHaveCSS("font-family", /Geist/);
 });
 

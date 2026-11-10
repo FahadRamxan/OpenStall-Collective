@@ -54,7 +54,7 @@ export default function DemoPage() {
               <TamperCheck />
               <GuardrailPanel />
             </div>
-            <aside aria-label="The live feed" className="max-w-3xl min-w-0 xl:sticky xl:top-4 xl:max-w-none">
+            <aside aria-label="The live feed" className="max-w-3xl min-w-0 xl:sticky xl:top-[7.5rem] xl:max-w-none">
               <LiveActivity scroll />
             </aside>
           </div>

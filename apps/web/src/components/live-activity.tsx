@@ -96,7 +96,7 @@ function ActivityItem({ event, stacked = false }: { event: FeedEvent; stacked?: 
   const category = categoryOf(event);
   if (stacked) {
     return (
-      <li className="px-4 py-3">
+      <li className="animate-pop-in px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <time dateTime={event.created_at} className="font-mono text-xs text-muted tabular-nums">
             {clockTime(event.created_at)}
@@ -108,7 +108,7 @@ function ActivityItem({ event, stacked = false }: { event: FeedEvent; stacked?: 
     );
   }
   return (
-    <li className="flex items-start gap-3 px-4 py-3 sm:gap-4 sm:px-5">
+    <li className="animate-pop-in flex items-start gap-3 px-4 py-3 sm:gap-4 sm:px-5">
       <time dateTime={event.created_at} className="shrink-0 pt-0.5 font-mono text-xs text-muted tabular-nums">
         {clockTime(event.created_at)}
       </time>

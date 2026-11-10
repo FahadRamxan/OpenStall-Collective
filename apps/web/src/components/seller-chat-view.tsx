@@ -440,7 +440,7 @@ function Bubble({
   const right = perspective === "seller" ? fromSeller : !fromSeller;
   const speaker = fromSeller ? (perspective === "seller" ? "You" : title) : "OpenStall";
   return (
-    <li className={`flex flex-col ${right ? "items-end" : "items-start"}`}>
+    <li className={`animate-pop-in flex flex-col ${right ? "items-end origin-bottom-right" : "items-start origin-bottom-left"}`}>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-6 shadow-xs ${
           right ? "rounded-tr-sm bg-accent-soft" : "rounded-tl-sm bg-surface"

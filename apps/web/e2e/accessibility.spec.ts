@@ -69,7 +69,8 @@ test("someone who asks for less motion gets none", async ({ page }) => {
 for (const scheme of ["light", "dark"] as const) {
   for (const width of [1280, 375]) {
     test(`every page meets WCAG 2.1 AA in ${scheme} mode at ${width}px`, async ({ page, request }) => {
-      await page.emulateMedia({ colorScheme: scheme });
+      // Contrast is judged at rest: sections fade in as a page opens, and axe would otherwise read their text halfway.
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.setViewportSize({ width, height: 900 });
       const orderId = await freshOrder(request);
       const pages: [string, string][] = [...PAGES, [`/approve/${orderId}`, "Approve and pay with PayPal"]];

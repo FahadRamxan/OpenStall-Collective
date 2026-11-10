@@ -6,13 +6,14 @@ import { NavLinks, SiteNav } from "@/components/site-nav";
 
 export function SiteHeader() {
   return (
-    <header className="border-b border-border bg-surface">
-      <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6">
+    // Pinned on wider screens, frosted so the page shows through as it scrolls; on phones it scrolls away.
+    <header className="z-40 border-b border-border/70 bg-surface/85 backdrop-blur-md backdrop-saturate-150 sm:sticky sm:top-0">
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 self-start rounded-md text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:self-auto"
+          className="group inline-flex items-center gap-2 self-start rounded-md text-lg font-semibold tracking-tight focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:self-auto"
         >
-          <LogoMark className="size-7 shrink-0" />
+          <LogoMark className="size-8 shrink-0 transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105" />
           <span>
             OpenStall <span className="font-normal text-muted">Collective</span>
           </span>

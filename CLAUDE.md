@@ -18,7 +18,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 2. Wire it into the UI.
 3. Test it through the UI: a Playwright spec in `apps/web/e2e`, in fake mode.
 4. Run `python scripts/check_all.py` (pytest, mypy, lint, Vitest, build, Playwright). Commit only when it ends with "All 6 checks passed". There is no CI; this is the gate.
-5. Update `README.md` ("What works today" and "Build progress"), this file's status table, and the status table in `../prompt.md`.
+5. Update `docs/guide.md` ("What works today" and "Build progress"; the README is the short front page, changed only when a headline changes), this file's status table, and the status table in `../prompt.md`.
 6. Commit with the prompt's commit message, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, then `git pull --rebase` and push: `GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never git push origin main` (retry once on a network reset).
 
 ## Commands (Windows, Git Bash)
@@ -43,7 +43,7 @@ OpenStall pools WhatsApp-only home makers into one collective supplier that AI s
 
 ## Status (2026-11-09)
 
-Of the 58 build prompts in `../prompt.md`: **53 done, 2 partly done, 3 not started.** Each row was checked against the commits; "done" means built, tested, wired into the UI, tested in a browser and pushed. Update this table, the README's "Build progress" and `../prompt.md`'s status table with every prompt.
+Of the 58 build prompts in `../prompt.md`: **53 done, 2 partly done, 3 not started.** Each row was checked against the commits; "done" means built, tested, wired into the UI, tested in a browser and pushed. Update this table, the guide's "Build progress" (`docs/guide.md`) and `../prompt.md`'s status table with every prompt.
 
 | Prompt | What | State | Commit |
 |---|---|---|---|

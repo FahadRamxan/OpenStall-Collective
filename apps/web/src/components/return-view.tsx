@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { Confetti } from "@/components/confetti";
 import { RailChip } from "@/components/rail-chip";
 import {
   AdvanceLine,
@@ -205,6 +206,8 @@ function Receipt({
           {complete ? "Order complete" : `${simulated ? "Simulated PayPal" : "PayPal"} is holding ${total}`}
         </h1>
       </div>
+      {/* Once when PayPal holds the money, once more when the order completes. */}
+      <Confetti key={complete ? "complete" : "holding"} />
       <p className="mt-4 text-lg leading-8 text-muted">
         {complete
           ? "Every parcel that shipped has arrived, and every maker who shipped is paid."
