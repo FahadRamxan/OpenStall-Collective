@@ -17,12 +17,17 @@ class SentMessage:
     to: str  # for example "whatsapp:+923001234567"
     text: str
     media_urls: tuple[str, ...] = ()
+    buttons: tuple[str, ...] = ()  # the titles of the reply buttons shown under the text, where the provider has them
 
 
 @runtime_checkable
 class Messenger(Protocol):
-    def send(self, to: str, text: str, media_urls: Sequence[str] = ()) -> SentMessage:
-        """Send one WhatsApp message, with optional media at public URLs."""
+    def send(
+        self, to: str, text: str, media_urls: Sequence[str] = (), buttons: Sequence[str] = ()
+    ) -> SentMessage:
+        """Send one WhatsApp message, with optional media at public URLs, and optional reply buttons under its text
+        (at most 3; a tap sends the button's title back as her message). A provider without buttons sends the text
+        alone: every message that offers buttons also says what to type."""
         ...
 
 
@@ -33,8 +38,10 @@ class FakeMessenger:
         self.calls: list[SentMessage] = []
         self._next_id = count(1)
 
-    def send(self, to: str, text: str, media_urls: Sequence[str] = ()) -> SentMessage:
-        message = SentMessage(f"fake-msg-{next(self._next_id):04d}", to, text, tuple(media_urls))
+    def send(
+        self, to: str, text: str, media_urls: Sequence[str] = (), buttons: Sequence[str] = ()
+    ) -> SentMessage:
+        message = SentMessage(f"fake-msg-{next(self._next_id):04d}", to, text, tuple(media_urls), tuple(buttons))
         self.calls.append(message)
         return message
 

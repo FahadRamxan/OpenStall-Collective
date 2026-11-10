@@ -14,6 +14,7 @@ from openstall_api.db import new_session, session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
 from openstall_api.models import Channel, Direction, Seller
+from openstall_api.wording import buttons_of
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ def send_to_seller(
     provider_id = None
     if channel == Channel.WHATSAPP:
         try:
-            provider_id = messenger().send(f"whatsapp:{number}", text).message_id
+            provider_id = messenger().send(f"whatsapp:{number}", text, buttons=buttons_of(text)).message_id
         except Exception as error:  # WhatsApp refused it or Twilio is not set up: she did not get it
             log.warning("A message to seller %s could not be sent on WhatsApp: %s", seller_id, type(error).__name__)
             return False

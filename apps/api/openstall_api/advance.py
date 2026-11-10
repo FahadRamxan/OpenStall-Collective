@@ -60,6 +60,15 @@ class AdvancePhrases:
     already: str  # {amount}
 
 
+# The buttons under the offer: her yes and her no, each title starting with that word in her language (is_yes,
+# is_no), so a tap is read as her answer.
+ADVANCE_BUTTONS: dict[str, tuple[str, ...]] = {
+    "en": ("Yes, pay me now", "No, thanks"),
+    "ur": ("ہاں، رقم لیں", "نہیں، شکریہ"),
+    "hi": ("हाँ, रकम लें", "नहीं, धन्यवाद"),
+    "es": ("Sí, la quiero", "No, gracias"),
+}
+
 PHRASES: dict[str, AdvancePhrases] = {
     "en": AdvancePhrases(
         offer="Yes: your trust record lets OpenStall pay you {amount} now for materials, ahead of your {share} share "
@@ -230,7 +239,7 @@ def advance_turn(session: Session, seller: Seller, words: str, message_id: str) 
             order_id=part.order_id,
         )
 
-    return AdvanceTurn([say(code, offer)])
+    return AdvanceTurn([say(code, offer, ADVANCE_BUTTONS)])
 
 
 def pay_advance_after(

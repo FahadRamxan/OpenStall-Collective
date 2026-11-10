@@ -60,6 +60,8 @@ class MessageOut(BaseModel):
     # was kept.
     delivery: Delivery | None = None
     delivery_error: str | None = None
+    # The buttons she can answer a message of ours with, their titles in her language; a tap sends the title.
+    buttons: list[str] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -180,6 +182,7 @@ def message_out(message: ChatMessage) -> MessageOut:
         english=message.english,
         delivery=delivery,
         delivery_error=delivery_error,
+        buttons=list(message.buttons_json or []),
         created_at=aware(message.created_at),
     )
 

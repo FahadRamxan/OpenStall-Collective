@@ -12,8 +12,10 @@ const ASK = {
   city: "پارسل کس شہر سے بھیجا جائے گا؟",
   lowest: "بڑے آرڈر میں ایک عدد کی کم سے کم قیمت کتنی ہو سکتی ہے، امریکی ڈالر میں؟",
   leadDays: "آرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
-  // Her item is named in Urdu in messages to her; the listing itself keeps its English title for buyers.
-  summary: "یہ رہا آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور",
+  // All of it as a list, her item named in Urdu in messages to her; the listing keeps its English title for buyers.
+  summary: "یہ رہا آپ کا اشتہار:",
+  summaryTitle: "• ہاتھ کی کڑھائی والا کشن کور",
+  publishButton: "ہاں، اشتہار لگائیں",
   confirm: 'اشتہار لگانے کے لیے "ہاں" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔',
   live: "آپ کا اشتہار لگ گیا ہے!",
 };
@@ -63,6 +65,7 @@ test("the sample photo and voice note become a listing: one question at a time i
   await expect(draft).toContainText("$15.00 each, for a big order");
   await answer("5", ASK.confirm);
   await expect(thread).toContainText(ASK.summary);
+  await expect(thread).toContainText(ASK.summaryTitle);
   await expect(draft).toContainText("5 days at least");
   await expect(draft.getByText("Still to ask")).toHaveCount(0);
   await expect(draft.getByText("Asking now")).toHaveCount(0);
@@ -70,7 +73,9 @@ test("the sample photo and voice note become a listing: one question at a time i
   await expect(draft.getByRole("heading", { name: "Your limits" })).toBeVisible();
   await page.screenshot({ path: "e2e/screenshots/listing-draft.png", fullPage: true });
 
-  await answer("ہاں", ASK.live);
+  // Her yes, as a tap on the button under her listing, as WhatsApp shows it.
+  await thread.getByRole("button", { name: ASK.publishButton }).click();
+  await expect(thread).toContainText(ASK.live);
   const live = page.getByRole("region", { name: /Your listing is live/ });
   await expect(live).toContainText("Hand-embroidered cushion cover, $18.00 each.");
   await expect(page.getByRole("region", { name: /Your listing so far/ })).toHaveCount(0);

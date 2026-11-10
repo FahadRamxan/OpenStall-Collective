@@ -38,6 +38,8 @@ export type ChatMessage = {
    */
   delivery?: "sent" | "delivered" | "read" | "failed" | null;
   delivery_error?: string | null;
+  /** The buttons she can answer a message of OpenStall's with, their titles in her language; a tap sends the title. */
+  buttons?: string[];
   created_at: string;
 };
 

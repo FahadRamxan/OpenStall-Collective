@@ -250,7 +250,7 @@ def test_a_reply_meta_could_not_deliver_says_why_on_her_chat_and_once_in_the_fee
 
 
 def test_a_reply_whatsapp_refuses_at_once_is_kept_as_failed_with_why_and_no_phone_number(meta, fakes, monkeypatch):
-    def refuse(to, text, media_urls=()):
+    def refuse(to, text, media_urls=(), buttons=()):
         raise MessengerError("Meta refused the message (400): Recipient phone number +923001234567 not in allowed list")
 
     monkeypatch.setattr(fakes.messenger, "send", refuse)
@@ -384,6 +384,31 @@ def test_the_meta_messenger_sends_text_then_a_voice_note_as_a_link():
         "text": {"body": "Your listing is live", "preview_url": False},
     }
     assert (second["type"], second["audio"]) == ("audio", {"link": "https://openstall.example/media/uploads/a.mp3"})
+
+
+def test_the_meta_messenger_sends_reply_buttons_and_the_text_alone_if_refused():
+    with respx.mock() as graph:
+        route = graph.post(f"{GRAPH}/{PHONE_ID}/messages").mock(
+            side_effect=[
+                httpx.Response(200, json={"messages": [{"id": "wamid.B1"}]}),
+                httpx.Response(400, json={"error": {"message": "Interactive messages are not allowed"}}),
+                httpx.Response(200, json={"messages": [{"id": "wamid.T1"}]}),
+            ]
+        )
+        messenger = MetaMessenger(TOKEN, PHONE_ID, "v23.0")
+
+        first = messenger.send("whatsapp:+923001234567", "Is this right?", buttons=["Yes, that's right"])
+        second = messenger.send("whatsapp:+923001234567", "Is this right?", buttons=["Yes, that's right"])
+
+    sent = [json.loads(call.request.content) for call in route.calls]
+    assert sent[0]["type"] == "interactive"
+    assert sent[0]["interactive"] == {
+        "type": "button",
+        "body": {"text": "Is this right?"},
+        "action": {"buttons": [{"type": "reply", "reply": {"id": "button-1", "title": "Yes, that's right"}}]},
+    }
+    assert (first.message_id, second.message_id) == ("wamid.B1", "wamid.T1")
+    assert sent[2]["type"] == "text"  # Meta refused the buttons the second time: the text went alone
 
 
 def test_a_message_meta_refuses_says_why():

@@ -55,6 +55,15 @@ class DropPhrases:
     ship_by: str  # added to `kept`: {day}
 
 
+# The buttons under "do you want to drop your share?": her yes and her no, each title starting with that word in her
+# language (is_yes, is_no), so a tap is read as her answer.
+DROP_BUTTONS: dict[str, tuple[str, ...]] = {
+    "en": ("Yes, drop my share", "No, I'll make it"),
+    "ur": ("ہاں، حصہ چھوڑ دیں", "نہیں، حصہ رکھیں"),
+    "hi": ("हाँ, हिस्सा छोड़ें", "नहीं, हिस्सा रखें"),
+    "es": ("Sí, la dejo", "No, la hago yo"),
+}
+
 PHRASES: dict[str, DropPhrases] = {
     "en": DropPhrases(
         ask="I'm sorry to hear that. Do you want to give up your share of order {order_id} ({quantity} × {item}, "
@@ -200,7 +209,7 @@ def _ask(session: Session, part: OrderPart, code: str, words: str, message_id: s
             amount=format_money(used, part.amount_usd),
         )
 
-    return DropTurn([say(code, compose)])
+    return DropTurn([say(code, compose, DROP_BUTTONS)])
 
 
 def _keep(session: Session, part: OrderPart, code: str) -> DropTurn:

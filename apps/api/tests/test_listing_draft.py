@@ -61,7 +61,7 @@ def listing_requests(fakes) -> int:
 def test_her_photo_and_voice_note_become_a_draft_and_she_is_asked_one_question_in_urdu(db):
     sent = on_the_web("", SAMPLES)
 
-    assert sent["replies"] == [WELCOMES["ur"], f"{SO_FAR_UR}۔ {ASK_DAYS_UR}"]
+    assert sent["replies"] == [WELCOMES["ur"], f"{SO_FAR_UR}۔\n\n{ASK_DAYS_UR}"]
     chat = chat_of(db, sent["seller_id"])
     draft = chat.draft_json
     assert draft is not None
@@ -103,18 +103,18 @@ def test_she_answers_one_question_at_a_time_and_her_limits_come_last(db):
 
     answered = [on_the_web(answer)["replies"] for answer in ("9", "Lahore", "15", "5")]
 
-    assert first["replies"] == [WELCOME, f"{SO_FAR}. {QUESTIONS['ship_days']}"]
+    assert first["replies"] == [WELCOME, f"{SO_FAR}.\n\n{QUESTIONS['ship_days']}"]
     assert answered == [
-        [f"Thank you. {SO_FAR}, arrives in 9 days. {QUESTIONS['ship_from_city']}"],
-        [f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore. {QUESTIONS['floor_price_usd']}"],
+        [f"Thank you. {SO_FAR}, arrives in 9 days.\n\n{QUESTIONS['ship_from_city']}"],
+        [f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore.\n\n{QUESTIONS['floor_price_usd']}"],
         [
-            f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore, lowest $15.00 for a big order. "
+            f"Thank you. {SO_FAR}, arrives in 9 days, from Lahore, lowest $15.00 for a big order.\n\n"
             f"{QUESTIONS['min_lead_days']}"
         ],
-        [  # nothing left to ask: all of it, and her yes asked for (prompt 19)
-            "Thank you. Here is your listing: Hand-embroidered cushion cover, $18.00 each, 4 a week, arrives in 9 days, "
-            "from Lahore, lowest $15.00 for a big order, 5 days to make an order. Reply YES to publish it, or tell me "
-            "what to change."
+        [  # nothing left to ask: all of it as a list, one line per fact, and her yes asked for (prompt 19)
+            "Thank you. Here is your listing:\n• Hand-embroidered cushion cover\n• $18.00 each\n• 4 a week\n"
+            "• arrives in 9 days\n• from Lahore\n• lowest $15.00 for a big order\n• 5 days to make an order\n\n"
+            "Reply YES to publish it, or tell me what to change."
         ],
     ]
     draft = chat_of(db, first["seller_id"]).draft_json
@@ -139,7 +139,7 @@ def test_after_her_urdu_voice_note_she_is_asked_in_urdu_whatever_she_types(db):
 
     sent = on_the_web("9")
 
-    assert sent["replies"] == [f"شکریہ۔ {SO_FAR_UR}، 9 دن میں پہنچتا ہے۔ پارسل کس شہر سے بھیجا جائے گا؟"]
+    assert sent["replies"] == [f"شکریہ۔ {SO_FAR_UR}، 9 دن میں پہنچتا ہے۔\n\nپارسل کس شہر سے بھیجا جائے گا؟"]
 
 
 @pytest.mark.parametrize(
@@ -148,12 +148,12 @@ def test_after_her_urdu_voice_note_she_is_asked_in_urdu_whatever_she_types(db):
         (
             "hi",
             "धन्यवाद। आपकी लिस्टिंग अब तक: Hand-embroidered cushion cover, $18.00 प्रति पीस, हफ़्ते में 4, 9 दिन में "
-            "पहुँचता है। पार्सल किस शहर से भेजा जाएगा?",
+            "पहुँचता है।\n\nपार्सल किस शहर से भेजा जाएगा?",
         ),
         (
             "es",
             "¡Gracias! Tu anuncio hasta ahora: Hand-embroidered cushion cover, US$18.00 cada uno, 4 por semana, llega "
-            "en 9 días. ¿Desde qué ciudad lo envías?",
+            "en 9 días.\n\n¿Desde qué ciudad lo envías?",
         ),
     ],
 )
@@ -172,7 +172,7 @@ def test_without_a_photo_she_is_asked_for_one_first(db):
 
     assert sent["replies"] == [
         WELCOME,
-        f"Your listing so far: your item, not named yet, $45.00 each, 3 a week. {QUESTIONS['photos']}",
+        f"Your listing so far: your item, not named yet, $45.00 each, 3 a week.\n\n{QUESTIONS['photos']}",
     ]
 
 
@@ -186,7 +186,7 @@ def test_a_lowest_price_above_her_price_is_asked_again(db):
     assert too_high["replies"][0].endswith(QUESTIONS["floor_price_usd"])
     assert lowered["replies"] == [
         "Thank you. Your listing so far: Hand-embroidered cushion cover, $14.00 each, 4 a week, arrives in 9 days, "
-        f"from Lahore. {QUESTIONS['floor_price_usd']}"
+        f"from Lahore.\n\n{QUESTIONS['floor_price_usd']}"
     ]
     draft = chat_of(db, lowered["seller_id"]).draft_json
     assert (draft["price_usd"], draft["floor_price_usd"], draft["asked"]) == ("14.00", None, "floor_price_usd")
@@ -238,7 +238,7 @@ def test_a_message_that_changes_nothing_asks_the_same_question_again_but_does_no
 
     sent = on_the_web("Hello again")
 
-    assert sent["replies"] == [f"Thank you. {SO_FAR}. {QUESTIONS['ship_days']}"]
+    assert sent["replies"] == [f"Thank you. {SO_FAR}.\n\n{QUESTIONS['ship_days']}"]
     assert len(draft_events(db)) == 1
 
 
@@ -277,9 +277,9 @@ def test_when_the_model_cannot_read_her_answer_she_is_asked_again_and_it_is_read
     monkeypatch.setattr(fakes.llm, "generate_json", answer)  # the model answers again
     read = on_the_web("Lahore")
 
-    assert unread["replies"] == [f"Thank you. {SO_FAR}. {QUESTIONS['ship_days']}"]
+    assert unread["replies"] == [f"Thank you. {SO_FAR}.\n\n{QUESTIONS['ship_days']}"]
     # "9" was kept as her answer about delivery, so the next reading counts it; "Lahore" answered the same question.
-    assert read["replies"] == [f"Thank you. {SO_FAR}, arrives in 9 days. {QUESTIONS['ship_from_city']}"]
+    assert read["replies"] == [f"Thank you. {SO_FAR}, arrives in 9 days.\n\n{QUESTIONS['ship_from_city']}"]
     last = [call for call in fakes.llm.calls if FACTS_OPEN in call.prompt][-1]
     assert f'"words": "9", "answering": "{QUESTIONS["ship_days"]}"' in last.prompt
 

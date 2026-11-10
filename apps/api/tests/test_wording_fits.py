@@ -85,6 +85,44 @@ def test_urdu_uses_words_the_voice_reads_rightly():
     assert wrong == [], f"say {MISREAD['ur']} instead: {wrong[:3]}"
 
 
+BUTTONS = {
+    "publish": asking.PUBLISH_BUTTONS,
+    "receipt": proof.CONFIRM_BUTTONS,
+    "drop": healing.DROP_BUTTONS,
+    "advance": advance.ADVANCE_BUTTONS,
+}
+
+
+@pytest.mark.parametrize("name", sorted(BUTTONS))
+def test_each_button_fits_whatsapp_and_is_read_as_the_answer_it_says(name):
+    """Meta's reply buttons take at most 3 under a message, each title up to 20 characters (Whapi's 25), and a tap
+    sends the title back as her message: the first button is her yes, the second her no, in every language."""
+    for language, titles in BUTTONS[name].items():
+        assert 1 <= len(titles) <= 3, (name, language)
+        assert all(len(title) <= 20 for title in titles), (name, language, titles)
+        assert proof.is_yes(titles[0]), (name, language, titles[0])
+        assert all(proof.is_no(title) for title in titles[1:]), (name, language, titles)
+
+
+def test_the_voice_reads_a_message_without_its_formatting():
+    welcome = handler.WELCOMES["ur"]
+
+    spoken = wording.speakable(welcome)
+
+    assert "*" not in spoken and "\n" not in spoken
+    assert spoken.startswith("OpenStall میں خوش آمدید! اپنا سامان بیچنے کے لیے: 1. اپنے ہاتھ سے بنی چیز کی تصویر بھیجیں۔")
+    assert wording.speakable("Here is your listing:\n• Clay mug\n• $12.00 each") == (
+        "Here is your listing: Clay mug. $12.00 each."
+    )
+
+
+def test_a_message_carries_its_buttons_and_its_english():
+    said = wording.say("ur", lambda code: {"ur": "تیار؟", "en": "Ready?"}[code], {"ur": ("ہاں",), "en": ("Yes",)})
+
+    assert (str(said), wording.english_of(said), wording.buttons_of(said)) == ("تیار؟", "Ready?", ("ہاں",))
+    assert wording.buttons_of("plain text") == ()
+
+
 def test_her_listing_is_told_back_in_urdu_with_its_name_in_urdu():
     draft = {"title": "Hand-embroidered cushion cover", "title_local": "ہاتھ کی کڑھائی والا کشن کور",
              "price_usd": "18.00", "capacity_per_week": 4}

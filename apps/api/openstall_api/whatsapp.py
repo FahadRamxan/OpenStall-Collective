@@ -134,7 +134,11 @@ class TwilioMessenger:
         self.from_number = from_number
         self._http = http or httpx.Client(timeout=15.0)
 
-    def send(self, to: str, text: str, media_urls: Sequence[str] = ()) -> SentMessage:
+    def send(
+        self, to: str, text: str, media_urls: Sequence[str] = (), buttons: Sequence[str] = ()
+    ) -> SentMessage:
+        # Twilio's WhatsApp sandbox shows buttons only from approved content templates: the text goes alone, and it
+        # says what to type.
         recipient = to if to.startswith("whatsapp:") else f"whatsapp:{to}"
         form: dict[str, str | list[str]] = {"From": self.from_number, "To": recipient, "Body": text}
         if media_urls:

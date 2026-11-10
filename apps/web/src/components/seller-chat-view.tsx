@@ -10,6 +10,8 @@ import { ListingDraftCard } from "@/components/listing-draft";
 import { LiveListingCard } from "@/components/live-listing";
 import { DeliveryProblem, deliveryWords } from "@/components/delivery-note";
 import { EnglishLine } from "@/components/english-line";
+import { FormattedText } from "@/components/formatted-text";
+import { ReplyButtons } from "@/components/reply-buttons";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -169,6 +171,7 @@ export function SellerChatView() {
               subtitle="Web chat · your demo phone"
               messages={sellerId ? (loaded?.messages ?? []) : []}
               perspective="seller"
+              onButton={(title) => void send(title, [])}
               pending={pending}
               loading={!!sellerId && !loaded && conversation?.state !== "failed"}
               empty="Send a photo of something you make, or tell OpenStall about it, to start."
@@ -375,7 +378,9 @@ function Phone({
   loading,
   empty,
   footer,
+  onButton,
 }: {
+  onButton?: (title: string) => void;
   title: string;
   subtitle: string;
   messages: ChatMessage[];
@@ -387,6 +392,9 @@ function Phone({
 }) {
   const end = useRef<HTMLLIElement>(null);
   const count = messages.length + pending.length;
+  // Only the newest message's buttons can be tapped, and only until she answers it, as on WhatsApp.
+  const newest = messages.at(-1);
+  const answerable = newest?.direction === "outbound" && pending.length === 0 ? newest.id : null;
 
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "end" });
@@ -415,7 +423,13 @@ function Phone({
       >
         {count === 0 && !loading ? <li className="m-auto max-w-xs text-center text-sm text-muted">{empty}</li> : null}
         {messages.map((message) => (
-          <Bubble key={message.id} message={message} title={title} perspective={perspective} />
+          <Bubble
+            key={message.id}
+            message={message}
+            title={title}
+            perspective={perspective}
+            onButton={message.id === answerable ? onButton : undefined}
+          />
         ))}
         {pending.map((item) => (
           <PendingBubble key={item.key} item={item} />
@@ -431,10 +445,14 @@ function Bubble({
   message,
   title,
   perspective,
+  onButton,
+  busy = false,
 }: {
   message: ChatMessage;
   title: string;
   perspective: "seller" | "watcher";
+  onButton?: (title: string) => void;
+  busy?: boolean;
 }) {
   const fromSeller = message.direction === "inbound";
   // As the seller, your own messages sit on the right, as on your phone.
@@ -455,11 +473,12 @@ function Bubble({
         {/* dir="auto": a message in Urdu reads right to left, as on her phone, and English left to right. */}
         {message.text ? (
           <p dir="auto" className="break-words whitespace-pre-line">
-            {message.text}
+            <FormattedText text={message.text} />
           </p>
         ) : null}
         {message.english ? <EnglishLine text={message.english} /> : null}
       </div>
+      {fromSeller ? null : <ReplyButtons titles={message.buttons} onChoose={onButton} busy={busy} />}
       <time dateTime={message.created_at} className="mt-1 px-1 text-xs text-muted">
         {messageTime(message.created_at)} · {CHANNEL_LABELS[message.channel]}
         {perspective === "seller" && fromSeller ? " · Sent" : null}

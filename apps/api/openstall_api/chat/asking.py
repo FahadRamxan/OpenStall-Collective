@@ -100,7 +100,7 @@ class Parts:
     unnamed: str  # the title, before there is one
     joiner: str
     so_far: str  # {listing}
-    summary: str  # {listing}: everything, once nothing is left to ask
+    summary: str  # {listing}: everything, once nothing is left to ask, as a list, one line per fact
     confirm: str  # her yes, asked for
     live: str  # {link}: her stall, once her yes published it
     still_live: str  # {link}: her answer once she is live
@@ -118,7 +118,7 @@ PARTS: dict[str, Parts] = {
         unnamed="your item, not named yet",
         joiner=", ",
         so_far="Your listing so far: {listing}.",
-        summary="Here is your listing: {listing}.",
+        summary="Here is your listing:{listing}",
         confirm="Reply YES to publish it, or tell me what to change.",
         live="Your listing is live! AI shopping agents can find it now. Your stall: {link}",
         still_live="Your listing is live: {link}",
@@ -135,7 +135,7 @@ PARTS: dict[str, Parts] = {
         joiner="، ",
         # "اشتہار", the everyday word for an online ad, not "لسٹنگ": the voice read that English word as "listening".
         so_far="اب تک آپ کا اشتہار: {listing}۔",
-        summary="یہ رہا آپ کا اشتہار: {listing}۔",
+        summary="یہ رہا آپ کا اشتہار:{listing}",
         confirm='اشتہار لگانے کے لیے "ہاں" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔',
         live="آپ کا اشتہار لگ گیا ہے! اب اے آئی شاپنگ ایجنٹ اسے ڈھونڈ سکتے ہیں۔ آپ کی دکان: {link}",
         still_live="آپ کا اشتہار لگا ہوا ہے: {link}",
@@ -151,7 +151,7 @@ PARTS: dict[str, Parts] = {
         unnamed="आपकी चीज़, नाम अभी बाकी है",
         joiner=", ",
         so_far="आपकी लिस्टिंग अब तक: {listing}।",
-        summary="यह आपकी लिस्टिंग है: {listing}।",
+        summary="यह आपकी लिस्टिंग है:{listing}",
         confirm='इसे प्रकाशित करने के लिए "हाँ" लिखें, या बताएँ क्या बदलना है।',
         live="आपकी लिस्टिंग अब लाइव है! AI शॉपिंग एजेंट अब इसे ढूँढ सकते हैं। आपकी दुकान: {link}",
         still_live="आपकी लिस्टिंग लाइव है: {link}",
@@ -167,14 +167,22 @@ PARTS: dict[str, Parts] = {
         unnamed="tu artículo, aún sin nombre",
         joiner=", ",
         so_far="Tu anuncio hasta ahora: {listing}.",
-        summary="Este es tu anuncio: {listing}.",
+        summary="Este es tu anuncio:{listing}",
         confirm="Responde SÍ para publicarlo, o dime qué cambiar.",
         live="¡Tu anuncio ya está publicado! Los agentes de compra con IA ya pueden encontrarlo. Tu puesto: {link}",
         still_live="Tu anuncio está publicado: {link}",
         thanks="¡Gracias!",
     ),
 }
-assert QUESTIONS.keys() == PARTS.keys() == LOCALES.keys(), "every template language asks in its own words"
+# The button under her listing told back, for her yes: its title starts with her language's yes (proof.is_yes), so a
+# tap counts as one; at most 20 characters, as Meta's buttons take.
+PUBLISH_BUTTONS: dict[str, tuple[str, ...]] = {
+    "en": ("Yes, publish it",),
+    "ur": ("ہاں، اشتہار لگائیں",),
+    "hi": ("हाँ, लिस्टिंग लगाएँ",),
+    "es": ("Sí, publícalo",),
+}
+assert QUESTIONS.keys() == PARTS.keys() == PUBLISH_BUTTONS.keys() == LOCALES.keys(), "every language, its own words"
 assert all(tuple(asked) == ASK_ORDER for asked in QUESTIONS.values()), "every language asks every question, in order"
 
 
@@ -194,6 +202,11 @@ def described(draft: Mapping[str, Any], language: str = "en") -> str:
     each, 4 a week, arrives in 9 days, from Lahore". In her language the item is named in it too (`title_local`, which
     the listing reader writes beside the English title), so an Urdu message, and its spoken copy, carries no English
     title; the listing's own title stays in English, as buyers' agents read it."""
+    return PARTS[language].joiner.join(pieces_of(draft, language))
+
+
+def pieces_of(draft: Mapping[str, Any], language: str = "en") -> list[str]:
+    """Her listing and limits so far, one short fact each, in a template language (described)."""
     parts = PARTS[language]
     local = draft.get("title_local") if language != "en" else None
     pieces = [str(local or draft.get("title") or parts.unnamed)]
@@ -209,7 +222,7 @@ def described(draft: Mapping[str, Any], language: str = "en") -> str:
         pieces.append(parts.lowest.format(price=format_money(language, Decimal(str(draft["floor_price_usd"])))))
     if given(draft.get("min_lead_days")):
         pieces.append(parts.lead.format(n=draft["min_lead_days"]))
-    return parts.joiner.join(pieces)
+    return pieces
 
 
 def asking_reply(draft: Mapping[str, Any], language: str, *, thanks: bool) -> str:
@@ -220,14 +233,14 @@ def asking_reply(draft: Mapping[str, Any], language: str, *, thanks: bool) -> st
 
     def compose(code: str) -> str:
         parts = PARTS[code]
-        listing = described(draft, code)
-        if asked:
-            text = f"{parts.so_far.format(listing=listing)} {QUESTIONS[code][asked]}"
-        else:
-            text = f"{parts.summary.format(listing=listing)} {parts.confirm}"
+        if asked:  # the question on a line of its own, under her listing so far
+            text = f"{parts.so_far.format(listing=described(draft, code))}\n\n{QUESTIONS[code][asked]}"
+        else:  # all of it as a list, one line per fact, then her yes asked for
+            listing = "".join(f"\n• {piece}" for piece in pieces_of(draft, code))
+            text = f"{parts.summary.format(listing=listing)}\n\n{parts.confirm}"
         return f"{parts.thanks} {text}" if thanks else text
 
-    return say(language, compose)
+    return say(language, compose, None if asked else PUBLISH_BUTTONS)
 
 
 def live_reply(language: str, link: str, *, again: bool = False) -> str:

@@ -12,6 +12,7 @@ FAKE_META_VERIFY_TOKEN. Both are public, which is fine: fake mode sends nothing 
 
 import hashlib
 import hmac
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -23,7 +24,12 @@ from openstall_api.messaging import SentMessage
 from openstall_api.settings import Settings
 from openstall_api.whatsapp import MessengerError
 
+log = logging.getLogger(__name__)
+
 GRAPH = "https://graph.facebook.com"
+# Meta's reply buttons: at most 3, each title up to 20 characters, under a text of up to 1024.
+MAX_BUTTON_TITLE = 20
+MAX_BUTTON_TEXT = 1024
 FAKE_META_APP_SECRET = "openstall-fake-mode-meta-app-secret"
 FAKE_META_VERIFY_TOKEN = "openstall-fake-mode-meta-verify-token"
 # The kinds of message that carry one file. Meta sends each photo or voice note as a message of its own.
@@ -199,15 +205,32 @@ class MetaMessenger:
         self.version = version
         self._http = http or httpx.Client(timeout=15.0)
 
-    def send(self, to: str, text: str, media_urls: Sequence[str] = ()) -> SentMessage:
+    def send(
+        self, to: str, text: str, media_urls: Sequence[str] = (), buttons: Sequence[str] = ()
+    ) -> SentMessage:
         recipient = to.removeprefix("whatsapp:").strip().lstrip("+")
         ids: list[str] = []
         if text:
-            ids.append(self._post(recipient, {"type": "text", "text": {"body": text, "preview_url": False}}))
+            ids.append(self._text(recipient, text, buttons))
         for url in media_urls:
             kind = "image" if url.split("?", 1)[0].lower().endswith(IMAGE_SUFFIXES) else "audio"
             ids.append(self._post(recipient, {"type": kind, kind: {"link": url}}))
-        return SentMessage(ids[0] if ids else "", f"whatsapp:+{recipient}", text, tuple(media_urls))
+        return SentMessage(ids[0] if ids else "", f"whatsapp:+{recipient}", text, tuple(media_urls), tuple(buttons))
+
+    def _text(self, recipient: str, text: str, buttons: Sequence[str]) -> str:
+        """Her text, with reply buttons under it when it offers any (Meta takes 3, each title up to 20 characters,
+        under a text of up to 1024); the text alone if Meta refuses them, as it also says what to type."""
+        if buttons and len(text) <= MAX_BUTTON_TEXT:
+            choices = [
+                {"type": "reply", "reply": {"id": f"button-{index}", "title": title[:MAX_BUTTON_TITLE]}}
+                for index, title in enumerate(buttons[:3], 1)
+            ]
+            interactive = {"type": "button", "body": {"text": text}, "action": {"buttons": choices}}
+            try:
+                return self._post(recipient, {"type": "interactive", "interactive": interactive})
+            except MessengerError as error:
+                log.warning("Meta refused the reply buttons, so the text goes alone: %s", error)
+        return self._post(recipient, {"type": "text", "text": {"body": text, "preview_url": False}})
 
     def _post(self, recipient: str, message: dict[str, Any]) -> str:
         body = {"messaging_product": "whatsapp", "recipient_type": "individual", "to": recipient, **message}

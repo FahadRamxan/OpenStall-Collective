@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/badge";
 import { DeliveryProblem, deliveryWords } from "@/components/delivery-note";
 import { EnglishLine } from "@/components/english-line";
+import { FormattedText } from "@/components/formatted-text";
+import { ReplyButtons } from "@/components/reply-buttons";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { useLatestOrder } from "@/hooks/use-latest-order";
@@ -223,12 +225,13 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
         ) : null}
         {message.text ? (
           <p dir="auto" className="break-words whitespace-pre-line">
-            {message.text}
+            <FormattedText text={message.text} />
           </p>
         ) : null}
         {message.english ? <EnglishLine text={message.english} /> : null}
         {spoken ? <p className="mt-1 text-muted italic">Also sent as a voice note</p> : null}
       </div>
+      {hers ? null : <ReplyButtons titles={message.buttons} />}
       <time dateTime={message.created_at} className="mt-0.5 px-1 text-[0.7rem] text-muted">
         {messageTime(message.created_at)}
         {deliveryWords(message)}

@@ -219,6 +219,9 @@ class ChatMessage(Base):
     # What a message to her in Urdu, Hindi or Spanish says in English, composed from the English templates with the
     # same facts (wording.say), for the pages' English line; never sent to her. None for one in English.
     english: Mapped[str | None] = mapped_column(Text)
+    # The buttons she can answer a message of ours with (their titles, in her language: wording.Said.buttons), shown
+    # under it on WhatsApp and on the pages; a tap sends the title back as her message. None when it offers none.
+    buttons_json: Mapped[list[str] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")

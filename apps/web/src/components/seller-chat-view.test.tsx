@@ -412,6 +412,45 @@ describe("SellerChatView, your own demo phone", () => {
     expect(screen.getByLabelText("Message")).toHaveValue("");
   });
 
+  it("on your demo phone, a button under OpenStall's newest message sends its title as your answer", async () => {
+    saveDemoPhone({ id: "demo-3f9a1c7e2b40", sellerId: "s_web" });
+    const offered: Conversation = {
+      ...MINE,
+      messages: [
+        ...MINE.messages,
+        {
+          id: "cm_11",
+          direction: "outbound",
+          channel: "web",
+          text: "Here is your listing:\n• Quilt\n\nReply YES to publish it, or tell me what to change.",
+          buttons: ["Yes, publish it"],
+          media: [],
+          created_at: "2026-11-03T11:00:02Z",
+        },
+      ],
+    };
+    let sent: FormData | null = null;
+    vi.stubGlobal(
+      "fetch",
+      api({
+        "GET /api/chats": () => Response.json([]),
+        "GET /api/chats/s_web": () => Response.json(offered),
+        "POST /api/seller-chat/messages": (init) => {
+          sent = init?.body as FormData;
+          return Response.json({ seller_id: "s_web", message_id: "cm_12", replies: [] });
+        },
+      }),
+    );
+    render(<SellerChatView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Yes, publish it" }));
+
+    await waitFor(() => expect(sent).not.toBeNull());
+    expect(sent!.get("text")).toBe("Yes, publish it");
+    // The listing's lines stay lines, as on her phone.
+    expect(screen.getByText(/Here is your listing:/)).toHaveClass("whitespace-pre-line");
+  });
+
   it("sends an attached photo with the message", async () => {
     let sent: FormData | null = null;
     vi.stubGlobal(

@@ -1,3 +1,5 @@
+import { FormattedText } from "@/components/formatted-text";
+
 /**
  * What a message to a maker in Urdu, Hindi or Spanish says in English, shown under it for someone who reads only
  * English. The API composes it from the English templates with the same facts (never a translation made at run time),
@@ -8,7 +10,7 @@ export function EnglishLine({ text }: { text: string }) {
     <figure className="mt-2 border-t border-border pt-1.5">
       <figcaption className="text-xs font-medium text-muted">In English</figcaption>
       <p lang="en" dir="ltr" className="break-words whitespace-pre-line">
-        {text}
+        <FormattedText text={text} />
       </p>
     </figure>
   );

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from openstall_agents.listing_reader import QUESTIONS
-from openstall_api.chat.handler import THANKS, WELCOME, WELCOMES, turn
+from openstall_api.chat.handler import PAY_ANSWERS, THANKS, WELCOME, WELCOMES, asked_about, turn
 from openstall_api.chat.voice import Heard, language_hint, written_language
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
@@ -90,8 +90,8 @@ def test_same_input_through_whatsapp_and_the_web_gives_the_same_messages_and_rep
     # Answered in English until her Urdu voice note saves her language, then in Urdu.
     assert [text for direction, text, _ in on_the_web if direction == "outbound"] == [
         WELCOME,
-        f"Thank you. Your listing so far: Hand-embroidered cushion cover. {QUESTIONS['price_usd']}",
-        "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، Lahore سے۔ آپ کا "
+        f"Thank you. Your listing so far: Hand-embroidered cushion cover.\n\n{QUESTIONS['price_usd']}",
+        "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، Lahore سے۔\n\nآپ کا "
         "پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
     ]
 
@@ -164,7 +164,7 @@ def test_a_web_seller_is_known_by_her_demo_phone_and_labelled_web_chat(db):
     assert first.status_code == second.status_code == 200
     assert first.json()["replies"] == [WELCOME]
     assert second.json()["replies"] == [
-        f"Thank you. Your listing so far: Hand-embroidered cushion cover. {QUESTIONS['price_usd']}"
+        f"Thank you. Your listing so far: Hand-embroidered cushion cover.\n\n{QUESTIONS['price_usd']}"
     ]
     assert first.json()["seller_id"] == second.json()["seller_id"]
     [chat] = client.get("/api/chats").json()
@@ -243,14 +243,76 @@ def test_arabic_script_from_a_country_that_writes_urdu_in_it_is_urdu(text, count
 
 def test_a_maker_in_pakistan_who_greets_in_urdu_is_welcomed_in_urdu(twilio):
     """"السلام علیکم" has no letter only Urdu writes; from a Pakistani number it is still Urdu. Found on the first
-    real WhatsApp message, through Meta, on November 10."""
+    real WhatsApp message, through Meta, on November 10. A greeting alone does not decide her language, though: the
+    tester went on in English, and was answered in Urdu."""
     send_on_whatsapp("+923145550000", "SM_pk_1", "السلام علیکم", [])
 
     twilio.expire_all()
     seller = twilio.scalars(select(Seller).filter_by(whatsapp_number="+923145550000")).one()
-    assert (seller.language, seller.country) == ("ur", "PK")
+    assert (seller.language, seller.country) == (None, "PK")
     [message] = [m for m in client.get(f"/api/chats/{seller.id}").json()["messages"] if m["direction"] == "outbound"]
     assert message["text"] == WELCOMES["ur"]
+
+
+def test_after_an_urdu_greeting_her_english_question_is_answered_in_english_with_how_it_works(twilio):
+    """"Who are you?" and "what can you do?" were answered with thanks for a message, in Urdu: now they get how it
+    works, in the language she asked in."""
+    send_on_whatsapp("+923145550001", "SM_pk_2", "السلام علیکم۔", [])
+    send_on_whatsapp("+923145550001", "SM_pk_3", "Hello what can you do or what do you do", [])
+
+    twilio.expire_all()
+    seller = twilio.scalars(select(Seller).filter_by(whatsapp_number="+923145550001")).one()
+    replies = [m["text"] for m in client.get(f"/api/chats/{seller.id}").json()["messages"] if m["direction"] == "outbound"]
+    assert replies == [WELCOMES["ur"], WELCOME]
+    assert seller.language is None
+
+
+@pytest.mark.parametrize(
+    ("question", "topic"),
+    [
+        ("Who are you?", "about"),
+        ("Hello what can you do or what do you do", "about"),
+        ("Help", "about"),
+        ("آپ کیا کرتے ہیں؟", "about"),
+        ("یہ کیا ہے", "about"),
+        ("आप कौन हैं?", "about"),
+        ("¿Qué haces?", "about"),
+        ("aap kya karte ho", "about"),
+        ("Is it free?", "about"),  # no topic of its own: told what OpenStall is
+        ("How do I get paid?", "pay"),
+        ("پیسے کب ملیں گے؟", "pay"),
+        ("paise kab milenge", "pay"),
+        ("भुगतान कैसे होगा?", "pay"),
+        ("¿Cómo me pagan?", "pay"),
+        ("Who buys these?", "buyers"),
+        ("خریدار کون ہیں؟", "buyers"),
+        ("What can I sell?", "sell"),
+        ("میں کیا بیچ سکتی ہوں؟", "sell"),
+    ],
+)
+def test_her_questions_about_openstall_are_answered_by_topic(question, topic):
+    assert asked_about(question) == topic
+
+
+@pytest.mark.parametrize("words", ["I make cushion covers", "18 dollars", "میں کشن کور بناتی ہوں", "helpful hint", "9"])
+def test_her_own_words_are_not_questions_about_openstall(words):
+    assert asked_about(words) is None
+
+
+def test_while_she_answers_a_question_a_question_shaped_answer_is_her_answer():
+    assert asked_about("How about 15 dollars?", answering=True) is None
+    assert asked_about("How do I get paid?", answering=True) == "pay"  # a question with a topic is still answered
+
+
+def test_her_question_about_payment_is_answered_in_her_language_and_her_listing_goes_on(twilio):
+    send_on_whatsapp("+923145550002", "SM_pk_4", "السلام علیکم", [])
+    send_on_whatsapp("+923145550002", "SM_pk_5", "پیسے کب ملیں گے؟", [])
+
+    twilio.expire_all()
+    seller = twilio.scalars(select(Seller).filter_by(whatsapp_number="+923145550002")).one()
+    replies = [m for m in client.get(f"/api/chats/{seller.id}").json()["messages"] if m["direction"] == "outbound"]
+    assert [reply["text"] for reply in replies] == [WELCOMES["ur"], PAY_ANSWERS["ur"]]
+    assert replies[1]["english"] == PAY_ANSWERS["en"]
 
 
 def test_a_maker_outside_pakistan_who_writes_in_urdu_is_answered_in_urdu(twilio):

@@ -9,7 +9,8 @@ English is kept with it, so the pages can show what she was told to someone who 
 translation made at run time, and never sent to her.
 """
 
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -92,24 +93,46 @@ def language_words(used: str, requested: str | None) -> str:
 
 class Said(str):
     """A message in a maker's language that carries what it says in English (`english`), for the English line the
-    pages show under it. It is a str, so sending, storing and comparing it work as before; but joining or formatting
-    it gives a plain str again, so a whole message is composed first and made a Said last (say)."""
+    pages show under it, and the buttons she can answer it with (`buttons`, their titles in her language: WhatsApp
+    shows them under it, and a tap sends the title back as her answer). It is a str, so sending, storing and comparing
+    it work as before; but joining or formatting it gives a plain str again, so a whole message is composed first and
+    made a Said last (say)."""
 
     english: str | None
+    buttons: tuple[str, ...]
 
-    def __new__(cls, text: str, english: str | None = None) -> "Said":
+    def __new__(cls, text: str, english: str | None = None, buttons: Sequence[str] = ()) -> "Said":
         made = super().__new__(cls, text)
         made.english = english if english and english != text else None
+        made.buttons = tuple(buttons)
         return made
 
 
-def say(code: str, compose: Callable[[str], str]) -> Said:
+def say(code: str, compose: Callable[[str], str], buttons: Mapping[str, Sequence[str]] | None = None) -> Said:
     """A message composed in template language `code`, with the same message composed in English as its English line
-    (none when it is English already). `compose` takes a template language and words every date and amount in it."""
+    (none when it is English already). `compose` takes a template language and words every date and amount in it.
+    `buttons`: the titles of the buttons she can answer with, by template language."""
     text = compose(code)
-    return Said(text, compose(DEFAULT_LANGUAGE) if code != DEFAULT_LANGUAGE else None)
+    english = compose(DEFAULT_LANGUAGE) if code != DEFAULT_LANGUAGE else None
+    return Said(text, english, (buttons or {}).get(code, ()))
 
 
 def english_of(text: str | None) -> str | None:
     """The English line of a message made with say(); None for any other text, and for one in English."""
     return getattr(text, "english", None)
+
+
+def buttons_of(text: str | None) -> tuple[str, ...]:
+    """The buttons a message made with say() offers her; none for any other text."""
+    return tuple(getattr(text, "buttons", ()) or ())
+
+
+# WhatsApp's formatting marks (*bold*, _italic_, ~struck~) and list bullets, which a voice must not read out.
+FORMATTING = re.compile(r"[*_~•]")
+
+
+def speakable(text: str) -> str:
+    """A message as a voice should read it: WhatsApp's formatting marks and bullets taken out, and each line ended,
+    so a list is read as sentences rather than run together."""
+    lines = [FORMATTING.sub("", line).strip() for line in text.splitlines()]
+    return " ".join(line if line[-1:] in ".!?۔؟।:" else f"{line}." for line in lines if line)

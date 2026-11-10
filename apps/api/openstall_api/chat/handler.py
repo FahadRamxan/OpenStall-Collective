@@ -48,25 +48,41 @@ from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaSt
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller
 from openstall_api.advance import advance_turn
 from openstall_api.healing import drop_turn
-from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
+from openstall_api.proof import PhotoReading, look_at_photo, normalise, proof_turn
 from openstall_api.wording import LOCALES, say, template_language
 
 # Kept here too: they moved to chat/store.py.
 __all__ = ["CHANNEL_WORDS", "DIALING_CODES", "country_of", "find_chat", "save_message"]
 
 
-# The first answer a seller gets, in her language when it is known (from her first voice note, or her profile).
+# The first answer a seller gets, in her language when it is known (from her first voice note, or her profile), and
+# again when she asks what OpenStall is (asks_what_this_is). WhatsApp shows *this* in bold; the pages do too, and the
+# voice leaves the marks out (wording.speakable).
 WELCOMES = {
-    "en": "Welcome to OpenStall! Send photos of what you make and tell me about it, by text or a voice note. I will "
-    "turn it into a listing that AI shopping agents can find, and you are paid through PayPal when you ship.",
-    "ur": "OpenStall میں خوش آمدید! اپنی ہاتھ سے بنی چیزوں کی تصویریں بھیجیں، اور ان کے بارے میں لکھ کر یا وائس نوٹ "
-    "میں بتائیں۔ ہم اس سے آپ کا اشتہار بنائیں گے جسے اے آئی شاپنگ ایجنٹ ڈھونڈ سکیں گے، اور سامان بھیجنے پر آپ کو "
-    "PayPal سے ادائیگی ہوگی۔",
-    "hi": "OpenStall में आपका स्वागत है! अपनी हाथ से बनी चीज़ों की फ़ोटो भेजें, और उनके बारे में लिखकर या वॉइस नोट में "
-    "बताएँ। हम इससे आपकी लिस्टिंग बनाएँगे जिसे AI शॉपिंग एजेंट ढूँढ सकेंगे, और सामान भेजने पर आपको PayPal से भुगतान "
-    "होगा।",
-    "es": "¡Te damos la bienvenida a OpenStall! Mándame fotos de lo que haces y cuéntame de ello, por mensaje o nota de "
-    "voz. Con eso armo un anuncio que los agentes de compra con IA pueden encontrar, y PayPal te paga cuando envías.",
+    "en": "*Welcome to OpenStall!*\n\n"
+    "To sell what you make:\n"
+    "1. Send a photo of it.\n"
+    "2. Tell me about it, by text or a voice note.\n"
+    "3. We make your listing, which buyers' AI shopping agents can find.\n\n"
+    "You are paid through PayPal when you ship.",
+    "ur": "*OpenStall میں خوش آمدید!*\n\n"
+    "اپنا سامان بیچنے کے لیے:\n"
+    "1. اپنے ہاتھ سے بنی چیز کی تصویر بھیجیں۔\n"
+    "2. اس کے بارے میں لکھ کر یا وائس نوٹ میں بتائیں۔\n"
+    "3. ہم آپ کا اشتہار بنائیں گے، جسے خریداروں کے اے آئی ایجنٹ ڈھونڈ سکیں گے۔\n\n"
+    "سامان بھیجنے پر آپ کو PayPal سے ادائیگی ہوگی۔",
+    "hi": "*OpenStall में आपका स्वागत है!*\n\n"
+    "अपना सामान बेचने के लिए:\n"
+    "1. अपने हाथ से बनी चीज़ की फ़ोटो भेजें।\n"
+    "2. उसके बारे में लिखकर या वॉइस नोट में बताएँ।\n"
+    "3. हम आपकी लिस्टिंग बनाएँगे, जिसे खरीदारों के AI एजेंट ढूँढ सकेंगे।\n\n"
+    "सामान भेजने पर आपको PayPal से भुगतान होगा।",
+    "es": "*¡Te damos la bienvenida a OpenStall!*\n\n"
+    "Para vender lo que haces:\n"
+    "1. Mándame una foto.\n"
+    "2. Cuéntame de ello, por mensaje o nota de voz.\n"
+    "3. Armamos tu anuncio, que los agentes de compra con IA de los compradores pueden encontrar.\n\n"
+    "PayPal te paga cuando envías.",
 }
 assert WELCOMES.keys() == LOCALES.keys(), "every template language welcomes her in its own words"
 WELCOME = WELCOMES["en"]
@@ -84,6 +100,133 @@ THANKS = {
     "semana.",
 }
 assert THANKS.keys() == LOCALES.keys(), "every template language thanks her in its own words"
+
+# Answers to her questions about OpenStall, by topic, in each template language, laid out for a phone like the
+# welcome. They are fixed texts, as every message to her is; WELCOMES answers what OpenStall is and does.
+PAY_ANSWERS = {
+    "en": "*How you are paid*\n\n"
+    "When an order comes, OpenStall has the buyer's money held by PayPal. You make it and ship it, then send a photo "
+    "of your courier receipt here. As soon as it is checked, your share is paid to you.",
+    "ur": "*ادائیگی کیسے ہوتی ہے*\n\n"
+    "جب آرڈر آتا ہے تو OpenStall خریدار کی رقم PayPal کے پاس محفوظ کروا دیتا ہے۔ آپ سامان تیار کر کے بھیجیں، پھر "
+    "کورئیر کی رسید کی تصویر یہاں بھیجیں۔ رسید کی تصدیق ہوتے ہی آپ کا حصہ آپ کو ادا کر دیا جاتا ہے۔",
+    "hi": "*भुगतान कैसे होता है*\n\n"
+    "जब ऑर्डर आता है, तो OpenStall खरीदार का पैसा PayPal के पास सुरक्षित रखवा देता है। आप सामान तैयार करके भेजें, "
+    "फिर कूरियर की रसीद की फ़ोटो यहाँ भेजें। रसीद की जाँच होते ही आपका हिस्सा आपको दे दिया जाता है।",
+    "es": "*Cómo te pagan*\n\n"
+    "Cuando llega un pedido, OpenStall deja el dinero del comprador reservado en PayPal. Tú lo haces y lo envías, y "
+    "luego mandas aquí una foto del recibo de paquetería. En cuanto se revisa, te pagamos tu parte.",
+}
+BUYER_ANSWERS = {
+    "en": "*Who buys*\n\n"
+    "Shoppers abroad, mostly in the United States, ask their AI shopping assistants to find handmade things. Those "
+    "assistants find your listing on OpenStall, and one order can be shared by several makers, each paid for their "
+    "own share.",
+    "ur": "*خریدار کون ہیں*\n\n"
+    "بیرونِ ملک، زیادہ تر امریکہ کے خریدار اپنے اے آئی شاپنگ اسسٹنٹ سے ہاتھ کی بنی چیزیں ڈھونڈنے کو کہتے ہیں۔ وہ "
+    "اسسٹنٹ OpenStall پر آپ کا اشتہار ڈھونڈ لیتے ہیں، اور ایک آرڈر کئی کاریگروں میں بانٹا جا سکتا ہے، ہر ایک کو اپنے "
+    "حصے کی ادائیگی ملتی ہے۔",
+    "hi": "*खरीदार कौन हैं*\n\n"
+    "विदेश में, ज़्यादातर अमेरिका के खरीदार अपने AI शॉपिंग असिस्टेंट से हाथ की बनी चीज़ें ढूँढने को कहते हैं। वे "
+    "असिस्टेंट OpenStall पर आपकी लिस्टिंग ढूँढ लेते हैं, और एक ऑर्डर कई कारीगरों में बाँटा जा सकता है, हर एक को अपने "
+    "हिस्से का भुगतान मिलता है।",
+    "es": "*Quién compra*\n\n"
+    "Compradores en el extranjero, sobre todo en Estados Unidos, piden a sus asistentes de compra con IA que "
+    "encuentren cosas hechas a mano. Esos asistentes encuentran tu anuncio en OpenStall, y un pedido puede repartirse "
+    "entre varias personas que hacen artesanía, cada una con el pago de su parte.",
+}
+SELL_ANSWERS = {
+    "en": "*What you can sell*\n\n"
+    "Things made by hand: cushion covers, embroidery, quilts, pottery, jewellery and the like. Send a photo of one "
+    "to start your listing.",
+    "ur": "*کیا بیچا جا سکتا ہے*\n\n"
+    "ہاتھ سے بنی چیزیں: کشن کور، کڑھائی، رلی، مٹی کے برتن، زیورات وغیرہ۔ اشتہار شروع کرنے کے لیے ان میں سے ایک کی "
+    "تصویر بھیجیں۔",
+    "hi": "*क्या बेचा जा सकता है*\n\n"
+    "हाथ से बनी चीज़ें: कुशन कवर, कढ़ाई, रज़ाई, मिट्टी के बर्तन, गहने वगैरह। लिस्टिंग शुरू करने के लिए इनमें से एक की "
+    "फ़ोटो भेजें।",
+    "es": "*Qué puedes vender*\n\n"
+    "Cosas hechas a mano: fundas de cojín, bordados, colchas, cerámica, joyería y cosas así. Mándame una foto de una "
+    "para empezar tu anuncio.",
+}
+ANSWERS: dict[str, dict[str, str]] = {"pay": PAY_ANSWERS, "buyers": BUYER_ANSWERS, "sell": SELL_ANSWERS, "about": WELCOMES}
+assert all(answers.keys() == LOCALES.keys() for answers in ANSWERS.values()), "every topic, in every language"
+
+# Her questions by topic, in the demo's languages and Urdu and Hindi in Latin letters, matched as whole words after
+# normalising; the first topic found answers, so the specific ones come before what OpenStall is.
+TOPICS: dict[str, tuple[str, ...]] = {
+    topic: tuple(normalise(phrase) for phrase in phrases)
+    for topic, phrases in {
+        "pay": (
+            "how do i get paid", "how will i get paid", "when will i get paid", "when do i get paid", "get paid",
+            "payment", "my money", "پیسے کب", "پیسے کیسے", "ادائیگی", "پیمنٹ", "paise kab", "paise kaise", "paisay",
+            "payment kab", "पैसे कब", "पैसे कैसे", "भुगतान", "पेमेंट", "cómo me pagan", "como me pagan", "pago", "cobrar",
+        ),
+        "buyers": (
+            "who buys", "who will buy", "who are the buyers", "buyers", "customers", "خریدار", "کون خریدے", "گاہک",
+            "kaun khareedega", "khareedar", "ग्राहक", "खरीदार", "कौन खरीदेगा", "quién compra", "quien compra",
+            "compradores", "clientes",
+        ),
+        "sell": (
+            "what can i sell", "what can i make", "what should i sell", "what do you buy", "کیا بیچ", "kya bech",
+            "क्या बेच", "qué puedo vender", "que puedo vender",
+        ),
+        "about": (
+            "what can you do", "what do you do", "who are you", "what are you", "what is this", "what is openstall",
+            "how does it work", "how does this work", "how do i sell", "help",
+            "آپ کیا کرتے ہیں", "آپ کیا کر سکتے ہیں", "آپ کون ہیں", "یہ کیا ہے", "کیسے کام کرتا ہے", "مدد",
+            "aap kya karte", "ap kya karte", "aap kaun", "ye kya hai", "yeh kya hai", "madad",
+            "आप क्या करते हैं", "आप कौन हैं", "यह क्या है", "कैसे काम करता है", "मदद",
+            "qué haces", "que haces", "quién eres", "quien eres", "cómo funciona", "como funciona", "qué es esto",
+            "ayuda",
+        ),
+    }.items()
+}
+# The words a question starts with, for a question about none of the topics: told what OpenStall is.
+QUESTION_WORDS = frozenset(
+    normalise(word)
+    for word in (
+        "what", "how", "who", "why", "when", "where", "which", "can", "is", "do", "does", "kya", "kaise", "kab",
+        "kaun", "kyun", "کیا", "کیسے", "کب", "کون", "کیوں", "क्या", "कैसे", "कब", "कौन", "क्यों", "qué", "cómo",
+        "cuándo", "quién", "por qué",
+    )
+)
+# A greeting alone, which many write in Urdu letters whatever language they write in next ("السلام علیکم", then
+# English): it is answered in its own language, but does not decide hers.
+GREETINGS = frozenset(
+    normalise(phrase)
+    for phrase in (
+        "السلام علیکم", "السلام عليكم", "اسلام علیکم", "السلام و علیکم", "سلام", "assalam o alaikum",
+        "assalamualaikum", "asalam o alaikum", "salam", "salaam", "aoa", "hello", "hi", "hey", "नमस्ते", "नमस्कार",
+        "hola",
+    )
+)
+
+
+def asked_about(text: str, *, answering: bool = False) -> str | None:
+    """What she asks about OpenStall, as a topic of ANSWERS: how she is paid, who buys, what she can sell, or what
+    OpenStall is ("Who are you?", "آپ کیا کرتے ہیں؟"). Any other question is told what OpenStall is too, unless she is
+    answering a question OpenStall asked (`answering`), when "How about 15 dollars?" is her answer. None when she asks
+    nothing."""
+    words = f" {normalise(text)} "
+    for topic, phrases in TOPICS.items():
+        if any(f" {phrase} " in words for phrase in phrases):
+            return topic
+    stripped = text.strip()
+    first = normalise(stripped).split(" ", 1)[0] if stripped else ""
+    if not answering and (stripped.endswith(("?", "؟")) or first in QUESTION_WORDS):
+        return "about"
+    return None
+
+
+def asks_what_this_is(text: str) -> bool:
+    """Whether she asks what OpenStall is or does: she is told how it works (asked_about's "about")."""
+    return asked_about(text) == "about"
+
+
+def greeting_only(text: str) -> bool:
+    """Whether her message is a greeting and nothing else ("السلام علیکم۔", "Hi!")."""
+    return normalise(text) in GREETINGS
 
 
 @dataclass(frozen=True)
@@ -242,8 +385,13 @@ def turn(
     told where it is."""
     replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
+    topic = None if first else asked_about(text, answering=bool(draft and draft.get("asked")))
     if first:
         replies.append(Reply(say(language, lambda code: WELCOMES[code])))
+    elif topic is not None:  # her question about OpenStall, answered; her listing goes on below, if she has one
+        answer = ANSWERS[topic]
+        replies.append(Reply(say(language, lambda code: answer[code])))
+        what = ""  # and nothing more to thank her for
     if draft is not None:
         replies.append(Reply(asking_reply(draft, language, thanks=bool(what) and not first)))
     elif live_at is not None:
@@ -356,14 +504,17 @@ def handle_inbound(
                 "language_saved": saved,
             },
         )
-    # Typed in Urdu (or Hindi), with no language on her profile yet: that is her language from now on.
-    remember_language(seller, written_language(text, seller.country))
+    # Typed in Urdu (or Hindi), with no language on her profile yet: that is her language from now on. A greeting
+    # alone is answered in its language but does not decide hers: many greet in Urdu letters, then write English.
+    written = written_language(text, seller.country)
+    if not greeting_only(text):
+        remember_language(seller, written)
     proof = proof_turn(session, seller, text, media, photo, message.id)
     # Her words typed and said: "I can't make it" counts in a voice note too.
     said = " ".join(words for words in (text, heard.transcript) if words)
     drop = drop_turn(session, seller, said, message.id) if proof is None else None
     advance = advance_turn(session, seller, said, message.id) if proof is None and drop is None else None
-    language = template_language(seller.language or opening_language(seller, text))
+    language = template_language(seller.language or written or opening_language(seller, text))
     published: str | None = None
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]

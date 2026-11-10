@@ -238,7 +238,7 @@ def test_a_played_message_with_a_photo_and_a_voice_note_shows_in_the_chat(db):
     seller_id = response.json()["seller_id"]
     # Her voice note is in Urdu, so she is welcomed and asked in Urdu.
     listing = (
-        "اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4۔ آپ کا پارسل امریکہ میں "
+        "اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4۔\n\nآپ کا پارسل امریکہ میں "
         "خریدار تک کتنے دن میں پہنچتا ہے؟"
     )
     assert response.json()["replies"] == [WELCOMES["ur"], listing]

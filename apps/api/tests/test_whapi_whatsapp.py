@@ -237,6 +237,36 @@ def test_the_whapi_messenger_sends_text_then_a_voice_note_as_a_link():
     assert sent_text.calls.last.request.headers["Authorization"] == f"Bearer {TOKEN}"
 
 
+def test_a_message_with_buttons_goes_as_quick_replies_and_her_tap_is_her_answer():
+    button = "ہاں، اشتہار لگائیں"
+    with respx.mock() as api:
+        sent_buttons = api.post(f"{API}/messages/interactive").respond(json={"sent": True, "message": {"id": "PsB1"}})
+
+        sent = WhapiMessenger(TOKEN).send("whatsapp:+923001234567", "یہ رہا آپ کا اشتہار", buttons=[button])
+
+    assert (sent.message_id, sent.buttons) == ("PsB1", (button,))
+    assert json.loads(sent_buttons.calls.last.request.content) == {
+        "to": AMINA,
+        "type": "button",
+        "body": {"text": "یہ رہا آپ کا اشتہار"},
+        "action": {"buttons": [{"type": "quick_reply", "title": button, "id": "button-1"}]},
+    }
+    tap = message("reply", "p.tap", reply={"type": "buttons_reply",
+                                            "buttons_reply": {"id": "ButtonsV3:button-1", "title": button}})
+    assert [inbound.text for inbound in parse_whapi_inbound(event(tap))] == [button]
+
+
+def test_when_whapi_refuses_the_buttons_the_text_goes_alone():
+    with respx.mock() as api:
+        api.post(f"{API}/messages/interactive").respond(400, json={"error": {"message": "buttons are not available"}})
+        sent_text = api.post(f"{API}/messages/text").respond(json={"sent": True, "message": {"id": "PsT1"}})
+
+        sent = WhapiMessenger(TOKEN).send("whatsapp:+923001234567", "Reply YES to publish it.", buttons=["Yes"])
+
+    assert sent.message_id == "PsT1"
+    assert json.loads(sent_text.calls.last.request.content) == {"to": AMINA, "body": "Reply YES to publish it."}
+
+
 def test_a_message_whapi_refuses_says_why():
     with respx.mock() as api:
         api.post(f"{API}/messages/text").respond(402, json={"error": {"code": 402, "message": "Trial limit reached"}})

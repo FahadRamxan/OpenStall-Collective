@@ -20,6 +20,7 @@ from openstall_api.chat.voice import Heard
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.media import MediaRejected, MediaStore, StoredMedia
+from openstall_api.wording import speakable
 from openstall_api.models import ChatMessage, ChatSession
 
 log = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def speak_replies(
     spoken: list[Spoken] = []
     for message_id, reply in zip(handled.reply_ids, handled.replies, strict=True):
         try:
-            audio = speaker.speak(reply.text, handled.language)
+            audio = speaker.speak(speakable(reply.text), handled.language)  # no "*" or bullet read out
             spoken.append(Spoken(message_id, store.save(audio.data, audio.media_type)))
         except (TextToSpeechError, MediaRejected) as error:
             log.warning("An answer to seller %s could not be spoken: %s", handled.seller_id, error)

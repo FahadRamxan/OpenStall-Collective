@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from openstall_agents.adapters import TextToSpeechError
 from openstall_api.chat.handler import WELCOMES
+from openstall_api.wording import speakable
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
@@ -55,7 +56,9 @@ def test_her_voice_note_is_answered_in_text_and_spoken_in_her_language(db, fakes
         [audio] = spoken(reply)
         assert (audio["content_type"], reply["language"]) == ("audio/wav", "ur")  # the stand-in voice, in test mode
         assert client.get(audio["url"]).status_code == 200
-    assert fakes.text_to_speech.calls == [(text, "ur") for text in sent["replies"]]
+    # The voice reads each answer without WhatsApp's formatting marks ("*") or bullets.
+    assert fakes.text_to_speech.calls == [(speakable(text), "ur") for text in sent["replies"]]
+    assert "*" not in fakes.text_to_speech.calls[0][0]
     assert events(db, EventType.MESSAGE_SPOKEN) == [
         f"OpenStall's 2 answers were spoken to {SELLER} in the web chat, in Urdu, as she sent a voice note"
     ]

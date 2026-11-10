@@ -351,6 +351,15 @@ def _item(part: OrderPart, code: str) -> str:
     return part.product.title if part.product else PHRASES[code].some_items
 
 
+# The button under what was read off her receipt, for her yes (its title starts with her language's yes: is_yes).
+CONFIRM_BUTTONS: dict[str, tuple[str, ...]] = {
+    "en": ("Yes, that's right",),
+    "ur": ("ہاں، درست ہے",),
+    "hi": ("हाँ, सही है",),
+    "es": ("Sí, es correcto",),
+}
+
+
 def _ask_confirm(part: OrderPart, code: str) -> str:
     proof = part.proof_json or {}
 
@@ -364,7 +373,7 @@ def _ask_confirm(part: OrderPart, code: str) -> str:
             tracking=proof.get("tracking_number"),
         )
 
-    return say(code, compose)
+    return say(code, compose, CONFIRM_BUTTONS)
 
 
 def _receipt_read(

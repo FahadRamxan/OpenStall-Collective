@@ -31,6 +31,11 @@ LISTING = (
 CONFIRM = "Reply YES to publish it, or tell me what to change."
 
 
+def summary(listing: str) -> str:
+    """Her listing told back as a list, one line per fact, then her yes asked for."""
+    return "Thank you. Here is your listing:" + "".join(f"\n• {fact}" for fact in listing.split(", ")) + f"\n\n{CONFIRM}"
+
+
 def on_the_web(text: str, files: list[tuple[bytes, str]] | None = None) -> dict:
     uploads = [("files", (f"file{index}", data, kind)) for index, (data, kind) in enumerate(files or [])]
     response = client.post(
@@ -64,7 +69,7 @@ def listing_requests(fakes) -> int:
 def test_once_nothing_is_missing_she_gets_her_listing_back_and_must_reply_yes(db):
     sent = ready_to_confirm()
 
-    assert sent["replies"] == [f"Thank you. Here is your listing: {LISTING}. {CONFIRM}"]
+    assert sent["replies"] == [summary(LISTING)]
     assert chat_of(db, sent["seller_id"]).state == ChatState.AWAITING_CONFIRMATION
     assert products_of(db, sent["seller_id"]) == []  # never published before she confirms
 
@@ -137,15 +142,17 @@ def test_after_her_urdu_voice_note_she_confirms_in_urdu(db):
     for answer in ("9", "Lahore", "15"):
         on_the_web(answer)
 
-    summary = on_the_web("5")
-    live = on_the_web("ہاں")
+    told = on_the_web("5")
+    [offered] = [m for m in client.get(f"/api/chats/{told['seller_id']}").json()["messages"] if m["buttons"]]
+    live = on_the_web(offered["buttons"][0])  # she taps the button under her listing: its title is her answer
 
     seller_id = live["seller_id"]
-    assert summary["replies"] == [
-        "شکریہ۔ یہ رہا آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، 9 دن میں پہنچتا ہے، "
-        "Lahore سے، بڑے آرڈر پر کم سے کم 15.00 ڈالر، آرڈر تیار کرنے میں 5 دن۔ اشتہار لگانے کے لیے \"ہاں\" لکھیں، یا "
-        "بتائیں کہ کیا بدلنا ہے۔"
+    assert told["replies"] == [
+        "شکریہ۔ یہ رہا آپ کا اشتہار:\n• ہاتھ کی کڑھائی والا کشن کور\n• 18.00 ڈالر فی عدد\n• ہفتے میں 4\n"
+        "• 9 دن میں پہنچتا ہے\n• Lahore سے\n• بڑے آرڈر پر کم سے کم 15.00 ڈالر\n• آرڈر تیار کرنے میں 5 دن\n\n"
+        "اشتہار لگانے کے لیے \"ہاں\" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔"
     ]
+    assert offered["buttons"] == ["ہاں، اشتہار لگائیں"]
     assert live["replies"] == [
         "آپ کا اشتہار لگ گیا ہے! اب اے آئی شاپنگ ایجنٹ اسے ڈھونڈ سکتے ہیں۔ آپ کی دکان: "
         f"{get_settings().WEB_BASE_URL}/stall/{seller_id}"
@@ -158,7 +165,7 @@ def test_a_change_instead_of_yes_is_read_and_she_gets_her_listing_back_again(db)
     changed = on_the_web("Make it $20 each")
 
     assert changed["replies"] == [
-        f"Thank you. Here is your listing: {LISTING.replace('$18.00', '$20.00')}. {CONFIRM}"
+        summary(LISTING.replace("$18.00", "$20.00"))
     ]
     assert products_of(db, changed["seller_id"]) == []
     assert chat_of(db, changed["seller_id"]).state == ChatState.AWAITING_CONFIRMATION
@@ -169,7 +176,7 @@ def test_a_no_publishes_nothing(db):
 
     no = on_the_web("No")
 
-    assert no["replies"] == [f"Thank you. Here is your listing: {LISTING}. {CONFIRM}"]
+    assert no["replies"] == [summary(LISTING)]
     assert products_of(db, no["seller_id"]) == []
 
 

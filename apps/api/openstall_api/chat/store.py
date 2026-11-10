@@ -21,7 +21,7 @@ from openstall_api.models import (
     WhatsAppSend,
     utcnow,
 )
-from openstall_api.wording import english_of
+from openstall_api.wording import buttons_of, english_of
 
 CHANNEL_WORDS = {Channel.WHATSAPP: "on WhatsApp", Channel.WEB: "in the web chat"}
 # The parts a message of ours goes out as on WhatsApp: its text, then its spoken voice note (chat/spoken.py).
@@ -73,7 +73,7 @@ def save_message(
     session: Session, chat: ChatSession, direction: Direction, text: str, media: list[dict[str, object]]
 ) -> ChatMessage:
     """One message in her chat, inbound or outbound. The caller commits. A message composed with wording.say keeps
-    its English line."""
+    its English line and the buttons it offers her."""
     message = ChatMessage(
         session_id=chat.id,
         direction=direction,
@@ -81,6 +81,7 @@ def save_message(
         text=text or None,
         media_json=media,
         english=english_of(text),
+        buttons_json=list(buttons_of(text)) or None,
     )
     session.add(message)
     chat.updated_at = utcnow()

@@ -41,6 +41,7 @@ from openstall_api.feeds import clear_catalog_cache
 from openstall_api.media import get_media_store
 from openstall_api.models import Channel, ChatMessage
 from openstall_api.whatsapp import MessengerError
+from openstall_api.wording import buttons_of
 from openstall_api.advance import pay_advance_after
 from openstall_api.healing import heal_after
 from openstall_api.proof import pay_on_proof
@@ -106,7 +107,8 @@ def send_replies(handled: HandledMessage, spoken: Sequence[Spoken], address: str
     sends: list[tuple[str, str | None, str, str | None]] = []
     for message_id, text, media, part in outgoing:
         try:
-            sent = registry.messenger.send(f"whatsapp:{address}", text, media)
+            # A reply that offers buttons (wording.Said) has them under its text, where the provider can show them.
+            sent = registry.messenger.send(f"whatsapp:{address}", text, media, buttons_of(text))
             sends.append((message_id, sent.message_id, part, None))
         except (MessengerError, AdapterUnavailable) as error:  # WhatsApp refused it, or is not set up here
             log.warning("A WhatsApp reply to seller %s could not be sent: %s", handled.seller_id, error)

@@ -16,6 +16,7 @@ fake mode sends nothing to anyone.
 """
 
 import hmac
+import logging
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -29,7 +30,11 @@ from openstall_api.meta_whatsapp import IMAGE_SUFFIXES, meta_error
 from openstall_api.settings import Settings
 from openstall_api.whatsapp import MessengerError
 
+log = logging.getLogger(__name__)
+
 FAKE_WHAPI_WEBHOOK_SECRET = "openstall-fake-mode-whapi-webhook-secret"
+# Whapi's quick reply buttons: at most 3, each title up to 25 characters (Meta's are 20, which ours keep to).
+MAX_BUTTON_TITLE = 25
 # The kinds of message that carry one file. A voice note is "voice"; a sound file sent as such is "audio".
 FILE_KINDS = ("image", "voice", "audio", "video", "document", "sticker")
 # Whapi's statuses, as OpenStall keeps them: "played" (she listened to a voice note) counts as read; "pending" is
@@ -97,11 +102,15 @@ def _sender(message: dict[str, Any]) -> str | None:
 
 
 def _words(message: dict[str, Any], kind: str) -> str:
-    """What she wrote: a text's body (with or without a link in it), or a photo's caption."""
+    """What she wrote: a text's body (with or without a link in it), a photo's caption, or the title of a button she
+    tapped (the button's own words, in her language, which the chat reads as her answer)."""
     if kind in ("text", "link_preview"):
         return str((message.get(kind) or {}).get("body") or "")
     if kind in FILE_KINDS:
         return str((message.get(kind) or {}).get("caption") or "")
+    if kind == "reply":
+        reply = message.get("reply") or {}
+        return str((reply.get("buttons_reply") or reply.get("list_reply") or {}).get("title") or "")
     return ""
 
 
@@ -113,7 +122,7 @@ def parse_whapi_inbound(payload: dict[str, Any]) -> list[WhapiInbound]:
         if not isinstance(message, dict) or message.get("from_me"):
             continue
         kind, number = str(message.get("type") or ""), _sender(message)
-        if number is None or kind not in ("text", "link_preview", *FILE_KINDS):
+        if number is None or kind not in ("text", "link_preview", "reply", *FILE_KINDS):
             continue
         item = (message.get(kind) or {}) if kind in FILE_KINDS else {}
         media = (
@@ -186,15 +195,33 @@ class WhapiMessenger:
         self.base_url = base_url.rstrip("/")
         self._http = http or httpx.Client(timeout=30.0)
 
-    def send(self, to: str, text: str, media_urls: Sequence[str] = ()) -> SentMessage:
+    def send(
+        self, to: str, text: str, media_urls: Sequence[str] = (), buttons: Sequence[str] = ()
+    ) -> SentMessage:
         recipient = to.removeprefix("whatsapp:").strip().lstrip("+")
         ids: list[str] = []
         if text:
-            ids.append(self._post("/messages/text", {"to": recipient, "body": text}))
+            ids.append(self._text(recipient, text, buttons))
         for url in media_urls:
             image = url.split("?", 1)[0].lower().endswith(IMAGE_SUFFIXES)
             ids.append(self._post("/messages/image" if image else "/messages/voice", {"to": recipient, "media": url}))
-        return SentMessage(ids[0] if ids else "", f"whatsapp:+{recipient}", text, tuple(media_urls))
+        return SentMessage(ids[0] if ids else "", f"whatsapp:+{recipient}", text, tuple(media_urls), tuple(buttons))
+
+    def _text(self, recipient: str, text: str, buttons: Sequence[str]) -> str:
+        """Her text, with quick reply buttons under it when it offers any (at most 3, each title up to 25
+        characters); the text alone if Whapi refuses them, as Whapi says its buttons depend on Meta, and the text
+        also says what to type."""
+        if buttons:
+            choices = [
+                {"type": "quick_reply", "title": title[:MAX_BUTTON_TITLE], "id": f"button-{index}"}
+                for index, title in enumerate(buttons[:3], 1)
+            ]
+            body = {"to": recipient, "type": "button", "body": {"text": text}, "action": {"buttons": choices}}
+            try:
+                return self._post("/messages/interactive", body)
+            except MessengerError as error:
+                log.warning("Whapi refused the reply buttons, so the text goes alone: %s", error)
+        return self._post("/messages/text", {"to": recipient, "body": text})
 
     def _post(self, path: str, body: dict[str, Any]) -> str:
         try:
