@@ -10,13 +10,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from openstall_agents.listing_reader import QUESTIONS
-from openstall_api.chat.handler import THANKS, WELCOME, turn
-from openstall_api.chat.voice import Heard
+from openstall_api.chat.handler import THANKS, WELCOME, WELCOMES, turn
+from openstall_api.chat.voice import Heard, language_hint, written_language
 from openstall_api.events import EventType
 from openstall_api.fixtures import fixture_photo, fixture_voice_note
 from openstall_api.main import app
 from openstall_api.media import MAX_BYTES
-from openstall_api.models import Event, Product, ProductStatus, Seller
+from openstall_api.models import Channel, Event, Product, ProductStatus, Seller
 from openstall_api.whatsapp import twilio_signature
 
 client = TestClient(app)
@@ -212,6 +212,34 @@ def test_the_web_chat_refuses_what_it_cannot_take(db, data, files, problem):
 
     assert response.status_code == 422
     assert problem in response.text
+
+
+@pytest.mark.parametrize(
+    ("text", "language"),
+    [
+        ("السلام علیکم، میں کشن کور بناتی ہوں", "ur"),
+        ("नमस्ते, मैं कुशन कवर बनाती हूँ", "hi"),
+        ("مرحبا، أصنع أغطية الوسائد", None),  # Arabic letters alone could be Arabic or Persian: not guessed
+        ("Hola, hago fundas de cojín", None),  # Latin letters could be English or Spanish: not guessed
+        ("", None),
+    ],
+)
+def test_the_language_of_her_typed_words_when_the_script_alone_says_it(text, language):
+    assert written_language(text) == language
+
+
+def test_a_maker_outside_pakistan_who_writes_in_urdu_is_answered_in_urdu(twilio):
+    """A number from Saudi Arabia says nothing about her language; her words in Urdu do, so the welcome is in Urdu
+    (with its English line) and Urdu is saved on her profile, the hint for her voice notes from then on."""
+    send_on_whatsapp("+966551230000", "SM_ur_1", "السلام علیکم، میں کشن کور بناتی ہوں", [])
+
+    twilio.expire_all()
+    seller = twilio.scalars(select(Seller).filter_by(whatsapp_number="+966551230000")).one()
+    assert (seller.language, seller.country) == ("ur", None)
+    [message] = [m for m in client.get(f"/api/chats/{seller.id}").json()["messages"] if m["direction"] == "outbound"]
+    assert message["text"] == WELCOMES["ur"]
+    assert message["english"] == WELCOMES["en"]
+    assert language_hint(Channel.WHATSAPP, "+966551230000") == "ur"
 
 
 @pytest.mark.parametrize("language", ["en", "ur", "hi", "es"])

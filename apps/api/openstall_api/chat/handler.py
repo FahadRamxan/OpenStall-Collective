@@ -33,7 +33,7 @@ from openstall_api.chat.asking import asking_reply, live_reply
 from openstall_api.chat.listing import DRAFTING, read_her_listing, update_draft
 from openstall_api.chat.publish import publish, said_yes, stall_url
 from openstall_api.chat.store import CHANNEL_WORDS, DIALING_CODES, country_of, find_chat, save_message
-from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear
+from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear, written_language
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller
@@ -334,6 +334,8 @@ def handle_inbound(
                 "language_saved": saved,
             },
         )
+    # Typed in Urdu (or Hindi), with no language on her profile yet: that is her language from now on.
+    remember_language(seller, written_language(text))
     proof = proof_turn(session, seller, text, media, photo, message.id)
     # Her words typed and said: "I can't make it" counts in a voice note too.
     said = " ".join(words for words in (text, heard.transcript) if words)

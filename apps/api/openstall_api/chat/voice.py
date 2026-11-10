@@ -104,6 +104,23 @@ def unclear(heard: Heard) -> list[str]:
     return [UNCLEAR if heard.failed == 1 else UNCLEAR_SEVERAL.format(count=heard.failed)]
 
 
+# Letters that Urdu writes and Arabic and Persian do not, and the Devanagari block Hindi is written in.
+URDU_LETTERS = frozenset("ٹڈڑںےہھ")
+DEVANAGARI = range(0x0900, 0x0980)
+
+
+def written_language(text: str) -> str | None:
+    """The language her typed words are in, when their script alone says it: Urdu, by a letter only Urdu writes
+    (ٹ ڈ ڑ ں ے ہ ھ), or Hindi, in Devanagari. None otherwise: Latin letters could be English or Spanish, and Arabic
+    letters alone could be Arabic or Persian. A maker on a number from outside Pakistan who writes in Urdu is then
+    answered in Urdu, and her voice notes are heard with Urdu as the hint."""
+    if any(letter in URDU_LETTERS for letter in text):
+        return "ur"
+    if any(ord(letter) in DEVANAGARI for letter in text):
+        return "hi"
+    return None
+
+
 def remember_language(seller: Seller, language: str | None) -> bool:
     """Her language, saved on her profile from the first voice note it is heard in. One already there (a seeded
     maker's, or heard before) stays: a single misheard voice note must not change the language OpenStall writes to

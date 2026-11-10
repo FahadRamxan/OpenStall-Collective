@@ -33,7 +33,7 @@ from openstall_api.chat.handler import (
     read_listing_from,
 )
 from openstall_api.chat.spoken import speak_replies
-from openstall_api.chat.voice import language_hint
+from openstall_api.chat.voice import language_hint, written_language
 from openstall_api.db import session_scope
 from openstall_api.feeds import clear_catalog_cache
 from openstall_api.media import get_media_store
@@ -55,7 +55,9 @@ def receive(
     registry = get_registry()
     store = get_media_store()
     photo = look_at_photos(sender, files, lambda: registry.llm)
-    hint = language_hint(sender.channel, sender.address, sender.seller_id) if any_voice_note(files) else None
+    hint = None
+    if any_voice_note(files):
+        hint = language_hint(sender.channel, sender.address, sender.seller_id) or written_language(text)
     heard = listen_to_voice_notes(files, lambda: registry.speech_to_text, hint)
     reading = read_listing_from(sender, text, files, heard, store, lambda: registry.llm)
     with session_scope() as session:
