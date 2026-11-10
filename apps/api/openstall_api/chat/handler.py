@@ -335,7 +335,7 @@ def handle_inbound(
             },
         )
     # Typed in Urdu (or Hindi), with no language on her profile yet: that is her language from now on.
-    remember_language(seller, written_language(text))
+    remember_language(seller, written_language(text, seller.country))
     proof = proof_turn(session, seller, text, media, photo, message.id)
     # Her words typed and said: "I can't make it" counts in a voice note too.
     said = " ".join(words for words in (text, heard.transcript) if words)

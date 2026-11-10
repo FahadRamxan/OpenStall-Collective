@@ -104,20 +104,24 @@ def unclear(heard: Heard) -> list[str]:
     return [UNCLEAR if heard.failed == 1 else UNCLEAR_SEVERAL.format(count=heard.failed)]
 
 
-# Letters that Urdu writes and Arabic and Persian do not, and the Devanagari block Hindi is written in.
+# Letters that Urdu writes and Arabic and Persian do not; the Arabic script's block; and Devanagari, for Hindi.
 URDU_LETTERS = frozenset("ٹڈڑںےہھ")
+ARABIC_SCRIPT = range(0x0600, 0x0700)
 DEVANAGARI = range(0x0900, 0x0980)
 
 
-def written_language(text: str) -> str | None:
-    """The language her typed words are in, when their script alone says it: Urdu, by a letter only Urdu writes
-    (ٹ ڈ ڑ ں ے ہ ھ), or Hindi, in Devanagari. None otherwise: Latin letters could be English or Spanish, and Arabic
-    letters alone could be Arabic or Persian. A maker on a number from outside Pakistan who writes in Urdu is then
-    answered in Urdu, and her voice notes are heard with Urdu as the hint."""
+def written_language(text: str, country: str | None = None) -> str | None:
+    """The language her typed words are in, when their script says it: Urdu, by a letter only Urdu writes
+    (ٹ ڈ ڑ ں ے ہ ھ), or by any Arabic-script letter from a country that writes Urdu in it (Pakistan: "السلام علیکم"
+    has no Urdu-only letter); Hindi, in Devanagari. None otherwise: Latin letters could be English or Spanish, and
+    Arabic letters elsewhere could be Arabic or Persian. A maker who writes in Urdu is then answered in Urdu, and her
+    voice notes are heard with Urdu as the hint."""
     if any(letter in URDU_LETTERS for letter in text):
         return "ur"
     if any(ord(letter) in DEVANAGARI for letter in text):
         return "hi"
+    if LANGUAGE_BY_COUNTRY.get(country or "") == "ur" and any(ord(letter) in ARABIC_SCRIPT for letter in text):
+        return "ur"
     return None
 
 

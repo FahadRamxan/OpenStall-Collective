@@ -228,6 +228,31 @@ def test_the_language_of_her_typed_words_when_the_script_alone_says_it(text, lan
     assert written_language(text) == language
 
 
+@pytest.mark.parametrize(
+    ("text", "country", "language"),
+    [
+        ("السلام علیکم", "PK", "ur"),  # no Urdu-only letter, but Arabic script from Pakistan is Urdu
+        ("السلام علیکم", None, None),
+        ("السلام علیکم", "SA", None),  # from Saudi Arabia it could be Arabic
+        ("Salaam! I make cushion covers.", "PK", None),  # she writes English: she is answered in English
+    ],
+)
+def test_arabic_script_from_a_country_that_writes_urdu_in_it_is_urdu(text, country, language):
+    assert written_language(text, country) == language
+
+
+def test_a_maker_in_pakistan_who_greets_in_urdu_is_welcomed_in_urdu(twilio):
+    """"السلام علیکم" has no letter only Urdu writes; from a Pakistani number it is still Urdu. Found on the first
+    real WhatsApp message, through Meta, on November 10."""
+    send_on_whatsapp("+923145550000", "SM_pk_1", "السلام علیکم", [])
+
+    twilio.expire_all()
+    seller = twilio.scalars(select(Seller).filter_by(whatsapp_number="+923145550000")).one()
+    assert (seller.language, seller.country) == ("ur", "PK")
+    [message] = [m for m in client.get(f"/api/chats/{seller.id}").json()["messages"] if m["direction"] == "outbound"]
+    assert message["text"] == WELCOMES["ur"]
+
+
 def test_a_maker_outside_pakistan_who_writes_in_urdu_is_answered_in_urdu(twilio):
     """A number from Saudi Arabia says nothing about her language; her words in Urdu do, so the welcome is in Urdu
     (with its English line) and Urdu is saved on her profile, the hint for her voice notes from then on."""
