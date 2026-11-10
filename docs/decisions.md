@@ -764,3 +764,15 @@ Code: `packages/paypal/openstall_paypal/sandbox.py` (`payment_source`, `paid_wit
 ## November 9: a voice note before her listing can be read is answered in her language
 
 - When there was nothing to ask a seller yet (no draft listing, no live one), she got one English line, "Thank you, I have your voice note…", even when her language was Urdu. In sandbox mode without a working Claude key that was every answer she got. That line now has Urdu, Hindi and Spanish versions (`chat/handler.py`, `THANKS`), which need a native speaker's read like every template.
+
+## November 10: the blueprint brought up to date before the deploy (prompt 12)
+
+Code: `render.yaml` and its test, `apps/api/tests/test_render_blueprint.py`.
+
+- **A hosted demo is optional, but worth it.** The official rules accept either setup instructions in the repo or a hosted URL, and the README's test-mode run already meets the first. A judge is far likelier to click a link than to install Python and Node, though, and a fixed address is what PayPal's and Twilio's webhooks need. The hackathon gives every entrant $50 of Render credit, which covers the plan below until judging ends on December 15.
+- **Render renamed its plans.** Its blueprint spec now lists instance types by size: the $7 web service once called Starter is `0.5c-512mb`, and the $6 database once called basic-256mb is `0.1c-256mb`. The blueprint uses the new names, and its test checks every plan is one of Render's paid types: free stays out for the reasons of November 3 (a free web service sleeps and cannot have a disk; a free database is deleted 30 days after it is made, before judging ends).
+- **The Python the tests run on.** The blueprint pinned 3.14.5, but the gate runs on 3.13.3, so the host now runs 3.13.3 (Render takes any released version, written in full), and a test fails when the two part.
+- **Sandbox mode is written in the blueprint.** Render applies every value written in `render.yaml` again on each blueprint sync, over a change made in its dashboard, so switching `OPENSTALL_MODE` in the dashboard, as planned on November 3, would be undone by the next sync. The API starts without the PayPal keys anyway; `/status` says what is missing.
+- **Render makes the two secrets that belong to no outside account.** `DEMO_RUN_TOKEN` and `PASSPORT_SIGNING_KEY` are `generateValue: true`: a random 256-bit value in base64, which is exactly an Ed25519 key as `openstall_trust` reads it. Nobody has to make or type them, and they never pass through a chat or git. The token is read in the API's Environment tab for the judges' testing instructions. The keys of outside accounts (PayPal, Anthropic, ElevenLabs, Twilio) stay `sync: false`, typed in by the person who owns them.
+- **The makers' sandbox payees are written in.** They are PayPal sandbox accounts, already listed in `docs/day-one-checks.md`, so they are plain values: the first seed pays the right accounts without anyone typing them, and the test checks each one is a sandbox address listed there.
+

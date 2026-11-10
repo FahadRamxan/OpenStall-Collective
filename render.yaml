@@ -3,15 +3,20 @@
 #
 # Plans: the demo must stay up until judging ends on December 15. A free Render Postgres is deleted 30 days after it
 # is created, and free web services sleep after 15 idle minutes and take about a minute to wake, which a judge would
-# see. So both services run on Starter and the database on basic-256mb (docs/decisions.md, prompt 12).
+# see. So both services run on Render's $7 instance type (0.5c-512mb, once called Starter) and the database on its $6
+# one (0.1c-256mb, once basic-256mb): $20.25 a month with the disk, paid from the hackathon's $50 Render credit
+# (docs/decisions.md, prompt 12).
 #
-# Secrets are marked "sync: false": Render asks for their values when the blueprint is created (leave the ones you
-# do not have yet empty), and they never live in git. The URLs below assume Render gives the services these names; if it adds a suffix, change the three URL
-# variables in the dashboard to the real addresses and redeploy.
+# Secrets are marked "sync: false": Render asks for their values only when the blueprint is created (leave the ones
+# you do not have yet empty, and add them later in each service's Environment tab), and they never live in git. The
+# two secrets that belong to no outside account, the demo token and the passport signing key, Render generates.
+# Every other value here is applied again on each blueprint sync, over any change made in the dashboard, so change
+# them in this file. The URLs below assume Render gives the services these names; if it adds a suffix, change the
+# three URL variables here to the real addresses.
 
 databases:
   - name: openstall-db
-    plan: basic-256mb
+    plan: 0.1c-256mb
     databaseName: openstall
     user: openstall
     postgresMajorVersion: "16"
@@ -21,10 +26,10 @@ services:
   - type: web
     name: openstall-collective-api
     runtime: python
-    plan: starter
+    plan: 0.5c-512mb
     buildCommand: pip install -e ".[postgres]"
-    # Migrate, seed the demo world only on a fresh database, then serve. One process: fake mode keeps the simulated
-    # PayPal's orders in memory.
+    # Migrate, seed the demo world only on a fresh database, then serve. One process: the rate limits' windows live
+    # in memory.
     startCommand: >-
       alembic upgrade head &&
       python scripts/seed_demo.py --if-empty --demo-order &&
@@ -36,11 +41,12 @@ services:
       mountPath: /var/data
       sizeGB: 1
     envVars:
+      # The Python the tests run on (Render needs the full version).
       - key: PYTHON_VERSION
-        value: "3.14.5"
-      # fake until the PayPal sandbox keys are set; then change it to sandbox in the dashboard.
+        value: "3.13.3"
+      # The real PayPal sandbox and models. Without its keys the API still starts; /status says what is missing.
       - key: OPENSTALL_MODE
-        value: fake
+        value: sandbox
       - key: PUBLIC_BASE_URL
         value: https://openstall-collective-api.onrender.com
       - key: WEB_BASE_URL
@@ -64,23 +70,24 @@ services:
         sync: false
       - key: PAYPAL_WEBHOOK_ID
         sync: false
-      # Sandbox PayPal accounts that receive Priya's, Lucia's and Noor's payouts. They are written into the database
-      # when it is seeded, so set them before the first deploy, or run python scripts/seed_demo.py once after.
+      # The sandbox personal accounts that receive Priya's, Lucia's and Noor's payouts, listed with the other sandbox
+      # accounts in docs/day-one-checks.md. They are written into the database when it is seeded.
       - key: PAYPAL_SANDBOX_PAYEE_PRIYA
-        sync: false
+        value: sb-e437yj53750314@personal.example.com
       - key: PAYPAL_SANDBOX_PAYEE_LUCIA
-        sync: false
+        value: sb-abthj53620158@personal.example.com
       - key: PAYPAL_SANDBOX_PAYEE_NOOR
-        sync: false
+        value: sb-oalci53802401@personal.example.com
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Unlocks /demo's Run and Reset controls in sandbox mode; without it they are off there.
+      # Unlocks /demo's Run and Reset controls in sandbox mode. Render makes a random one; read it in the API's
+      # Environment tab, for the judges' testing instructions.
       - key: DEMO_RUN_TOKEN
-        sync: false
+        generateValue: true
       - key: OPENAI_API_KEY
         sync: false
       # ElevenLabs: Scribe turns sellers' voice notes into text, and Eleven v4 Turbo speaks OpenStall's answers.
@@ -88,13 +95,15 @@ services:
         sync: false
       - key: GOOGLE_VISION_API_KEY
         sync: false
+      # Signs the trust passports: Render makes a random 32-byte key, base64, which is what an Ed25519 key is. It
+      # must not change once passports are signed with it.
       - key: PASSPORT_SIGNING_KEY
-        sync: false
+        generateValue: true
 
   - type: web
     name: openstall-collective
     runtime: node
-    plan: starter
+    plan: 0.5c-512mb
     rootDir: apps/web
     buildCommand: npm ci && npm run build
     startCommand: npm start -- --port $PORT

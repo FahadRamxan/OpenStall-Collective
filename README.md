@@ -249,9 +249,9 @@ It runs `pytest`, then `mypy --strict` on the PayPal package, then, in `apps/web
 - Web app: https://openstall-collective.onrender.com
 - API: https://openstall-collective-api.onrender.com (its health check is `/health`)
 
-These addresses work once the blueprint is created; it is not created yet. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false`; leave the ones you do not have yet empty. The API starts in fake mode. Once the PayPal sandbox keys are set, change `OPENSTALL_MODE` to `sandbox` in the dashboard. If Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` to match.
+These addresses work once the blueprint is created. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false` (the PayPal, Anthropic, ElevenLabs and Twilio keys); leave the ones you do not have yet empty and add them later in the API's Environment tab. Render makes the demo token and the passport signing key itself. The API runs in sandbox mode. Every value written in `render.yaml` is applied again on each blueprint sync, over a change made in the dashboard, so change those in the file: if Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` there.
 
-Both services run on Starter and the database on basic-256mb. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](docs/decisions.md)).
+Both services run on Render's $7 instance type (`0.5c-512mb`, once called Starter) and the database on its $6 one (`0.1c-256mb`, once basic-256mb): $20.25 a month with the 1 GB disk, paid from the hackathon's $50 Render credit. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](docs/decisions.md)).
 
 To check a deploy, open `/status`, which names the deployed commit. Then run the smoke tests and an MCP search against it:
 
