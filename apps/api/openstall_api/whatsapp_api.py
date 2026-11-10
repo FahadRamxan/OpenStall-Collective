@@ -29,6 +29,7 @@ from openstall_api.limits import TooMany, check
 from openstall_api.events import EventType, record_event
 from openstall_api.events_api import fake_mode_only
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
+from openstall_api.proof import unused_shipment
 from openstall_api.media import MediaRejected, media_type
 from openstall_api.meta_whatsapp import (
     MetaInbound,
@@ -344,7 +345,9 @@ def dev_inbound(body: DevInbound) -> DevInboundOut:
     if body.voice_note:
         files.append(InboundFile(fixture_voice_note(), "audio/wav"))
     if body.receipt:
-        files.append(InboundFile(fixture_receipt(*demo_shipment(country_of(body.sender))), "image/png"))
+        with new_session() as session:  # a parcel's own number, as a courier's: one receipt pays one share
+            shipment = unused_shipment(session, *demo_shipment(country_of(body.sender)))
+        files.append(InboundFile(fixture_receipt(*shipment), "image/png"))
     handled = deliver_inbound(Sender(Channel.WHATSAPP, body.sender, body.profile_name), body.text, files)
     with session_scope() as session:
         sent = session.execute(

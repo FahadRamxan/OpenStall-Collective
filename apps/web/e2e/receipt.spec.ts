@@ -10,6 +10,14 @@ import { E2E_API_URL } from "../playwright.config";
 // no phone, so this page plays them in test mode.
 const SCREENSHOTS = path.join(__dirname, "screenshots");
 
+// One tracking number pays one share (proof.py). An earlier spec file paid Priya with fake mode's sample receipt,
+// whose usual number this one checks for, so the demo world is put back as seeded first and that number is free.
+test.beforeAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext();
+  expect((await api.post(`${E2E_API_URL}/api/demo/reset`)).ok()).toBeTruthy();
+  await api.dispose();
+});
+
 async function freshOrder(request: APIRequestContext): Promise<string> {
   // Earlier spec files leave story orders reserved; release them, so this order is each maker's only open share.
   expect((await request.post(`${E2E_API_URL}/api/dev/release-reserved-shares`)).status()).toBe(200);

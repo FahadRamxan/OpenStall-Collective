@@ -27,7 +27,7 @@ from openstall_api.models import (
     PayoutRailChoice,
     Seller,
 )
-from openstall_api.proof import is_no, is_yes, typed_tracking
+from openstall_api.proof import is_no, is_yes, typed_tracking, unused_shipment
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
 from openstall_paypal import PaymentUnavailable
@@ -231,6 +231,57 @@ def test_a_maker_no_payout_rail_reaches_confirms_but_is_not_paid(story, fakes):
     assert (amina.tracking_number, amina.status) == (AMINA_TRACKING, PartStatus.AUTHORIZED)  # tracked, not captured
     assert captures(fakes) == 0
     assert events(story, EventType.PART_CAPTURED) == []
+
+
+REUSED = (
+    f"This tracking number ({PRIYA_TRACKING}) already paid for another parcel, in order ord_demo, so it cannot pay for "
+    "this one. Please send the courier receipt for this parcel, or type its tracking number."
+)
+
+
+def test_a_tracking_number_that_already_paid_a_share_pays_no_other(story, fakes):
+    """One parcel's receipt pays one share: Grace types the tracking number Priya was already paid on. It is refused
+    and recorded, she is asked for her own parcel's receipt, and nothing more is captured."""
+    play("s_priya", receipt=True)
+    play("s_priya", "हाँ")
+    play("s_grace", receipt=True)  # her own receipt is read, and she is asked to confirm it
+
+    [refused] = play("s_grace", PRIYA_TRACKING)
+
+    assert refused == REUSED
+    grace = part_of(story, "Grace")
+    assert (grace.status, grace.tracking_number) == (PartStatus.AUTHORIZED, None)
+    assert grace.proof_json["state"] == "awaiting_number"
+    assert captures(fakes) == 1  # Priya's alone
+    [rejected] = events(story, EventType.SECURITY_REJECTED)
+    assert rejected.payload_json["summary"] == (
+        f"Grace's courier receipt for order ord_demo was refused: its tracking number {PRIYA_TRACKING} already paid "
+        "another share, of order ord_demo. Nothing was captured"
+    )
+
+
+def test_two_receipts_with_one_tracking_number_pending_at_once_pay_only_the_first_confirmed(story, fakes):
+    play("s_priya", receipt=True)
+    play("s_grace", receipt=True)
+    play("s_grace", PRIYA_TRACKING)  # nobody is paid on it yet, so she is asked to confirm it
+    play("s_priya", "हाँ")  # Priya confirms first, and is paid
+
+    [refused] = play("s_grace", "yes")
+
+    assert refused == REUSED
+    assert part_of(story, "Grace").status == PartStatus.AUTHORIZED
+    assert captures(fakes) == 1
+
+
+def test_test_modes_sample_receipt_gets_a_parcels_own_number_once_its_usual_one_has_paid(story):
+    """As a courier gives every parcel its own number, the demo can be played again without its sample receipt being
+    refused as used: once its usual number has paid a share, the next one up that has not is printed on it."""
+    assert unused_shipment(story, INDIA_POST, PRIYA_TRACKING) == (INDIA_POST, PRIYA_TRACKING)
+    play("s_priya", receipt=True)
+    play("s_priya", "हाँ")  # paid on the usual number
+
+    assert unused_shipment(story, INDIA_POST, PRIYA_TRACKING) == (INDIA_POST, "EE123456790IN")
+    assert unused_shipment(story, "TCS", "7712345678") == ("TCS", "7712345678")  # nobody paid on this one
 
 
 def test_a_wrong_reading_is_put_right_by_typing_the_number(story):

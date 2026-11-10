@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from openstall_agents.adapters import LLM, LLMError, Media
@@ -71,6 +71,7 @@ class ProofPhrases:
     hyperwallet: str  # added to `paid_bank` in sandbox mode: Hyperwallet is simulated
     payment_failed: str
     retrying: str  # {order_id}
+    reused: str  # {tracking}, {other_order}: a tracking number that already paid another share
 
 
 PHRASES: dict[str, ProofPhrases] = {
@@ -94,6 +95,8 @@ PHRASES: dict[str, ProofPhrases] = {
         payment_failed="Your tracking number is saved, but the payment did not go through yet. We will try again; "
         "reply YES here to try now.",
         retrying="Your tracking number for order {order_id} is already saved. Trying your payment again now.",
+        reused="This tracking number ({tracking}) already paid for another parcel, in order {other_order}, so it "
+        "cannot pay for this one. Please send the courier receipt for this parcel, or type its tracking number.",
     ),
     "ur": ProofPhrases(
         ask_confirm="شکریہ! میں نے آرڈر {order_id} ({quantity} × {item}) کی کورئیر رسید پڑھ لی ہے:\n"
@@ -115,6 +118,9 @@ PHRASES: dict[str, ProofPhrases] = {
         payment_failed="آپ کا ٹریکنگ نمبر محفوظ ہے، لیکن ادائیگی ابھی نہیں ہو سکی۔ ہم دوبارہ کوشش کریں گے؛ ابھی کوشش "
         "کے لیے یہاں \"ہاں\" لکھیں۔",
         retrying="آرڈر {order_id} کا آپ کا ٹریکنگ نمبر پہلے سے محفوظ ہے۔ ہم ابھی دوبارہ ادائیگی کی کوشش کر رہے ہیں۔",
+        reused="یہ ٹریکنگ نمبر ({tracking}) پہلے ہی ایک اور پارسل کی ادائیگی کے لیے استعمال ہو چکا ہے (آرڈر "
+        "{other_order})، اس لیے اس سے اس پارسل کی ادائیگی نہیں ہو سکتی۔ براہ کرم اس پارسل کی کورئیر رسید بھیجیں، یا اس "
+        "کا ٹریکنگ نمبر لکھیں۔",
     ),
     "hi": ProofPhrases(
         ask_confirm="धन्यवाद! मैंने ऑर्डर {order_id} ({quantity} × {item}) की कूरियर रसीद पढ़ ली है:\n"
@@ -136,6 +142,9 @@ PHRASES: dict[str, ProofPhrases] = {
         payment_failed="आपका ट्रैकिंग नंबर सेव है, लेकिन भुगतान अभी नहीं हो पाया। हम फिर से कोशिश करेंगे; अभी कोशिश "
         "करने के लिए यहाँ \"हाँ\" लिखें।",
         retrying="ऑर्डर {order_id} का आपका ट्रैकिंग नंबर पहले से सेव है। हम अभी फिर से भुगतान की कोशिश कर रहे हैं।",
+        reused="यह ट्रैकिंग नंबर ({tracking}) पहले ही एक और पार्सल के भुगतान के लिए इस्तेमाल हो चुका है (ऑर्डर "
+        "{other_order}), इसलिए इससे इस पार्सल का भुगतान नहीं हो सकता। कृपया इस पार्सल की कूरियर रसीद भेजें, या उसका "
+        "ट्रैकिंग नंबर लिखें।",
     ),
     "es": ProofPhrases(
         ask_confirm="¡Gracias! Leí tu recibo de paquetería del pedido {order_id} ({quantity} × {item}):\n"
@@ -158,6 +167,8 @@ PHRASES: dict[str, ProofPhrases] = {
         payment_failed="Tu número de guía está guardado, pero el pago todavía no se completó. Lo intentaremos de "
         "nuevo; responde SÍ aquí para intentarlo ahora.",
         retrying="Tu número de guía del pedido {order_id} ya está guardado. Estamos intentando tu pago de nuevo.",
+        reused="Este número de guía ({tracking}) ya pagó otro paquete, del pedido {other_order}, así que no puede "
+        "pagar este. Por favor, manda el recibo de paquetería de este paquete, o escribe su número de guía.",
     ),
 }
 assert PHRASES.keys() == LOCALES.keys(), "every template language has the receipt flow's words too"
@@ -376,6 +387,52 @@ def _ask_confirm(part: OrderPart, code: str) -> str:
     return say(code, compose, CONFIRM_BUTTONS)
 
 
+def paid_with(session: Session, tracking: str, part_id: str) -> OrderPart | None:
+    """Another share already confirmed with this tracking number. One parcel's receipt pays one share: the same
+    receipt sent again, for another order, pays nothing more."""
+    return session.scalar(
+        select(OrderPart)
+        .where(func.upper(OrderPart.tracking_number) == tracking.strip().upper(), OrderPart.id != part_id)
+        .limit(1)
+    )
+
+
+def unused_shipment(session: Session, carrier: str, tracking: str) -> tuple[str, str]:
+    """Fake mode's sample receipt for a parcel: its usual tracking number (fixtures.demo_shipment), or, once that
+    number has paid a share, the next one up that has not, as a courier gives every parcel its own number. So the
+    demo can be played again without its receipts being refused as used."""
+    number = tracking
+    while session.scalar(select(OrderPart.id).where(func.upper(OrderPart.tracking_number) == number.upper()).limit(1)):
+        last = list(re.finditer(r"\d+", number))[-1]
+        bumped = str(int(last.group()) + 1).zfill(len(last.group()))
+        number = number[: last.start()] + bumped + number[last.end() :]
+    return carrier, number
+
+
+def _refuse_reused(session: Session, part: OrderPart, tracking: str, other: OrderPart, code: str) -> ProofTurn:
+    """Her receipt's tracking number already paid another share: refused and recorded, and she is asked for this
+    order's own receipt. Nothing is captured."""
+    part.proof_json = {**(part.proof_json or {}), "tracking_number": None, "state": AWAITING_NUMBER,
+                       "refused_tracking": tracking}
+    record_event(
+        session,
+        EventType.SECURITY_REJECTED,
+        f"{part.seller.name}'s courier receipt for order {part.order_id} was refused: its tracking number {tracking} "
+        f"already paid another share, of order {other.order_id}. Nothing was captured",
+        entity_id=part.id,
+        payload={
+            "order_id": part.order_id,
+            "seller_id": part.seller_id,
+            "tracking_number": tracking,
+            "paid_share": other.id,
+            "paid_order": other.order_id,
+        },
+    )
+    return ProofTurn(
+        [say(code, lambda used: PHRASES[used].reused.format(tracking=tracking, other_order=other.order_id))]
+    )
+
+
 def _receipt_read(
     session: Session, part: OrderPart, photo: PhotoReading, url: str, message_id: str, code: str
 ) -> ProofTurn:
@@ -421,6 +478,8 @@ def _receipt_read(
             "read_by": photo.read_by,
         },
     )
+    if tracking and (other := paid_with(session, tracking, part.id)) is not None:
+        return _refuse_reused(session, part, tracking, other, code)
     if tracking:
         reply = _ask_confirm(part, code)
     else:
@@ -432,8 +491,10 @@ def _answer_pending(session: Session, part: OrderPart, text: str, code: str) -> 
     proof = dict(part.proof_json or {})
     ask_again = say(code, lambda used: PHRASES[used].ask_again)
     if proof.get("state") == AWAITING_CONFIRMATION and is_yes(text):
-        return _confirm(session, part, code)
+        return confirm_receipt(session, part, code)
     typed = typed_tracking(text)
+    if typed and (other := paid_with(session, typed, part.id)) is not None:
+        return _refuse_reused(session, part, typed, other, code)
     if typed:
         part.proof_json = {**proof, "tracking_number": typed, "source": "typed", "state": AWAITING_CONFIRMATION}
         record_event(
@@ -458,9 +519,13 @@ def _answer_pending(session: Session, part: OrderPart, text: str, code: str) -> 
     return ProofTurn([_ask_confirm(part, code) if proof.get("state") == AWAITING_CONFIRMATION else ask_again])
 
 
-def _confirm(session: Session, part: OrderPart, code: str) -> ProofTurn:
+def confirm_receipt(session: Session, part: OrderPart, code: str) -> ProofTurn:
+    """Her yes to what was read off her receipt: her tracking is kept and her share is paid after the commit, unless
+    that tracking number already paid another share (two orders' receipts pending at once), when it is refused."""
     proof = dict(part.proof_json or {})
     tracking = str(proof["tracking_number"])
+    if (other := paid_with(session, tracking, part.id)) is not None:
+        return _refuse_reused(session, part, tracking, other, code)
     carrier = proof.get("carrier")
     part.tracking_number = tracking
     part.carrier = carrier

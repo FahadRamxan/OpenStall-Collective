@@ -17,6 +17,7 @@ from openstall_api.chat.store import channel_for
 from openstall_api.db import get_session, new_session
 from openstall_api.events_api import fake_mode_only
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
+from openstall_api.proof import unused_shipment
 from openstall_api.models import Offer, OrderPart, PartStatus, Seller
 from openstall_api.offers import OfferOut
 from openstall_api.orders_api import OrderOut, _load, order_out, payment_errors
@@ -166,9 +167,10 @@ def play_seller(seller_id: str, body: PlayMessage, background: BackgroundTasks) 
             raise HTTPException(status_code=404, detail=f"There is no seller called {seller_id!r}.")
         channel, country = channel_for(seller), seller.country
         address = seller.whatsapp_number or seller.web_chat_id or seller.id
+        shipment = unused_shipment(session, *demo_shipment(country))  # a parcel's own number, as a courier's
     files: list[InboundFile | Refused] = []
     if body.receipt:
-        files.append(InboundFile(fixture_receipt(*demo_shipment(country)), "image/png"))
+        files.append(InboundFile(fixture_receipt(*shipment), "image/png"))
     handled = receive(Sender(channel, address, seller_id=seller_id), text, files, background.add_task)
     return PlayedOut(
         seller_id=handled.seller_id, message_id=handled.message_id, replies=[reply.text for reply in handled.replies]

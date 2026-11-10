@@ -47,6 +47,7 @@ from openstall_api.orders import server_total
 from openstall_api.orders_api import TotalIn, verify_total
 from openstall_api.passports import trust_card, verify_card
 from openstall_api.payments import WrongStatus, pay_share, reserve_order
+from openstall_api.proof import AWAITING_CONFIRMATION, confirm_receipt
 from openstall_api.seed import story_order
 from openstall_api.storefront import storefront
 from openstall_api.webhooks import WebhookRefused, receive_paypal_webhook
@@ -92,6 +93,11 @@ ATTACKS: tuple[Attack, ...] = (
         "pay_before_proof",
         "Pay a maker before she proves she shipped",
         "A share is captured only once she has confirmed her tracking",
+    ),
+    Attack(
+        "reused_receipt",
+        "Get paid twice with one courier receipt",
+        "One parcel's tracking number pays one share: a receipt already used for another order is refused",
     ),
     Attack(
         "refund_through_paypal_mcp",
@@ -321,12 +327,36 @@ def _tampered_passport(registry: AdapterRegistry) -> Tried:
     )
 
 
+def _reused_receipt(registry: AdapterRegistry) -> Tried:
+    with throwaway_order() as (session, order):
+        paid, waiting = order.parts[0], order.parts[1]
+        paid.status, paid.carrier, paid.tracking_number = PartStatus.CAPTURED, "Pakistan Post", "EE123456789PK"
+        waiting.status = PartStatus.AUTHORIZED  # PayPal holds her share, and she says this receipt is hers
+        waiting.proof_json = {"carrier": "Pakistan Post", "tracking_number": "EE123456789PK", "source": "photo",
+                              "state": AWAITING_CONFIRMATION}
+        session.flush()
+        tried = (
+            f"{waiting.seller.name} confirms a courier receipt whose tracking number already paid "
+            f"{paid.seller.name}'s share."
+        )
+        turn = confirm_receipt(session, waiting, "en")  # the path her yes takes
+        if turn.pay_after:
+            return Tried(tried, "got_through", "Her share would have been paid.")
+    return Tried(
+        tried,
+        "refused",
+        "Refused: one parcel's tracking number pays one share, and that one already paid another. Nothing was "
+        "captured.",
+    )
+
+
 SYNC_ATTACKS: dict[str, Callable[[AdapterRegistry], Tried]] = {
     "below_floor": _below_floor,
     "changed_total": _changed_total,
     "forged_webhook": _forged_webhook,
     "reserve_unapproved": _reserve_unapproved,
     "pay_before_proof": _pay_before_proof,
+    "reused_receipt": _reused_receipt,
     "tampered_passport": _tampered_passport,
 }
 assert set(SYNC_ATTACKS) | {"capture_tool", "flood", "refund_through_paypal_mcp"} == set(BY_KEY)

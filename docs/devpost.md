@@ -70,7 +70,7 @@ Seven AG Grid tables (Community, one shared theme in light and dark): on `/demo`
 
 ## Safety
 
-No MCP tool moves money: a test calls every tool with a payment gateway that fails if anything reaches it. **Try to break it** on `/demo` runs nine real attacks through the code they target (a price talked down to $1.00, a capture tool through MCP, a smaller total from the browser, a forged PayPal webhook, an unapproved reservation, payment before proof, a flood of MCP calls, a tampered trust card, and a refund through PayPal's MCP server); each is refused and recorded. Per-client and global rate limits cap what real AI costs; a secret scan checks every file and the git history.
+No MCP tool moves money: a test calls every tool with a payment gateway that fails if anything reaches it. **Try to break it** on `/demo` runs ten real attacks through the code they target (a price talked down to $1.00, a capture tool through MCP, a smaller total from the browser, a forged PayPal webhook, an unapproved reservation, payment before proof, one courier receipt used to be paid twice, a flood of MCP calls, a tampered trust card, and a refund through PayPal's MCP server); each is refused and recorded. Per-client and global rate limits cap what real AI costs; a secret scan checks every file and the git history.
 
 ## Challenges we ran into
 

@@ -13,11 +13,11 @@ test("every attack on the guardrail panel is refused, and the live feed says so"
   const panel = page.getByRole("region", { name: "Try to break it" });
   await panel.scrollIntoViewIfNeeded();
   const attacks = panel.getByRole("list", { name: "Attacks" }).getByRole("listitem");
-  await expect(attacks).toHaveCount(9);
+  await expect(attacks).toHaveCount(10);
 
   await panel.getByRole("button", { name: "Try every attack" }).click();
 
-  await expect(panel.getByRole("status")).toHaveText("9 of 9 attacks refused");
+  await expect(panel.getByRole("status")).toHaveText("10 of 10 attacks refused");
   for (const row of await attacks.all()) {
     await expect(row.getByText("Refused", { exact: true })).toBeVisible();
   }
