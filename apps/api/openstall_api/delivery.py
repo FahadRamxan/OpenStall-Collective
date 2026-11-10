@@ -39,7 +39,7 @@ from openstall_api.orders import move_part
 from openstall_api.passports import MissingSigningKey, issue_passport
 from openstall_api.payments import WrongStatus, load_part, settle_order
 from openstall_api.seed import MAKERS
-from openstall_api.wording import LOCALES, format_day, language_words, template_language
+from openstall_api.wording import LOCALES, format_day, language_words, say, template_language
 from openstall_trust import trust_score
 
 log = logging.getLogger(__name__)
@@ -227,13 +227,18 @@ def tell_maker_delivered(part_id: str, messenger: Callable[[], Messenger]) -> bo
             return False
         seller = part.seller
         language = template_language(seller.language)
-        phrases = DELIVERED[language]
-        text = phrases.arrived.format(
-            maker=seller.name,
-            order_id=part.order_id,
-            date=format_day(language, arrived_on(part) or part.delivered_at.date()),
-            on_time=phrases.on_time if on_time(part) else "",
-        )
+        arrived, in_time = arrived_on(part) or part.delivered_at.date(), on_time(part)
+
+        def compose(code: str) -> str:
+            phrases = DELIVERED[code]
+            return phrases.arrived.format(
+                maker=seller.name,
+                order_id=part.order_id,
+                date=format_day(code, arrived),
+                on_time=phrases.on_time if in_time else "",
+            )
+
+        text = say(language, compose)
         seller_id, order_id, used = seller.id, part.order_id, language_words(language, seller.language)
         name = seller.name
     sent = send_to_seller(

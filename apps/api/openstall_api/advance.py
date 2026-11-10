@@ -28,7 +28,7 @@ from openstall_api.models import OrderPart, PartStatus, Passport, Seller, utcnow
 from openstall_api.payments import load_part, seller_rail, share_of
 from openstall_api.proof import PAYMENT_TROUBLE, PENDING, awaiting_proof, is_no, is_yes, normalise
 from openstall_api.settings import get_settings
-from openstall_api.wording import LOCALES, format_money, language_words, template_language
+from openstall_api.wording import LOCALES, format_money, language_words, say, template_language
 from openstall_paypal import RAIL_NAMES, Advance, PaymentGateway
 from openstall_trust import trust_score
 
@@ -181,7 +181,6 @@ def score_of(session: Session, seller_id: str) -> float | None:
 def advance_turn(session: Session, seller: Seller, words: str, message_id: str) -> AdvanceTurn | None:
     """The advance's answer to her message, or None when the message is not about one. The caller commits."""
     code = template_language(seller.language)
-    phrases = PHRASES[code]
     waiting = [
         part
         for part in awaiting_proof(session, seller.id)
@@ -194,22 +193,25 @@ def advance_turn(session: Session, seller: Seller, words: str, message_id: str) 
             amount = Decimal(str((part.advance_json or {})["amount_usd"]))
             if is_no(words):
                 part.advance_json = None
-                return AdvanceTurn([phrases.declined])
+                return AdvanceTurn([say(code, lambda used: PHRASES[used].declined)])
             part.advance_json = {**(part.advance_json or {}), "state": ACCEPTED, "accepted_at": utcnow().isoformat()}
-            return AdvanceTurn([phrases.accepted.format(amount=format_money(code, amount))], [part.id])
+            accepted = say(code, lambda used: PHRASES[used].accepted.format(amount=format_money(used, amount)))
+            return AdvanceTurn([accepted], [part.id])
     if not asks_for_advance(words):
         return None
     if not waiting:
-        return AdvanceTurn([phrases.no_share])
+        return AdvanceTurn([say(code, lambda used: PHRASES[used].no_share)])
     part = waiting[0]
     if state_of(part) in (ACCEPTED, PAID):
         amount = Decimal(str((part.advance_json or {})["amount_usd"]))
-        return AdvanceTurn([phrases.already.format(amount=format_money(code, amount))])
+        already = say(code, lambda used: PHRASES[used].already.format(amount=format_money(used, amount)))
+        return AdvanceTurn([already])
     score = score_of(session, seller.id)
     if score is None or score < MIN_SCORE:
-        return AdvanceTurn([phrases.low_score.format(score=f"{score or 0:.2f}")])
+        low = say(code, lambda used: PHRASES[used].low_score.format(score=f"{score or 0:.2f}"))
+        return AdvanceTurn([low])
     if not seller_rail(seller).available:
-        return AdvanceTurn([phrases.no_rail])
+        return AdvanceTurn([say(code, lambda used: PHRASES[used].no_rail)])
     amount = advance_amount(part)
     part.advance_json = {"state": ASKED, "amount_usd": str(amount), "asked_at": utcnow().isoformat(), "score": score}
     record_event(
@@ -220,16 +222,15 @@ def advance_turn(session: Session, seller: Seller, words: str, message_id: str) 
         entity_id=part.id,
         payload={"order_id": part.order_id, "amount_usd": amount, "score": score, "message_id": message_id},
     )
-    return AdvanceTurn(
-        [
-            phrases.offer.format(
-                amount=format_money(code, amount),
-                share=format_money(code, part.amount_usd),
-                rest=format_money(code, part.amount_usd - amount),
-                order_id=part.order_id,
-            )
-        ]
-    )
+    def offer(used: str) -> str:
+        return PHRASES[used].offer.format(
+            amount=format_money(used, amount),
+            share=format_money(used, part.amount_usd),
+            rest=format_money(used, part.amount_usd - amount),
+            order_id=part.order_id,
+        )
+
+    return AdvanceTurn([say(code, offer)])
 
 
 def pay_advance_after(
@@ -281,15 +282,19 @@ def pay_advance_after(
     except PAYMENT_TROUBLE as trouble:
         log.warning("The advance on share %s could not be paid: %s", part_id, trouble)
         return False
-    words = PHRASES[code]
-    if rail.kind == "hyperwallet":
-        text = words.paid_bank.format(amount=format_money(code, amount))
-    else:
-        text = words.paid.format(amount=format_money(code, amount), rail=RAIL_NAMES[rail.kind])
-    if get_settings().OPENSTALL_MODE == "fake":
-        text = f"{text}\n{words.simulated}"
-    elif rail.kind == "hyperwallet":
-        text = f"{text}\n{words.hyperwallet}"
+    fake = get_settings().OPENSTALL_MODE == "fake"
+
+    def compose(used: str) -> str:
+        words = PHRASES[used]
+        if rail.kind == "hyperwallet":
+            paid = words.paid_bank.format(amount=format_money(used, amount))
+        else:
+            paid = words.paid.format(amount=format_money(used, amount), rail=RAIL_NAMES[rail.kind])
+        if fake:
+            return f"{paid}\n{words.simulated}"
+        return f"{paid}\n{words.hyperwallet}" if rail.kind == "hyperwallet" else paid
+
+    text = say(code, compose)
     send_to_seller(
         seller_id,
         text,

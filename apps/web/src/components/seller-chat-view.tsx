@@ -8,6 +8,7 @@ import { Badge } from "@/components/badge";
 import { ChatComposer } from "@/components/chat-composer";
 import { ListingDraftCard } from "@/components/listing-draft";
 import { LiveListingCard } from "@/components/live-listing";
+import { EnglishLine } from "@/components/english-line";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { ApiError, errorMessage } from "@/lib/api";
@@ -456,6 +457,7 @@ function Bubble({
             {message.text}
           </p>
         ) : null}
+        {message.english ? <EnglishLine text={message.english} /> : null}
       </div>
       <time dateTime={message.created_at} className="mt-1 px-1 text-xs text-muted">
         {messageTime(message.created_at)} · {CHANNEL_LABELS[message.channel]}

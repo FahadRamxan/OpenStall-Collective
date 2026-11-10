@@ -40,7 +40,7 @@ from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, D
 from openstall_api.advance import advance_turn
 from openstall_api.healing import drop_turn
 from openstall_api.proof import PhotoReading, look_at_photo, proof_turn
-from openstall_api.wording import LOCALES, template_language
+from openstall_api.wording import LOCALES, say, template_language
 
 # Kept here too: they moved to chat/store.py.
 __all__ = ["CHANNEL_WORDS", "DIALING_CODES", "country_of", "find_chat", "save_message"]
@@ -221,13 +221,14 @@ def turn(
     replies = refusals(media) + [Reply(words) for words in unclear(heard)]
     what = received(text, media)
     if first:
-        replies.append(Reply(WELCOMES[language]))
+        replies.append(Reply(say(language, lambda code: WELCOMES[code])))
     if draft is not None:
         replies.append(Reply(asking_reply(draft, language, thanks=bool(what) and not first)))
     elif live_at is not None:
         replies.append(Reply(live_reply(language, live_at, again=True)))
     elif what and not first:
-        replies.append(Reply(THANKS.get(language, THANKS["en"]).format(what=what)))
+        code = language if language in THANKS else "en"
+        replies.append(Reply(say(code, lambda used: THANKS[used].format(what=what))))
     return replies
 
 

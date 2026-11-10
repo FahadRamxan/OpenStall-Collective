@@ -40,6 +40,7 @@ from openstall_api.payments import release_share, reserve_order
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
 from openstall_api.whatsapp import MessengerError
+from openstall_api.wording import english_of
 
 client = TestClient(app)
 TODAY = date(2026, 11, 10)  # the story's order is then due December 10, 2026, in Chicago
@@ -226,6 +227,28 @@ def test_once_paypal_holds_the_order_each_maker_is_told_in_her_language(story, f
     # The seeded makers have no WhatsApp number: nothing went out on WhatsApp.
     assert fakes.messenger.calls == []
     assert all(part.notified_at is not None for part in parts(story).values())
+
+
+@pytest.mark.parametrize("language", ["ur", "hi", "es"])
+def test_each_notice_carries_the_same_facts_in_english_for_the_pages(language):
+    notice = compose_notice(GRACE, language)
+
+    assert english_of(notice.text) == compose_notice(GRACE, "en").text
+    assert english_of(compose_notice(GRACE, "en").text) is None  # English needs no English line
+
+
+def test_each_maker_told_in_her_language_keeps_its_english_and_the_chat_api_gives_it(story):
+    reserve()
+
+    english = {seller: chat_of(story, seller)[0].english for seller in ("s_amina", "s_priya", "s_lucia", "s_grace")}
+    assert english["s_grace"] is None  # told in English
+    told = (("s_amina", "Amina", "$216.00"), ("s_priya", "Priya", "$176.00"), ("s_lucia", "Lucía", "$220.00"))
+    for seller, name, amount in told:
+        assert english[seller].startswith(f"Hello {name}! You have a new order from OpenStall.")
+        assert f"{amount} in all" in english[seller]
+    [message] = client.get("/api/chats/s_amina").json()["messages"]
+    assert message["english"] == english["s_amina"]
+    assert message["text"].startswith("السلام علیکم Amina!")
 
 
 def test_amina_is_promised_payment_on_her_receipt_as_hyperwallet_reaches_pakistan(story):

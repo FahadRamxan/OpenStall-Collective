@@ -19,7 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from openstall_agents.listing_reader import QUESTIONS as IN_ENGLISH
-from openstall_api.wording import LOCALES, format_money
+from openstall_api.wording import LOCALES, format_money, say
 
 # The listing's fields in the spec's order (3.1, "Required listing fields"), then her limits (3.3).
 LISTING_FIELDS = (
@@ -210,18 +210,26 @@ def described(draft: Mapping[str, Any], language: str = "en") -> str:
 def asking_reply(draft: Mapping[str, Any], language: str, *, thanks: bool) -> str:
     """Her answer while her listing is drafted, in a template language: thanks (not for her first message, which is
     welcomed instead), then her listing so far and the one question open now (`asked`); or, once nothing is left to
-    ask, all of it and a request for her yes (spec 3.1 step 5)."""
-    parts = PARTS[language]
+    ask, all of it and a request for her yes (spec 3.1 step 5). It carries its English line (wording.say)."""
     asked = draft.get("asked")
-    listing = described(draft, language)
-    if asked:
-        text = f"{parts.so_far.format(listing=listing)} {QUESTIONS[language][asked]}"
-    else:
-        text = f"{parts.summary.format(listing=listing)} {parts.confirm}"
-    return f"{parts.thanks} {text}" if thanks else text
+
+    def compose(code: str) -> str:
+        parts = PARTS[code]
+        listing = described(draft, code)
+        if asked:
+            text = f"{parts.so_far.format(listing=listing)} {QUESTIONS[code][asked]}"
+        else:
+            text = f"{parts.summary.format(listing=listing)} {parts.confirm}"
+        return f"{parts.thanks} {text}" if thanks else text
+
+    return say(language, compose)
 
 
 def live_reply(language: str, link: str, *, again: bool = False) -> str:
     """In a template language: her listing is live, with her stall's link; `again`, for a message once it is."""
-    parts = PARTS[language]
-    return f"{parts.thanks} {parts.still_live.format(link=link)}" if again else parts.live.format(link=link)
+
+    def compose(code: str) -> str:
+        parts = PARTS[code]
+        return f"{parts.thanks} {parts.still_live.format(link=link)}" if again else parts.live.format(link=link)
+
+    return say(language, compose)

@@ -3,8 +3,13 @@
 Code writes every message to a maker from templates (notices.py, proof.py), never a model, because they carry
 numbers she acts on. The demo's languages have templates: English, Urdu, Hindi and Spanish. Any other language gets
 English, and the feed says so. Numbers stay in Western digits, as most WhatsApp users in Pakistan and India type them.
+
+A message in Urdu, Hindi or Spanish is also composed from the English templates with the same facts (say), and that
+English is kept with it, so the pages can show what she was told to someone who reads only English: never a
+translation made at run time, and never sent to her.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -83,3 +88,28 @@ def language_words(used: str, requested: str | None) -> str:
     if asked and asked != used:
         return f"{LANGUAGE_NAMES[used]} (no template for {requested!r} yet)"
     return LANGUAGE_NAMES[used]
+
+
+class Said(str):
+    """A message in a maker's language that carries what it says in English (`english`), for the English line the
+    pages show under it. It is a str, so sending, storing and comparing it work as before; but joining or formatting
+    it gives a plain str again, so a whole message is composed first and made a Said last (say)."""
+
+    english: str | None
+
+    def __new__(cls, text: str, english: str | None = None) -> "Said":
+        made = super().__new__(cls, text)
+        made.english = english if english and english != text else None
+        return made
+
+
+def say(code: str, compose: Callable[[str], str]) -> Said:
+    """A message composed in template language `code`, with the same message composed in English as its English line
+    (none when it is English already). `compose` takes a template language and words every date and amount in it."""
+    text = compose(code)
+    return Said(text, compose(DEFAULT_LANGUAGE) if code != DEFAULT_LANGUAGE else None)
+
+
+def english_of(text: str | None) -> str | None:
+    """The English line of a message made with say(); None for any other text, and for one in English."""
+    return getattr(text, "english", None)

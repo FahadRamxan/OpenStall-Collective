@@ -207,6 +207,9 @@ class ChatMessage(Base):
     media_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     transcript: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(String(16))
+    # What a message to her in Urdu, Hindi or Spanish says in English, composed from the English templates with the
+    # same facts (wording.say), for the pages' English line; never sent to her. None for one in English.
+    english: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")

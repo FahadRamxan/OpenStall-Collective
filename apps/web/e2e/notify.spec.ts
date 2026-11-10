@@ -72,6 +72,12 @@ test("once PayPal holds the order, each maker is told about her share in her lan
   await expect(amina).toContainText(`آرڈر: ${orderId}`);
   await expect(amina).toContainText("قیمت: 18.00 ڈالر فی عدد، کل 216.00 ڈالر"); // dollars as Urdu writes them
   await expect(amina).toContainText("رسید کی تصویر یہاں بھیجیں، اسی وقت آپ کو ادائیگی ہو جائے گی");
+  // Under it, what it says in English, for someone who reads only English: the English templates with the same
+  // facts, never sent to her.
+  const notice = amina.getByRole("listitem").filter({ hasText: `آرڈر: ${orderId}` }).last();
+  await expect(notice.getByText("In English")).toBeVisible();
+  await expect(notice).toContainText("Hello Amina! You have a new order from OpenStall.");
+  await expect(notice).toContainText("Price: $18.00 each, $216.00 in all");
   await page.screenshot({ path: path.join(SCREENSHOTS, "notify-chat-amina-1280.png"), fullPage: true });
 
   // Lucía's, in Spanish, in US dollars.
@@ -83,6 +89,12 @@ test("once PayPal holds the order, each maker is told about her share in her lan
   // The live demo: the order card counts the makers told, and the feed says each was told, in the web chat.
   await page.goto("/demo");
   await expect(page.getByText("Makers told: 4 of 4")).toBeVisible();
+  // Her phone on the live demo shows the English line too; Grace, told in English, needs none.
+  const aminasPhone = page.getByRole("list", { name: "Messages on Amina's phone" });
+  await expect(aminasPhone.getByRole("listitem").filter({ hasText: orderId }).last()).toContainText("In English");
+  const gracesPhone = page.getByRole("list", { name: "Messages on Grace's phone" });
+  await expect(gracesPhone).toContainText("Hello Grace!");
+  await expect(gracesPhone).not.toContainText("In English");
   const feed = page.getByRole("list", { name: "Activity, newest first" });
   await expect(feed).toContainText("Grace was told about her share in the web chat, in English: 7 to ship by");
   await expect(feed.getByRole("listitem").filter({ hasText: "Grace was told about her share" }).first()).toContainText(

@@ -26,6 +26,11 @@ export type ChatMessage = {
    */
   transcript?: string | null;
   language?: string | null;
+  /**
+   * What a message to her in Urdu, Hindi or Spanish says in English, from the English templates with the same facts:
+   * shown under it, never sent to her. Null for one in English, and for her own words.
+   */
+  english?: string | null;
   created_at: string;
 };
 

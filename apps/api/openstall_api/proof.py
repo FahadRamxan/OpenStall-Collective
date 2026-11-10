@@ -43,7 +43,7 @@ from openstall_api.payments import PAID, OrderNotFound, WrongStatus, paid_ahead,
 from openstall_api.settings import get_settings
 from openstall_api.tracking import track_on_paypal
 from openstall_api.webhooks import deliver_fake_webhooks
-from openstall_api.wording import LOCALES, format_money, language_words, template_language
+from openstall_api.wording import LOCALES, format_money, language_words, say, template_language
 from openstall_paypal import RAIL_NAMES, PaymentError, PaymentGateway, PaymentUnavailable
 
 log = logging.getLogger(__name__)
@@ -315,8 +315,10 @@ def proof_turn(
     if is_yes(text):
         unpaid = _confirmed_unpaid(session, seller.id)
         if unpaid:
+            order_id = unpaid[0].order_id
             return ProofTurn(
-                [PHRASES[code].retrying.format(order_id=unpaid[0].order_id)], [part.id for part in unpaid]
+                [say(code, lambda used: PHRASES[used].retrying.format(order_id=order_id))],
+                [part.id for part in unpaid],
             )
     return None
 
@@ -351,14 +353,18 @@ def _item(part: OrderPart, code: str) -> str:
 
 def _ask_confirm(part: OrderPart, code: str) -> str:
     proof = part.proof_json or {}
-    words = PHRASES[code]
-    return words.ask_confirm.format(
-        order_id=part.order_id,
-        quantity=part.quantity,
-        item=_item(part, code),
-        carrier=proof.get("carrier") or words.no_carrier,
-        tracking=proof.get("tracking_number"),
-    )
+
+    def compose(used: str) -> str:
+        words = PHRASES[used]
+        return words.ask_confirm.format(
+            order_id=part.order_id,
+            quantity=part.quantity,
+            item=_item(part, used),
+            carrier=proof.get("carrier") or words.no_carrier,
+            tracking=proof.get("tracking_number"),
+        )
+
+    return say(code, compose)
 
 
 def _receipt_read(
@@ -406,13 +412,16 @@ def _receipt_read(
             "read_by": photo.read_by,
         },
     )
-    reply = _ask_confirm(part, code) if tracking else PHRASES[code].ask_number.format(order_id=part.order_id)
+    if tracking:
+        reply = _ask_confirm(part, code)
+    else:
+        reply = say(code, lambda used: PHRASES[used].ask_number.format(order_id=part.order_id))
     return ProofTurn([reply])
 
 
 def _answer_pending(session: Session, part: OrderPart, text: str, code: str) -> ProofTurn:
     proof = dict(part.proof_json or {})
-    words = PHRASES[code]
+    ask_again = say(code, lambda used: PHRASES[used].ask_again)
     if proof.get("state") == AWAITING_CONFIRMATION and is_yes(text):
         return _confirm(session, part, code)
     typed = typed_tracking(text)
@@ -435,9 +444,9 @@ def _answer_pending(session: Session, part: OrderPart, text: str, code: str) -> 
         return ProofTurn([_ask_confirm(part, code)])
     if is_no(text):
         part.proof_json = {**proof, "tracking_number": None, "state": AWAITING_NUMBER}
-        return ProofTurn([words.ask_again])
+        return ProofTurn([ask_again])
     # Anything else: ask again for what is still missing.
-    return ProofTurn([_ask_confirm(part, code) if proof.get("state") == AWAITING_CONFIRMATION else words.ask_again])
+    return ProofTurn([_ask_confirm(part, code) if proof.get("state") == AWAITING_CONFIRMATION else ask_again])
 
 
 def _confirm(session: Session, part: OrderPart, code: str) -> ProofTurn:
@@ -461,11 +470,14 @@ def _confirm(session: Session, part: OrderPart, code: str) -> ProofTurn:
             "source": proof.get("source"),
         },
     )
-    words = PHRASES[code]
-    amount = format_money(code, part.amount_usd)
-    if seller_rail(part.seller).available:
-        return ProofTurn([words.confirmed_paying.format(tracking=tracking, amount=amount)], [part.id])
-    return ProofTurn([words.confirmed_waiting.format(tracking=tracking, amount=amount)])
+    paying = seller_rail(part.seller).available
+
+    def compose(used: str) -> str:
+        words = PHRASES[used]
+        template = words.confirmed_paying if paying else words.confirmed_waiting
+        return template.format(tracking=tracking, amount=format_money(used, part.amount_usd))
+
+    return ProofTurn([say(code, compose)], [part.id] if paying else [])
 
 
 PAYMENT_TROUBLE = (WrongStatus, ClaimHeld, OrderNotFound, PaymentError, PaymentUnavailable, AdapterUnavailable)
@@ -500,23 +512,28 @@ def _tell(part_id: str, kind: str, messenger: Callable[[], Messenger], reason: s
             return
         seller = part.seller
         code = template_language(seller.language)
-        words = PHRASES[code]
         language = language_words(code, seller.language)
         if kind == "paid":
             rail = seller_rail(seller).kind
+            fake = get_settings().OPENSTALL_MODE == "fake"
             # What reached her now: her share, less any advance OpenStall paid her ahead (advance.py).
-            sent = format_money(code, part.amount_usd - paid_ahead(part))
-            if rail == "hyperwallet":
-                text = words.paid_bank.format(amount=sent, order_id=part.order_id)
-            else:
-                text = words.paid.format(amount=sent, order_id=part.order_id, rail=RAIL_NAMES[rail])
-            if get_settings().OPENSTALL_MODE == "fake":
-                text = f"{text}\n{words.simulated}"
-            elif rail == "hyperwallet":
-                text = f"{text}\n{words.hyperwallet}"
+            reached = part.amount_usd - paid_ahead(part)
+
+            def compose(used: str) -> str:
+                words = PHRASES[used]
+                sent = format_money(used, reached)
+                if rail == "hyperwallet":
+                    paid = words.paid_bank.format(amount=sent, order_id=part.order_id)
+                else:
+                    paid = words.paid.format(amount=sent, order_id=part.order_id, rail=RAIL_NAMES[rail])
+                if fake:
+                    return f"{paid}\n{words.simulated}"
+                return f"{paid}\n{words.hyperwallet}" if rail == "hyperwallet" else paid
+
+            text = say(code, compose)
             summary = f"{seller.name} was told {{where}}, in {language}, that she is paid for order {part.order_id}"
         else:
-            text = words.payment_failed
+            text = say(code, lambda used: PHRASES[used].payment_failed)
             summary = (
                 f"{seller.name} was told {{where}}, in {language}, that her payment for order {part.order_id} did "
                 f"not go through yet ({(reason or 'no reason given')[:160]})"

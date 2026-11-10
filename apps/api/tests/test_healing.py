@@ -18,7 +18,17 @@ from openstall_api import quotes
 from openstall_api.events import EventType
 from openstall_api.healing import cant_make_it, heal_after
 from openstall_api.main import app
-from openstall_api.models import Event, Order, OrderPart, OrderStatus, PartStatus, QuoteRequest
+from openstall_api.models import (
+    ChatMessage,
+    ChatSession,
+    Direction,
+    Event,
+    Order,
+    OrderPart,
+    OrderStatus,
+    PartStatus,
+    QuoteRequest,
+)
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
 
@@ -331,3 +341,30 @@ def test_the_top_up_is_approved_like_any_order_and_its_makers_are_told(story, fa
     assert story.get(Order, top_up.id).status == OrderStatus.AUTHORIZED
     told = {event.entity_id for event in events(story, EventType.ORDER_NOTICE_SENT)}
     assert {line.id for line in story.get(Order, top_up.id).parts} <= told
+
+
+def told_in_english(db, seller_id: str) -> list[tuple[str, str | None]]:
+    """Each message OpenStall sent her, oldest first: its text, and the English line kept with it."""
+    db.expire_all()
+    query = (
+        select(ChatMessage)
+        .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+        .where(ChatSession.seller_id == seller_id, ChatMessage.direction == Direction.OUTBOUND)
+        .order_by(ChatMessage.created_at)
+    )
+    return [(message.text or "", message.english) for message in db.scalars(query)]
+
+
+def devanagari(text: str) -> bool:
+    return any("ऀ" <= letter <= "ॿ" for letter in text)
+
+
+def test_dropping_out_in_hindi_keeps_each_answer_in_english_too(story, fakes):
+    play("s_priya", "माफ़ कीजिए, मैं यह ऑर्डर नहीं बना सकती।")
+    play("s_priya", "हाँ")
+
+    *_, (ask, ask_english), (done, done_english) = told_in_english(story, "s_priya")
+
+    assert devanagari(ask) and devanagari(done)
+    assert ask_english and "ord_demo" in ask_english and not devanagari(ask_english)
+    assert done_english and "ord_demo" in done_english and not devanagari(done_english)

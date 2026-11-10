@@ -34,7 +34,7 @@ from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
 from openstall_api.models import Channel, Direction, Event, Order, OrderPart, PartStatus, utcnow
 from openstall_api.payments import RESERVED, seller_rail
-from openstall_api.wording import LOCALES, format_day, format_money, template_language
+from openstall_api.wording import LOCALES, format_day, format_money, say, template_language
 from openstall_api.wording import language_words as words_for_language
 
 log = logging.getLogger(__name__)
@@ -155,8 +155,13 @@ class Notice:
 
 
 def compose_notice(facts: NoticeFacts, language: str | None) -> Notice:
-    """Her message, in her language. Every number comes from `facts`; nothing is translated at run time."""
+    """Her message, in her language, with its English line (wording.say). Every number comes from `facts`; nothing is
+    translated at run time."""
     code = template_language(language)
+    return Notice(say(code, lambda used: _notice_text(facts, used)), code, language)
+
+
+def _notice_text(facts: NoticeFacts, code: str) -> str:
     words = PHRASES[code]
 
     def money(value: Decimal) -> str:
@@ -182,7 +187,7 @@ def compose_notice(facts: NoticeFacts, language: str | None) -> Notice:
     elif facts.deliver_by:
         lines.append(words.deliver_by.format(date=day(facts.deliver_by)))
     lines += ["", (words.paid if facts.paid_on_proof else words.wait).format(amount=money(facts.amount))]
-    return Notice("\n".join(lines), code, language)
+    return "\n".join(lines)
 
 
 def ship_by(part: OrderPart) -> date | None:

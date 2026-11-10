@@ -414,3 +414,35 @@ def get_order_status(order_id: str) -> dict:
     result = asyncio.run(go())
     assert not result.is_error, result.content
     return result.structured_content
+
+
+def told_in_english(db, seller_id: str) -> list[tuple[str, str | None]]:
+    """Each message OpenStall sent her, oldest first: its text, and the English line kept with it."""
+    db.expire_all()
+    query = (
+        select(ChatMessage)
+        .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+        .where(ChatSession.seller_id == seller_id, ChatMessage.direction == Direction.OUTBOUND)
+        .order_by(ChatMessage.created_at)
+    )
+    return [(message.text or "", message.english) for message in db.scalars(query)]
+
+
+def devanagari(text: str) -> bool:
+    return any("ऀ" <= letter <= "ॿ" for letter in text)
+
+
+def test_every_message_to_priya_in_hindi_keeps_the_same_message_in_english(story, fakes):
+    """Her order, the reading she is asked to confirm, her tracking saved and her payment: each in Hindi, each with
+    the English templates' words for the pages, never a translation."""
+    play("s_priya", receipt=True)
+    play("s_priya", "हाँ")
+
+    told = told_in_english(story, "s_priya")
+
+    assert len(told) == 4
+    for text, english in told:
+        assert devanagari(text)
+        assert english and not devanagari(english), text
+    assert PRIYA_TRACKING in str(told[1][1]) and "ord_demo" in str(told[1][1])
+    assert "$176.00" in str(told[-1][1])

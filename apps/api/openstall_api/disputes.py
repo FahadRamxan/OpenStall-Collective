@@ -35,7 +35,7 @@ from openstall_api.messaging import Messenger
 from openstall_api.models import OrderPart, utcnow
 from openstall_api.payments import PAID, OrderNotFound, WrongStatus, load_part
 from openstall_api.settings import get_settings
-from openstall_api.wording import LOCALES, language_words, template_language
+from openstall_api.wording import LOCALES, language_words, say, template_language
 from openstall_paypal import DisputeEvidence, PaymentError, PaymentGateway, PaymentUnavailable
 from openstall_paypal.disputes import ANSWERABLE, REASONS, can_answer, disputed_captures
 
@@ -315,15 +315,19 @@ def answer_dispute(part_id: str, gateway: Callable[[], PaymentGateway], messenge
             if part is not None and part.dispute_json:
                 part.dispute_json = {**part.dispute_json, "error": str(trouble)[:200]}
         return False
-    words = PHRASES[code]
-    text = words.answered.format(
-        order_id=order_id,
-        reason=words.not_received if reason in ANSWERABLE else words.other_reason,
-        tracking=tracking,
-        receipt=words.receipt if with_photo else "",
-    )
-    if get_settings().OPENSTALL_MODE == "fake":
-        text = f"{text}\n{words.simulated}"
+    fake = get_settings().OPENSTALL_MODE == "fake"
+
+    def compose(used: str) -> str:
+        words = PHRASES[used]
+        answered = words.answered.format(
+            order_id=order_id,
+            reason=words.not_received if reason in ANSWERABLE else words.other_reason,
+            tracking=tracking,
+            receipt=words.receipt if with_photo else "",
+        )
+        return f"{answered}\n{words.simulated}" if fake else answered
+
+    text = say(code, compose)
     send_to_seller(
         seller_id,
         text,
@@ -343,13 +347,17 @@ def tell_resolved(part_id: str, messenger: Callable[[], Messenger]) -> bool:
         outcome = (part.dispute_json or {}).get("outcome")
         seller = part.seller
         code = template_language(seller.language)
-        words = PHRASES[code]
-        template = {"seller": words.resolved_mine, "buyer": words.resolved_buyer}.get(
-            str(outcome), words.resolved_other
-        )
-        text = template.format(order_id=part.order_id)
-        if get_settings().OPENSTALL_MODE == "fake":
-            text = f"{text}\n{words.simulated}"
+        fake = get_settings().OPENSTALL_MODE == "fake"
+
+        def compose(used: str) -> str:
+            words = PHRASES[used]
+            template = {"seller": words.resolved_mine, "buyer": words.resolved_buyer}.get(
+                str(outcome), words.resolved_other
+            )
+            decided = template.format(order_id=part.order_id)
+            return f"{decided}\n{words.simulated}" if fake else decided
+
+        text = say(code, compose)
         summary = (
             f"{seller.name} was told {{where}}, in {language_words(code, seller.language)}, that PayPal decided the "
             f"dispute on order {part.order_id}: {OUTCOME_WORDS.get(outcome, 'closed')}"

@@ -51,6 +51,9 @@ class MessageOut(BaseModel):
     # in (ISO 639-1). None when the message had no voice note, or none could be heard.
     transcript: str | None = None
     language: str | None = None
+    # What a message to her in Urdu, Hindi or Spanish says in English, from the English templates with the same facts:
+    # shown under it on the pages, never sent to her. None for one in English, and for her own words.
+    english: str | None = None
     created_at: datetime
 
 
@@ -205,6 +208,7 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
                 media=[media_out(item) for item in message.media_json],
                 transcript=message.transcript,
                 language=message.language,
+                english=message.english,
                 created_at=aware(message.created_at),
             )
             for message in reversed(recent)

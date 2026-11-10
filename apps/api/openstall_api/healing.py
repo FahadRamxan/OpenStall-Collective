@@ -34,7 +34,7 @@ from openstall_api.payments import release_share
 from openstall_api.proof import PAYMENT_TROUBLE, PENDING, awaiting_proof, is_no, is_yes, normalise
 from openstall_api.quotes import QuoteError, create_quote_request, run_quote
 from openstall_api.webhooks import deliver_fake_webhooks
-from openstall_api.wording import LOCALES, format_day, format_money, template_language
+from openstall_api.wording import LOCALES, format_day, format_money, say, template_language
 from openstall_paypal import PaymentGateway
 
 log = logging.getLogger(__name__)
@@ -189,13 +189,15 @@ def _ask(session: Session, part: OrderPart, code: str, words: str, message_id: s
         entity_id=part.id,
         payload={"order_id": part.order_id, "seller_id": part.seller_id, "message_id": message_id},
     )
-    ask = PHRASES[code].ask.format(
-        order_id=part.order_id,
-        quantity=part.quantity,
-        item=_item(part, code),
-        amount=format_money(code, part.amount_usd),
-    )
-    return DropTurn([ask])
+    def compose(used: str) -> str:
+        return PHRASES[used].ask.format(
+            order_id=part.order_id,
+            quantity=part.quantity,
+            item=_item(part, used),
+            amount=format_money(used, part.amount_usd),
+        )
+
+    return DropTurn([say(code, compose)])
 
 
 def _keep(session: Session, part: OrderPart, code: str) -> DropTurn:
@@ -207,10 +209,14 @@ def _keep(session: Session, part: OrderPart, code: str) -> DropTurn:
         entity_id=part.id,
         payload={"order_id": part.order_id, "seller_id": part.seller_id},
     )
-    words = PHRASES[code]
     day = ship_by(part)
-    kept = words.kept.format(order_id=part.order_id)
-    return DropTurn([kept + (words.ship_by.format(day=format_day(code, day)) if day else "")])
+
+    def compose(used: str) -> str:
+        words = PHRASES[used]
+        kept = words.kept.format(order_id=part.order_id)
+        return kept + (words.ship_by.format(day=format_day(used, day)) if day else "")
+
+    return DropTurn([say(code, compose)])
 
 
 def _drop(session: Session, part: OrderPart, code: str) -> DropTurn:
@@ -229,7 +235,7 @@ def _drop(session: Session, part: OrderPart, code: str) -> DropTurn:
             "amount_usd": part.amount_usd,
         },
     )
-    return DropTurn([PHRASES[code].dropped.format(order_id=part.order_id)], [part.id])
+    return DropTurn([say(code, lambda used: PHRASES[used].dropped.format(order_id=part.order_id))], [part.id])
 
 
 def heal_after(part_id: str, gateway: Callable[[], PaymentGateway], llm: Callable[[], LLM]) -> str | None:

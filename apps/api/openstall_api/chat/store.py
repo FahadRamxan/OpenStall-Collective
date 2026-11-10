@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Seller, utcnow
+from openstall_api.wording import english_of
 
 CHANNEL_WORDS = {Channel.WHATSAPP: "on WhatsApp", Channel.WEB: "in the web chat"}
 # The countries in the demo, by dialing code. Other numbers leave the country empty until the seller says.
@@ -52,9 +53,15 @@ def find_chat(session: Session, seller: Seller, channel: Channel) -> ChatSession
 def save_message(
     session: Session, chat: ChatSession, direction: Direction, text: str, media: list[dict[str, object]]
 ) -> ChatMessage:
-    """One message in her chat, inbound or outbound. The caller commits."""
+    """One message in her chat, inbound or outbound. The caller commits. A message composed with wording.say keeps
+    its English line."""
     message = ChatMessage(
-        session_id=chat.id, direction=direction, channel=chat.channel, text=text or None, media_json=media
+        session_id=chat.id,
+        direction=direction,
+        channel=chat.channel,
+        text=text or None,
+        media_json=media,
+        english=english_of(text),
     )
     session.add(message)
     chat.updated_at = utcnow()

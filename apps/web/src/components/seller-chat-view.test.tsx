@@ -146,6 +146,34 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(within(reply).queryByText(/as text/)).not.toBeInTheDocument();
   });
 
+  it("a message told in Urdu shows what it says in English under it, and an English one shows none", async () => {
+    const told: Conversation = {
+      ...CONVERSATION,
+      messages: [
+        ...CONVERSATION.messages,
+        {
+          id: "cm_4",
+          direction: "outbound",
+          channel: "web",
+          text: "السلام علیکم Amina! OpenStall سے آپ کے لیے ایک نیا آرڈر آیا ہے۔\n\nآرڈر: ord_demo",
+          english: "Hello Amina! You have a new order from OpenStall.\n\nOrder: ord_demo",
+          media: [],
+          created_at: "2026-11-10T10:06:00Z",
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", api({ ...BROWSING, "GET /api/chats/s_amina": () => Response.json(told) }));
+
+    render(<SellerChatView />);
+
+    const thread = await screen.findByRole("list", { name: "Messages with Amina" });
+    const bubbles = within(thread).getAllByRole("listitem");
+    const notice = bubbles[bubbles.length - 1];
+    expect(within(notice).getByText("In English")).toBeInTheDocument();
+    expect(within(notice).getByText(/Hello Amina! You have a new order from OpenStall/)).toHaveAttribute("lang", "en");
+    expect(within(bubbles[1]).queryByText("In English")).not.toBeInTheDocument();
+  });
+
   it("OpenStall's answer to her voice note is spoken too, in her language", async () => {
     const answer = {
       ...CONVERSATION.messages[1],

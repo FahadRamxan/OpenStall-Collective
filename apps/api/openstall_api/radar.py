@@ -27,7 +27,7 @@ from openstall_api.db import new_session, session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
 from openstall_api.models import DataSource, Event, Passport, Product, ProductStatus, Search, Seller, utcnow
-from openstall_api.wording import LOCALES, language_words, template_language
+from openstall_api.wording import LOCALES, language_words, say, template_language
 from openstall_trust import trust_score
 
 WEEK = timedelta(days=7)
@@ -229,7 +229,8 @@ def send_tip(key: str, messenger: Callable[[], Messenger], now: datetime | None 
         assert maker is not None
         code = template_language(maker.language)
         said_in = language_words(code, maker.language)
-    text = PHRASES[code].tip.format(count=group.searches, label=group.label, item=seller.product_title.lower())
+    item = seller.product_title.lower()
+    text = say(code, lambda used: PHRASES[used].tip.format(count=group.searches, label=group.label, item=item))
     summary = f"{seller.name} was tipped {{where}}, in {said_in}, that {group.searches} agents looked for {group.label}"
     if not send_to_seller(seller.seller_id, text, summary, messenger, payload={"kind": "radar_tip", "group": key}):
         raise TipError(f"{seller.name} could not be reached, so the tip was not sent.")

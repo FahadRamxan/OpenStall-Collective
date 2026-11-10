@@ -37,7 +37,7 @@ The receipt: **"Simulated PayPal is holding $815.00."** Every share reads "Reser
 Press **Watch it happen on the live demo**. On `/demo`:
 
 - **Payments** shows the order's steps: Reserved at PayPal, Makers told. "$815.00 reserved at simulated PayPal. Nothing is captured yet."
-- **The makers' phones** show each maker's chat as she sees it: her order in Hindi (Priya), Urdu, right to left (Amina), Spanish, in US dollars (Lucía) and English (Grace): the item, how many, her price, the date to ship by, where it goes and how she is paid. Code writes these from templates, so every number is the order's own.
+- **The makers' phones** show each maker's chat as she sees it: her order in Hindi (Priya), Urdu, right to left (Amina), Spanish, in US dollars (Lucía) and English (Grace): the item, how many, her price, the date to ship by, where it goes and how she is paid. Code writes these from templates, so every number is the order's own. Under each one in Urdu, Hindi or Spanish, **In English** gives the same message from the English templates, for you; the maker gets only her language.
 - Amina's message, like the others, asks for her courier receipt photo when she ships. PayPal Payouts does not reach Pakistan, so she is paid to her bank through Hyperwallet, which is simulated: no Hyperwallet account is connected. A maker no payout rail reaches would be asked to wait instead: OpenStall never asks a maker to ship goods it cannot pay for.
 
 ## 4. Priya proves she shipped and is paid
