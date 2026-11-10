@@ -33,6 +33,7 @@ from openstall_api.feeds import clear_catalog_cache
 from openstall_api.fixtures import known_voice_notes
 from openstall_api.messaging import FakeMessenger, Messenger
 from openstall_api.settings import Settings, get_settings
+from openstall_api.meta_whatsapp import MetaMessenger
 from openstall_api.whatsapp import TwilioMessenger
 from openstall_paypal import FakeGateway, MultipartyGateway, PaymentGateway, PayoutsGateway
 
@@ -125,6 +126,29 @@ def make_twilio_messenger(settings: Settings) -> TwilioMessenger:
     )
 
 
+def make_messenger(settings: Settings) -> Messenger:
+    """The WhatsApp provider WHATSAPP_PROVIDER names: Twilio, or Meta's WhatsApp Cloud API. The registry checks its
+    keys are set before calling it."""
+    if settings.WHATSAPP_PROVIDER == "meta":
+        assert settings.META_WHATSAPP_TOKEN and settings.META_WHATSAPP_PHONE_NUMBER_ID
+        return MetaMessenger(
+            settings.META_WHATSAPP_TOKEN.get_secret_value(),
+            settings.META_WHATSAPP_PHONE_NUMBER_ID,
+            settings.META_GRAPH_VERSION,
+        )
+    return make_twilio_messenger(settings)
+
+
+def messenger_service(settings: Settings) -> str:
+    return "Meta WhatsApp Cloud API" if settings.WHATSAPP_PROVIDER == "meta" else "Twilio WhatsApp sandbox"
+
+
+def messenger_keys(settings: Settings) -> tuple[str, ...]:
+    if settings.WHATSAPP_PROVIDER == "meta":
+        return ("META_WHATSAPP_TOKEN", "META_WHATSAPP_PHONE_NUMBER_ID")
+    return ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN")
+
+
 ADAPTERS: tuple[AdapterSpec, ...] = (
     AdapterSpec(
         name="llm",
@@ -180,7 +204,9 @@ ADAPTERS: tuple[AdapterSpec, ...] = (
         service="Twilio WhatsApp sandbox",
         keys=("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"),
         make_fake=lambda settings: FakeMessenger(),
-        make_real=lambda settings: make_twilio_messenger(settings),
+        make_real=lambda settings: make_messenger(settings),
+        service_for=messenger_service,
+        keys_for=messenger_keys,
     ),
     AdapterSpec(
         name="payment_gateway",

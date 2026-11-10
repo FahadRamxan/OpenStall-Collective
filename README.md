@@ -113,7 +113,7 @@ The same walkthrough runs as a browser test on every change. To plug in your own
 | **PayPal** | Orders v2 with intent AUTHORIZE, partial captures and voids, Payouts, order tracking, verified webhooks, disputes answered with proof, JS SDK buttons and Venmo, and PayPal's own MCP server for the ops agent |
 | **APIMatic** | APIMatic's PayPal Python SDK for every Orders and Payments call, built with APIMatic's PayPal Context Plugin ([docs/apimatic.md](docs/apimatic.md)) |
 | **AI** | Claude for the seller and buyer agents, the listing and receipt readers and the ops agent; ElevenLabs Scribe v2 for voice notes and Eleven v4 Turbo for spoken answers |
-| **Channels** | WhatsApp through Twilio, and the same chat in the browser |
+| **Channels** | WhatsApp through Meta's WhatsApp Cloud API or Twilio, and the same chat in the browser |
 | **App** | Python, FastAPI, SQLAlchemy and Postgres; Next.js 16, React 19, Tailwind 4 and AG Grid; the MCP Python SDK |
 | **Trust** | Ed25519-signed trust passports, checked live in the browser with Web Crypto |
 | **Quality** | About 1,600 Python tests, 325 component tests and 118 browser tests, including an accessibility check of every page in light and dark mode |

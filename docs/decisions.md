@@ -804,3 +804,12 @@ Code: `apps/web/src/app/globals.css`, `app/page.tsx`, `hero-scene.tsx`, `icons.t
 - **Nothing a test or the walkthrough names changed:** every label, heading and region is word for word as before.
 - **A short README.** The logo, screenshots taken from the browser tests' own screenshots, a diagram of the flow, the five-minute run and the links. Everything else moved word for word to `docs/guide.md`, which the docs tests now check like the README (its links, the scripts it names, and the PayPal products table).
 
+## November 10: WhatsApp through Meta's WhatsApp Cloud API, beside Twilio
+
+Code: `apps/api/openstall_api/meta_whatsapp.py`, `whatsapp_api.py` (`GET` and `POST /api/webhooks/whatsapp`), `adapters.py` (`make_messenger`), `settings.py`, `render.yaml`, and `tests/test_meta_whatsapp.py`.
+
+- **Why:** a new Twilio trial cannot point its WhatsApp test number at our webhook without an upgrade. Meta's own WhatsApp Cloud API gives a free test number that can message up to five phones, with a webhook we set ourselves, so the team set one up.
+- **One path, two providers.** `WHATSAPP_PROVIDER` chooses the messenger; both webhooks hand the same `Sender` and files to `chat.inbox.receive`, so nothing after the webhook knows which provider brought a message.
+- **Meta's checks.** Meta confirms the address once with our verify token and a challenge we echo; every event is signed with the app secret (`X-Hub-Signature-256`, HMAC-SHA256 of the raw body), and an unsigned or wrongly signed one is refused and recorded as `security.rejected`, like Twilio's. Each message is handled once, by its wamid, as Meta resends when an answer is slow. Delivery and read receipts are only acknowledged.
+- **Files and replies.** A photo or voice note arrives as a media id: Graph API gives a short-lived URL, both calls with the access token, kept under 16 MB as for Twilio. Replies go to the phone number's `/messages` endpoint; a spoken answer goes as an audio message linking to our public copy, as Meta fetches it. WhatsApp allows free-form replies for 24 hours after her last message, which covers every answer to her.
+- **Secrets stay out of git.** The access token and app secret are `sync: false` on Render and typed into `.env` by their owner; Render generates the verify token, which is typed into Meta's webhook settings. In fake mode, a public fake secret and verify token stand in, as Twilio's fake token does.

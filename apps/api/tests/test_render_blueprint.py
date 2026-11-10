@@ -15,9 +15,9 @@ from openstall_api.settings import Settings
 ROOT = Path(__file__).resolve().parents[3]
 BLUEPRINT = ROOT / "render.yaml"
 # Settings that name an account: not secret by themselves, but they belong to us, so they are entered by hand too.
-ACCOUNT_SETTINGS = {"PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID"}
+ACCOUNT_SETTINGS = {"PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID", "META_WHATSAPP_PHONE_NUMBER_ID"}
 # Secrets that belong to no outside account: Render makes them when the blueprint is created.
-GENERATED = {"DEMO_RUN_TOKEN", "PASSPORT_SIGNING_KEY"}
+GENERATED = {"DEMO_RUN_TOKEN", "PASSPORT_SIGNING_KEY", "META_WHATSAPP_VERIFY_TOKEN"}
 HOST_ONLY = {"PYTHON_VERSION"}  # read by Render, not by the app
 # Render's paid instance types, as its blueprint spec lists them (render.com/docs/blueprint-spec, November 10, 2026);
 # the old names (starter, basic-256mb) are no longer listed there. Free is left out on purpose: a free web service

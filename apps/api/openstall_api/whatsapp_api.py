@@ -1,15 +1,19 @@
-"""WhatsApp over HTTP: Twilio's webhook, and in fake mode a way to play a seller sending a message.
+"""WhatsApp over HTTP: Twilio's webhook, Meta's (the WhatsApp Cloud API), and in fake mode a way to play a seller
+sending a message.
 
-The webhook answers Twilio at once with an empty TwiML reply, after checking the signature and that the message is
-new. Fetching the media and handling the message happen in a background task, so Twilio never waits on them; the
-replies go back through the Messenger.
+Each webhook answers at once, after checking the signature and that the message is new: Twilio with an empty TwiML
+reply, Meta with a plain 200. Fetching the media and handling the message happen in a background task, so neither
+waits on them; the replies go back through the Messenger, the provider WHATSAPP_PROVIDER names.
 """
 
+import hmac
+import json
 import logging
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import PlainTextResponse
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +27,14 @@ from openstall_api.events import EventType, record_event
 from openstall_api.events_api import fake_mode_only
 from openstall_api.fixtures import demo_shipment, fixture_photo, fixture_receipt, fixture_voice_note
 from openstall_api.media import MediaRejected, media_type
+from openstall_api.meta_whatsapp import (
+    MetaInbound,
+    download_meta_media,
+    meta_app_secret,
+    meta_verify_token,
+    parse_meta_inbound,
+    valid_meta_request,
+)
 from openstall_api.models import Channel, ProcessedWebhook
 from openstall_api.settings import get_settings
 from openstall_api.whatsapp import (
@@ -44,21 +56,24 @@ def public_url(request: Request) -> str:
     return f"{url}?{request.url.query}" if request.url.query else url
 
 
-def first_time(message_sid: str) -> bool:
-    """Whether this message is new. Twilio sends a message again when an answer is slow or lost."""
+def first_time(message_sid: str, provider: str = "twilio") -> bool:
+    """Whether this message is new. Twilio and Meta both send a message again when an answer is slow or lost."""
     if not message_sid:
         return True
     try:
         with session_scope() as session:
-            session.add(ProcessedWebhook(provider="twilio", event_id=f"twilio:{message_sid}"[:128], payload_json={}))
+            event_id = f"{provider}:{message_sid}"[:128]
+            session.add(ProcessedWebhook(provider=provider, event_id=event_id, payload_json={}))
     except IntegrityError:
         return False
     return True
 
 
-def record_refusal() -> None:
+def record_refusal(provider: str = "Twilio") -> None:
     with session_scope() as session:
-        record_event(session, EventType.SECURITY_REJECTED, "A WhatsApp webhook without Twilio's signature was refused")
+        record_event(
+            session, EventType.SECURITY_REJECTED, f"A WhatsApp webhook without {provider}'s signature was refused"
+        )
 
 
 def deliver_inbound(sender: Sender, text: str, files: list[InboundFile | Refused]) -> HandledMessage:
@@ -102,6 +117,60 @@ async def twilio_webhook(request: Request, background: BackgroundTasks) -> Respo
     if inbound.sender and await run_in_threadpool(first_time, inbound.message_sid):
         background.add_task(process_whatsapp_inbound, inbound)
     return Response(EMPTY_TWIML, media_type="text/xml")
+
+
+def process_meta_inbound(inbound: MetaInbound) -> None:
+    """Meta's slow part, after it has its answer: fetch her file from Graph API, then handle the message, as for
+    Twilio. A sender over her limit is dropped before any file is fetched or read."""
+    try:
+        check("chat", f"whatsapp:{inbound.sender}")
+    except TooMany as error:
+        log.warning("A WhatsApp message was dropped: %s", error)
+        return
+    files: list[InboundFile | Refused] = []
+    if inbound.media:
+        with httpx.Client(timeout=20.0) as http:
+            for item in inbound.media:
+                try:
+                    data, kind = download_meta_media(item, get_settings(), http)
+                    files.append(InboundFile(data, kind))
+                except MediaRejected as error:
+                    files.append(Refused(str(error), media_type(item.content_type)))
+                except (httpx.HTTPError, KeyError, ValueError):
+                    files.append(Refused("It could not be fetched from WhatsApp.", media_type(item.content_type)))
+    deliver_inbound(Sender(Channel.WHATSAPP, inbound.sender, inbound.profile_name), inbound.text, files)
+
+
+@router.get("/api/webhooks/whatsapp", response_class=PlainTextResponse)
+def meta_webhook_check(
+    mode: Annotated[str, Query(alias="hub.mode")] = "",
+    token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    challenge: Annotated[str, Query(alias="hub.challenge", max_length=200)] = "",
+) -> str:
+    """Meta checks the webhook's address once: our verify token back means it is ours, and we echo its challenge."""
+    expected = meta_verify_token(get_settings())
+    if mode != "subscribe" or not expected or not hmac.compare_digest(token.encode(), expected.encode()):
+        raise HTTPException(status_code=403, detail="Refused: the verify token does not match.")
+    return challenge
+
+
+@router.post("/api/webhooks/whatsapp")
+async def meta_webhook(request: Request, background: BackgroundTasks) -> Response:
+    """Meta's WhatsApp events: each new message from a seller is handled in the background; delivery and read
+    receipts are only acknowledged."""
+    body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    if not valid_meta_request(body, signature, meta_app_secret(get_settings())):
+        await run_in_threadpool(record_refusal, "Meta")
+        raise HTTPException(status_code=403, detail="Refused: Meta did not sign this request.")
+    try:
+        payload = json.loads(body)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="Refused: the body is not JSON.") from error
+    for inbound in parse_meta_inbound(payload if isinstance(payload, dict) else {}):
+        if await run_in_threadpool(first_time, inbound.message_id, "meta"):
+            background.add_task(process_meta_inbound, inbound)
+    return PlainTextResponse("EVENT_RECEIVED")
 
 
 class DevInbound(BaseModel):

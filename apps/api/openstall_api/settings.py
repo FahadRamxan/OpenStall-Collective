@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: SecretStr | None = None
     TWILIO_WHATSAPP_FROM: str = "whatsapp:+14155238886"
+    # Which WhatsApp provider sandbox mode talks to: Twilio (above), or Meta's WhatsApp Cloud API, with a phone number
+    # from developers.facebook.com (a test number works), its access token and phone number id. Meta's webhook, at
+    # /api/webhooks/whatsapp, is checked with the app's secret, and its address with our own verify token.
+    WHATSAPP_PROVIDER: Literal["twilio", "meta"] = "twilio"
+    META_WHATSAPP_TOKEN: SecretStr | None = None
+    META_WHATSAPP_PHONE_NUMBER_ID: str | None = None
+    META_WHATSAPP_VERIFY_TOKEN: SecretStr | None = None
+    META_APP_SECRET: SecretStr | None = None
+    META_GRAPH_VERSION: str = "v23.0"
 
     ANTHROPIC_API_KEY: SecretStr | None = None
     OPENAI_API_KEY: SecretStr | None = None
@@ -104,7 +113,7 @@ class Settings(BaseSettings):
     # Trust passports: Ed25519 private key, base64.
     PASSPORT_SIGNING_KEY: SecretStr | None = None
 
-    @field_validator("OPENSTALL_MODE", "PAYMENT_PATH", mode="before")
+    @field_validator("OPENSTALL_MODE", "PAYMENT_PATH", "WHATSAPP_PROVIDER", mode="before")
     @classmethod
     def _choice_ignores_case(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value

@@ -82,6 +82,18 @@ services:
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
+      # WhatsApp through Meta's WhatsApp Cloud API: its test number's access token and phone number id, and the app's
+      # secret that signs its webhook. Render makes the verify token: type it into Meta's webhook settings.
+      - key: WHATSAPP_PROVIDER
+        value: meta
+      - key: META_WHATSAPP_TOKEN
+        sync: false
+      - key: META_WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_WHATSAPP_VERIFY_TOKEN
+        generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
       # Unlocks /demo's Run and Reset controls in sandbox mode. Render makes a random one; read it in the API's

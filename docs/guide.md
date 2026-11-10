@@ -117,6 +117,13 @@ The first searches the listings. The second plays the buyer agent's whole reques
 
 Set `OPENSTALL_MODE=sandbox` in `.env`, with a PayPal sandbox REST app's `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` (and `ANTHROPIC_API_KEY` for the AI agents, `OPENAI_API_KEY` for voice notes). Approving an order then goes to PayPal's sandbox checkout, where you sign in as a sandbox personal account from your PayPal Developer Dashboard. `/status` shows which services are connected and names any missing key. In sandbox mode the seeded makers cannot be played from `/demo` (test-mode controls are off); a maker proves she shipped from her own WhatsApp or web chat.
 
+## WhatsApp through Twilio or Meta
+
+A maker's WhatsApp reaches OpenStall through either provider; `WHATSAPP_PROVIDER` chooses which, and both take the same path once a message is in.
+
+- **Twilio** (`WHATSAPP_PROVIDER=twilio`, the default): its sandbox number, `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, and its incoming-message webhook set to `PUBLIC_BASE_URL` + `/api/webhooks/twilio`. A newer Twilio trial tries WhatsApp through **Try out WhatsApp**: put its number in `TWILIO_WHATSAPP_FROM`, and set its Inbound auto-reply to Custom with that webhook.
+- **Meta's WhatsApp Cloud API** (`WHATSAPP_PROVIDER=meta`): on developers.facebook.com, an app with WhatsApp gives a free test number that can message up to five phones you add. Set `META_WHATSAPP_TOKEN` (WhatsApp > API Setup), `META_WHATSAPP_PHONE_NUMBER_ID`, `META_APP_SECRET` (App settings > Basic) and a `META_WHATSAPP_VERIFY_TOKEN` of your own. In WhatsApp > Configuration > Webhook, set the callback URL to `PUBLIC_BASE_URL` + `/api/webhooks/whatsapp` with the same verify token, and subscribe to `messages`. Meta checks the address once with that token; every event after is signed with the app secret (`X-Hub-Signature-256`), and an unsigned one is refused and recorded. Her photos and voice notes are fetched from Graph API with the token, and replies, a spoken answer included, go out through the phone number's messages endpoint, within the 24 hours after her last message that WhatsApp allows.
+
 ## Run it locally, in more detail
 
 [Try it](../README.md#try-it-for-judges) has the quickest way in. This section is for working on the code. You need Python 3.11 or newer.

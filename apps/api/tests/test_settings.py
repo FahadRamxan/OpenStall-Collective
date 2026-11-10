@@ -30,6 +30,12 @@ ENVIRONMENT = {
     "TWILIO_ACCOUNT_SID": "ACmadeup0000",
     "TWILIO_AUTH_TOKEN": "made-up-twilio-token",
     "TWILIO_WHATSAPP_FROM": "whatsapp:+15550100000",
+    "WHATSAPP_PROVIDER": "meta",
+    "META_WHATSAPP_TOKEN": "made-up-meta-token",
+    "META_WHATSAPP_PHONE_NUMBER_ID": "155500000000000",
+    "META_WHATSAPP_VERIFY_TOKEN": "made-up-verify-token",
+    "META_APP_SECRET": "made-up-app-secret",
+    "META_GRAPH_VERSION": "v99.0",
     "ANTHROPIC_API_KEY": "made-up-anthropic-key",
     "OPENAI_API_KEY": "made-up-openai-key",
     "LLM_MODEL": "made-up-model",
@@ -53,6 +59,9 @@ ENVIRONMENT = {
 SECRETS = (
     "PAYPAL_CLIENT_SECRET",
     "TWILIO_AUTH_TOKEN",
+    "META_WHATSAPP_TOKEN",
+    "META_WHATSAPP_VERIFY_TOKEN",
+    "META_APP_SECRET",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "ELEVENLABS_API_KEY",
@@ -60,7 +69,7 @@ SECRETS = (
     "PASSPORT_SIGNING_KEY",
     "DEMO_RUN_TOKEN",
 )
-KEYS = ("PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID", *SECRETS)
+KEYS = ("PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID", "META_WHATSAPP_PHONE_NUMBER_ID", *SECRETS)
 # Never printed either. DATABASE_URL is not a key: it always has a value, the local SQLite file by default.
 HIDDEN = (*SECRETS, "DATABASE_URL")
 
