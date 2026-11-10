@@ -88,6 +88,15 @@ class Direction(StrEnum):
     OUTBOUND = "outbound"
 
 
+class Delivery(StrEnum):
+    """What became of a message of ours on WhatsApp, in the order it gets there; failed is final."""
+
+    SENT = "sent"  # WhatsApp took it: a 200 to the send, which says nothing yet about her phone
+    DELIVERED = "delivered"
+    READ = "read"
+    FAILED = "failed"  # refused at once, or Meta said later it could not be delivered, and why
+
+
 class OrderStatus(StrEnum):
     DRAFT = "draft"
     AWAITING_APPROVAL = "awaiting_approval"
@@ -213,6 +222,32 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")
+    # Each WhatsApp message it went out as (its text, then its spoken voice note), and what became of each.
+    sends: Mapped[list["WhatsAppSend"]] = relationship(
+        back_populates="message", cascade="all, delete-orphan", order_by="WhatsAppSend.created_at"
+    )
+
+
+class WhatsAppSend(Base):
+    """One WhatsApp message of ours, as handed to the provider, and what became of it, so her chat on the pages shows
+    what she really got. The provider's 200 only means it took the message: Meta or Whapi says later whether it was
+    delivered, read, or could not be delivered and why (whatsapp_api.record_status). A message refused at once has no
+    provider id."""
+
+    __tablename__ = "whatsapp_sends"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: new_id("ws"))
+    message_id: Mapped[str] = mapped_column(ForeignKey("chat_messages.id", ondelete="CASCADE"), index=True)
+    # Meta's wamid, Twilio's SID. Not unique: fake mode's ids count from 1 again in each process, while its database
+    # can outlive one, so a status names the newest send with its id (chat/store.py, apply_delivery).
+    provider_id: Mapped[str | None] = mapped_column(String(128), index=True)
+    part: Mapped[str] = mapped_column(String(16), default="text")  # "text" or "voice note"
+    status: Mapped[Delivery] = mapped_column(enum_type(Delivery, "delivery"), default=Delivery.SENT)
+    error: Mapped[str | None] = mapped_column(Text)  # why it failed, in the provider's words, numbers taken out
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    message: Mapped[ChatMessage] = relationship(back_populates="sends")
 
 
 class Search(Base):

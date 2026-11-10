@@ -37,36 +37,37 @@ LIMITS = ("floor_price_usd", "min_lead_days")
 # The order she is asked in: a photo first, then the spec's order, then her limits (the reader's QUESTIONS).
 ASK_ORDER = tuple(IN_ENGLISH)
 
-# One short question per field and limit, in each template language. Urdu and Hindi speak to her with the feminine
-# forms, and Spanish with "tú", as every message to a maker does (notices.py).
+# One short question per field and limit, in each template language. Urdu and Hindi verbs carry the speaker's gender,
+# and a maker may be a man, so each question is put so that it fits anyone: the verb agrees with the item or the
+# parcel, never with the maker (test_wording_fits checks every template). Spanish speaks to her with "tú".
 QUESTIONS: dict[str, Mapping[str, str]] = {
     "en": IN_ENGLISH,
     "ur": {
         "photos": "براہِ کرم اس کی ایک تصویر بھیجیں۔",
-        "title": "آپ کیا بناتی ہیں؟ چند لفظوں میں بتائیں۔",
-        "description": "اس کے بارے میں تھوڑا اور بتائیں: یہ کس چیز سے بنا ہے، اس کا سائز کیا ہے، اور آپ اسے کیسے "
-        "بناتی ہیں؟",
+        "title": "آپ کی بنائی ہوئی چیز کیا ہے؟ چند لفظوں میں بتائیں۔",
+        "description": "اس کے بارے میں تھوڑا اور بتائیں: یہ کس چیز سے بنا ہے، اس کا سائز کیا ہے، اور یہ کیسے بنایا "
+        "جاتا ہے؟",
         "category": "یہ کس قسم کی چیز ہے؟",
-        "variants": "آپ یہ کن رنگوں یا ڈیزائنوں میں بناتی ہیں؟",
-        "price_usd": "ایک کی قیمت کتنے امریکی ڈالر ہے؟",
-        "capacity_per_week": "آپ ایک ہفتے میں کتنے بنا سکتی ہیں؟",
+        "variants": "یہ کن رنگوں یا ڈیزائنوں میں بن سکتا ہے؟",
+        "price_usd": "ایک عدد کی قیمت کتنے امریکی ڈالر ہے؟",
+        "capacity_per_week": "ایک ہفتے میں کتنے تیار ہو سکتے ہیں؟",
         "ship_days": "آپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
-        "ship_from_city": "آپ کس شہر سے بھیجتی ہیں؟",
-        "floor_price_usd": "بڑے آرڈر کے لیے آپ ایک کی کم سے کم کتنی قیمت لیں گی، امریکی ڈالر میں؟",
+        "ship_from_city": "پارسل کس شہر سے بھیجا جائے گا؟",
+        "floor_price_usd": "بڑے آرڈر میں ایک عدد کی کم سے کم قیمت کتنی ہو سکتی ہے، امریکی ڈالر میں؟",
         "min_lead_days": "آرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
     },
     "hi": {
         "photos": "कृपया इसकी एक फ़ोटो भेजें।",
-        "title": "आप क्या बनाती हैं? कुछ शब्दों में बताएँ।",
-        "description": "इसके बारे में थोड़ा और बताएँ: यह किस चीज़ से बना है, इसका नाप क्या है, और आप इसे कैसे "
-        "बनाती हैं?",
+        "title": "आपकी बनाई हुई चीज़ क्या है? कुछ शब्दों में बताएँ।",
+        "description": "इसके बारे में थोड़ा और बताएँ: यह किस चीज़ से बना है, इसका नाप क्या है, और यह कैसे बनाया "
+        "जाता है?",
         "category": "यह किस तरह की चीज़ है?",
-        "variants": "आप इसे किन रंगों या डिज़ाइनों में बनाती हैं?",
-        "price_usd": "एक की कीमत कितने अमेरिकी डॉलर है?",
-        "capacity_per_week": "आप एक हफ़्ते में कितने बना सकती हैं?",
+        "variants": "यह किन रंगों या डिज़ाइनों में बन सकता है?",
+        "price_usd": "एक पीस की कीमत कितने अमेरिकी डॉलर है?",
+        "capacity_per_week": "एक हफ़्ते में कितने तैयार हो सकते हैं?",
         "ship_days": "आपका पार्सल अमेरिका में खरीदार तक कितने दिनों में पहुँचता है?",
-        "ship_from_city": "आप किस शहर से भेजती हैं?",
-        "floor_price_usd": "बड़े ऑर्डर के लिए आप एक की कम से कम कितनी कीमत लेंगी, अमेरिकी डॉलर में?",
+        "ship_from_city": "पार्सल किस शहर से भेजा जाएगा?",
+        "floor_price_usd": "बड़े ऑर्डर में एक पीस की कम से कम कीमत कितनी हो सकती है, अमेरिकी डॉलर में?",
         "min_lead_days": "ऑर्डर तैयार करने के लिए आपको कम से कम कितने दिन चाहिए?",
     },
     "es": {
@@ -130,13 +131,14 @@ PARTS: dict[str, Parts] = {
         ships_from="{city} سے",
         lowest="بڑے آرڈر پر کم سے کم {price}",
         lead="آرڈر تیار کرنے میں {n} دن",
-        unnamed="آپ کی چیز، نام ابھی باقی ہے",
+        unnamed="آپ کی چیز، جس کا نام ابھی باقی ہے",
         joiner="، ",
-        so_far="آپ کی لسٹنگ اب تک: {listing}۔",
-        summary="یہ آپ کی لسٹنگ ہے: {listing}۔",
-        confirm='اسے شائع کرنے کے لیے "ہاں" لکھیں، یا بتائیں کیا بدلنا ہے۔',
-        live="آپ کی لسٹنگ اب لائیو ہے! AI شاپنگ ایجنٹ اب اسے ڈھونڈ سکتے ہیں۔ آپ کا اسٹال: {link}",
-        still_live="آپ کی لسٹنگ لائیو ہے: {link}",
+        # "اشتہار", the everyday word for an online ad, not "لسٹنگ": the voice read that English word as "listening".
+        so_far="اب تک آپ کا اشتہار: {listing}۔",
+        summary="یہ رہا آپ کا اشتہار: {listing}۔",
+        confirm='اشتہار لگانے کے لیے "ہاں" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔',
+        live="آپ کا اشتہار لگ گیا ہے! اب اے آئی شاپنگ ایجنٹ اسے ڈھونڈ سکتے ہیں۔ آپ کی دکان: {link}",
+        still_live="آپ کا اشتہار لگا ہوا ہے: {link}",
         thanks="شکریہ۔",
     ),
     "hi": Parts(
@@ -189,9 +191,12 @@ def still_to_ask(draft: Mapping[str, Any]) -> list[str]:
 
 def described(draft: Mapping[str, Any], language: str = "en") -> str:
     """Her listing and limits so far in a few words, in a template language: "Hand-embroidered cushion cover, $18.00
-    each, 4 a week, arrives in 9 days, from Lahore". The title stays in English: buyers' agents read it."""
+    each, 4 a week, arrives in 9 days, from Lahore". In her language the item is named in it too (`title_local`, which
+    the listing reader writes beside the English title), so an Urdu message, and its spoken copy, carries no English
+    title; the listing's own title stays in English, as buyers' agents read it."""
     parts = PARTS[language]
-    pieces = [str(draft.get("title") or parts.unnamed)]
+    local = draft.get("title_local") if language != "en" else None
+    pieces = [str(local or draft.get("title") or parts.unnamed)]
     if given(draft.get("price_usd")):
         pieces.append(parts.each.format(price=format_money(language, Decimal(str(draft["price_usd"])))))
     if given(draft.get("capacity_per_week")):

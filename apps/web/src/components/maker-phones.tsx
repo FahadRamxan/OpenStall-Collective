@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/badge";
+import { DeliveryProblem, deliveryWords } from "@/components/delivery-note";
 import { EnglishLine } from "@/components/english-line";
 import { VoiceTranscript } from "@/components/voice-transcript";
 import { useEventStream } from "@/hooks/use-event-stream";
@@ -230,7 +231,9 @@ function Bubble({ message, name, onPhoto }: { message: ChatMessage; name: string
       </div>
       <time dateTime={message.created_at} className="mt-0.5 px-1 text-[0.7rem] text-muted">
         {messageTime(message.created_at)}
+        {deliveryWords(message)}
       </time>
+      <DeliveryProblem message={message} />
     </li>
   );
 }

@@ -33,7 +33,16 @@ from openstall_api.chat.asking import asking_reply, live_reply
 from openstall_api.chat.listing import DRAFTING, read_her_listing, update_draft
 from openstall_api.chat.publish import publish, said_yes, stall_url
 from openstall_api.chat.store import CHANNEL_WORDS, DIALING_CODES, country_of, find_chat, save_message
-from openstall_api.chat.voice import Heard, listen, remember_language, transcribed_words, unclear, written_language
+from openstall_api.chat.voice import (
+    LANGUAGE_BY_COUNTRY,
+    Heard,
+    listen,
+    remember_language,
+    transcribed_words,
+    unclear,
+    written_language,
+)
+from openstall_api.settings import get_settings
 from openstall_api.events import EventType, record_event
 from openstall_api.media import ALLOWED_TYPES, MAX_BYTES, MediaRejected, MediaStore
 from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, DataSource, Direction, Seller
@@ -50,25 +59,29 @@ __all__ = ["CHANNEL_WORDS", "DIALING_CODES", "country_of", "find_chat", "save_me
 WELCOMES = {
     "en": "Welcome to OpenStall! Send photos of what you make and tell me about it, by text or a voice note. I will "
     "turn it into a listing that AI shopping agents can find, and you are paid through PayPal when you ship.",
-    "ur": "OpenStall میں خوش آمدید! جو آپ بناتی ہیں اس کی تصویریں بھیجیں اور اس کے بارے میں لکھ کر یا وائس نوٹ میں "
-    "بتائیں۔ اس سے ایک لسٹنگ بنے گی جسے AI شاپنگ ایجنٹ ڈھونڈ سکیں گے، اور سامان بھیجنے پر آپ کو PayPal سے ادائیگی "
-    "ہو گی۔",
-    "hi": "OpenStall में आपका स्वागत है! आप जो बनाती हैं उसकी फ़ोटो भेजें और उसके बारे में लिखकर या वॉइस नोट में "
-    "बताएँ। इससे एक लिस्टिंग बनेगी जिसे AI शॉपिंग एजेंट ढूँढ सकेंगे, और सामान भेजने पर आपको PayPal से भुगतान होगा।",
-    "es": "¡Bienvenida a OpenStall! Mándame fotos de lo que haces y cuéntame de ello, por mensaje o nota de voz. Con "
-    "eso armo un anuncio que los agentes de compra con IA pueden encontrar, y PayPal te paga cuando envías.",
+    "ur": "OpenStall میں خوش آمدید! اپنی ہاتھ سے بنی چیزوں کی تصویریں بھیجیں، اور ان کے بارے میں لکھ کر یا وائس نوٹ "
+    "میں بتائیں۔ ہم اس سے آپ کا اشتہار بنائیں گے جسے اے آئی شاپنگ ایجنٹ ڈھونڈ سکیں گے، اور سامان بھیجنے پر آپ کو "
+    "PayPal سے ادائیگی ہوگی۔",
+    "hi": "OpenStall में आपका स्वागत है! अपनी हाथ से बनी चीज़ों की फ़ोटो भेजें, और उनके बारे में लिखकर या वॉइस नोट में "
+    "बताएँ। हम इससे आपकी लिस्टिंग बनाएँगे जिसे AI शॉपिंग एजेंट ढूँढ सकेंगे, और सामान भेजने पर आपको PayPal से भुगतान "
+    "होगा।",
+    "es": "¡Te damos la bienvenida a OpenStall! Mándame fotos de lo que haces y cuéntame de ello, por mensaje o nota de "
+    "voz. Con eso armo un anuncio que los agentes de compra con IA pueden encontrar, y PayPal te paga cuando envías.",
 }
 assert WELCOMES.keys() == LOCALES.keys(), "every template language welcomes her in its own words"
 WELCOME = WELCOMES["en"]
-NUDGE = "Send more photos, or tell me the price and how many you can make each week."
+NUDGE = "Send photos of what you make, or tell me the price and how many you can make each week."
 # The answer when there is nothing to ask her yet (no draft listing, no live one), in her template language. English
-# names what arrived; the others thank her for her message, whatever it was. The Urdu, Hindi and Spanish need a native
-# speaker's read, like every template.
+# names what arrived; the others thank her for her message, whatever it was. Urdu and Hindi are written so that they
+# fit any maker, a man as well as a woman: the verb agrees with the item, never with the maker (test_wording_fits).
 THANKS = {
     "en": "Thank you, I have {what}. " + NUDGE,
-    "ur": "شکریہ، آپ کا پیغام مل گیا۔ مزید تصویریں بھیجیں، یا مجھے قیمت بتائیں اور یہ کہ آپ ہفتے میں کتنے بنا سکتی ہیں۔",
-    "hi": "धन्यवाद, आपका संदेश मिल गया। और फ़ोटो भेजें, या मुझे कीमत बताएँ और यह कि आप हफ़्ते में कितने बना सकती हैं।",
-    "es": "Gracias, ya recibí tu mensaje. Mándame más fotos, o dime el precio y cuántos puedes hacer por semana.",
+    "ur": "شکریہ، آپ کا پیغام مل گیا۔ اپنی چیز کی تصویریں بھیجیں، یا اس کی قیمت بتائیں اور یہ کہ ہفتے میں کتنے تیار ہو "
+    "سکتے ہیں۔",
+    "hi": "धन्यवाद, आपका संदेश मिल गया। अपनी चीज़ की फ़ोटो भेजें, या उसकी कीमत बताएँ और यह कि हफ़्ते में कितने तैयार हो "
+    "सकते हैं।",
+    "es": "Gracias, ya recibí tu mensaje. Mándame fotos de lo que haces, o dime el precio y cuántos puedes hacer por "
+    "semana.",
 }
 assert THANKS.keys() == LOCALES.keys(), "every template language thanks her in its own words"
 
@@ -123,6 +136,15 @@ class HandledMessage:
     # hears them spoken (chat/spoken.py).
     reply_ids: list[str] = field(default_factory=list)
     language: str = "en"
+
+
+def opening_language(seller: Seller, text: str) -> str | None:
+    """Her country's language (Urdu for Pakistan) for a message that says nothing of her own: only the start word her
+    link to OpenStall wrote for her (WHAPI_START_WORD). Not saved: her own words decide her language."""
+    word = get_settings().WHAPI_START_WORD
+    if word and text.strip().strip("!.").casefold() == word.casefold():
+        return LANGUAGE_BY_COUNTRY.get(seller.country or "")
+    return None
 
 
 def find_seller(session: Session, sender: Sender) -> Seller:
@@ -341,7 +363,7 @@ def handle_inbound(
     said = " ".join(words for words in (text, heard.transcript) if words)
     drop = drop_turn(session, seller, said, message.id) if proof is None else None
     advance = advance_turn(session, seller, said, message.id) if proof is None and drop is None else None
-    language = template_language(seller.language)
+    language = template_language(seller.language or opening_language(seller, text))
     published: str | None = None
     if proof is not None:
         replies = refusals(media) + [Reply(words) for words in unclear(heard)] + [Reply(r) for r in proof.replies]

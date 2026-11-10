@@ -58,6 +58,9 @@ export default defineConfig({
       url: `${apiURL}/health`,
       env: {
         OPENSTALL_MODE: "fake",
+        // Tests ignore .env, as pytest does: its real keys (Meta's app secret, a Whapi channel) would otherwise stand
+        // in for fake mode's public ones, and a webhook signed the fake way would be refused.
+        OPENSTALL_IGNORE_DOTENV: "1",
         PUBLIC_BASE_URL: apiURL,
         WEB_BASE_URL: webURL,
         DATABASE_URL: databaseUrl,

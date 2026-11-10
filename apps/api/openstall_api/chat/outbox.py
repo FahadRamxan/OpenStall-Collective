@@ -1,14 +1,15 @@
 """Messages OpenStall starts itself, outside a reply: sent where it reaches the seller and kept in her chat.
 
-On WhatsApp the message is sent first and kept only if WhatsApp took it, so her chat shows what she really received.
-In the web chat (her demo phone on /seller-chat) keeping it is the delivery: the page shows it from the event stream.
+On WhatsApp the message is sent first and kept only if WhatsApp took it, with its WhatsApp id, so her chat shows
+whether it reached her phone once WhatsApp says (chat/store.py, apply_delivery). In the web chat (her demo phone on
+/seller-chat) keeping it is the delivery: the page shows it from the event stream.
 """
 
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from openstall_api.chat.store import CHANNEL_WORDS, channel_for, find_chat, save_message
+from openstall_api.chat.store import CHANNEL_WORDS, channel_for, find_chat, record_send, save_message
 from openstall_api.db import new_session, session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
@@ -43,6 +44,8 @@ def send_to_seller(
         seller = session.get(Seller, seller_id)
         assert seller is not None
         message = save_message(session, find_chat(session, seller, channel), Direction.OUTBOUND, text, [])
+        if channel == Channel.WHATSAPP:  # what became of it on her phone, as WhatsApp tells it later
+            record_send(session, message, provider_id)
         record_event(
             session,
             EventType.MESSAGE_SENT,

@@ -174,6 +174,29 @@ describe("SellerChatView, watching a WhatsApp chat", () => {
     expect(within(bubbles[1]).queryByText("In English")).not.toBeInTheDocument();
   });
 
+  it("says when WhatsApp could not deliver OpenStall's answer, and why, and how far one that arrived got", async () => {
+    const locked = "WhatsApp could not deliver it: (131031) Business Account locked: Business account has been locked.";
+    const told: Conversation = {
+      ...CONVERSATION,
+      messages: [
+        CONVERSATION.messages[0],
+        { ...CONVERSATION.messages[1], delivery: "failed", delivery_error: locked },
+        { ...CONVERSATION.messages[1], id: "cm_5", text: "Please send a photo of it.", delivery: "read" },
+      ],
+    };
+    vi.stubGlobal("fetch", api({ ...BROWSING, "GET /api/chats/s_amina": () => Response.json(told) }));
+
+    render(<SellerChatView />);
+
+    const thread = await screen.findByRole("list", { name: "Messages with Amina" });
+    const [fromHer, failed, read] = within(thread).getAllByRole("listitem");
+    expect(failed).toHaveTextContent("Not delivered");
+    expect(within(failed).getByText(locked)).toBeInTheDocument();
+    expect(read).toHaveTextContent("WhatsApp · Read");
+    expect(read).not.toHaveTextContent("Not delivered");
+    expect(fromHer).not.toHaveTextContent(/Not delivered|Read/);
+  });
+
   it("OpenStall's answer to her voice note is spoken too, in her language", async () => {
     const answer = {
       ...CONVERSATION.messages[1],

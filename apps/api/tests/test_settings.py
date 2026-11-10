@@ -36,6 +36,12 @@ ENVIRONMENT = {
     "META_WHATSAPP_VERIFY_TOKEN": "made-up-verify-token",
     "META_APP_SECRET": "made-up-app-secret",
     "META_GRAPH_VERSION": "v99.0",
+    "WHAPI_TOKEN": "made-up-whapi-token",
+    "WHAPI_API_URL": "https://gate.whapi.example",
+    "WHAPI_WEBHOOK_SECRET": "made-up-webhook-secret",
+    "WHAPI_CHANNEL_ID": "MANTIS-M72HC",
+    "WHAPI_START_WORD": "begin",
+    "WHAPI_ANSWER_EVERYONE": "true",
     "ANTHROPIC_API_KEY": "made-up-anthropic-key",
     "OPENAI_API_KEY": "made-up-openai-key",
     "LLM_MODEL": "made-up-model",
@@ -62,6 +68,8 @@ SECRETS = (
     "META_WHATSAPP_TOKEN",
     "META_WHATSAPP_VERIFY_TOKEN",
     "META_APP_SECRET",
+    "WHAPI_TOKEN",
+    "WHAPI_WEBHOOK_SECRET",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     "ELEVENLABS_API_KEY",
@@ -69,7 +77,14 @@ SECRETS = (
     "PASSPORT_SIGNING_KEY",
     "DEMO_RUN_TOKEN",
 )
-KEYS = ("PAYPAL_CLIENT_ID", "PAYPAL_WEBHOOK_ID", "TWILIO_ACCOUNT_SID", "META_WHATSAPP_PHONE_NUMBER_ID", *SECRETS)
+KEYS = (
+    "PAYPAL_CLIENT_ID",
+    "PAYPAL_WEBHOOK_ID",
+    "TWILIO_ACCOUNT_SID",
+    "META_WHATSAPP_PHONE_NUMBER_ID",
+    "WHAPI_CHANNEL_ID",
+    *SECRETS,
+)
 # Never printed either. DATABASE_URL is not a key: it always has a value, the local SQLite file by default.
 HIDDEN = (*SECRETS, "DATABASE_URL")
 

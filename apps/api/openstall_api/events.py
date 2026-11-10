@@ -59,6 +59,7 @@ class EventType(StrEnum):
     PAYMENT_WEBHOOK = "payment.webhook"
     MESSAGE_RECEIVED = "message.received"
     MESSAGE_SENT = "message.sent"
+    MESSAGE_UNDELIVERED = "message.undelivered"  # WhatsApp took a message to her but could not deliver it
     MESSAGE_TRANSCRIBED = "message.transcribed"
     MESSAGE_SPOKEN = "message.spoken"  # an answer to her voice note, spoken in her language
     # A maker told about her reserved share (notices.py), or why she could not be. The entity is her share.

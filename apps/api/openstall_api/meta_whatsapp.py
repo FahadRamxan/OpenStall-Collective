@@ -88,9 +88,54 @@ def _words(message: dict[str, Any], kind: str) -> str:
     return ""
 
 
+@dataclass(frozen=True)
+class MetaStatus:
+    """What became of a message we sent, as Meta tells it afterwards. Meta's 200 to a send only means it took the
+    message; whether it reached her phone comes later, as one of these: sent, delivered, read, or failed with Meta's
+    reasons."""
+
+    message_id: str  # the wamid our send was given
+    status: str  # "sent", "delivered", "read" or "failed"
+    recipient: str  # her number in E.164 form, such as +923001234567
+    errors: tuple[str, ...] = ()  # Meta's reasons, each in words (meta_error)
+
+    @property
+    def reason(self) -> str:
+        """Why it failed, in Meta's words, or that Meta gave none."""
+        return "; ".join(self.errors) or "Meta gave no reason."
+
+
+def meta_error(error: Any) -> str:
+    """One of Meta's errors in words: its code, title and details, such as "(131047) Re-engagement message: Message
+    failed to send because more than 24 hours have passed since the customer last replied to this number."."""
+    if not isinstance(error, dict):
+        return str(error)[:300]
+    title = str(error.get("title") or error.get("message") or "").strip()
+    data = error.get("error_data")
+    details = str(data.get("details") or "").strip() if isinstance(data, dict) else ""
+    words = f"{title}: {details}" if title and details and details != title else title or details or "no reason given"
+    code = error.get("code")
+    return (f"({code}) {words}" if code is not None else words)[:300]
+
+
+def parse_meta_statuses(payload: dict[str, Any]) -> list[MetaStatus]:
+    """Every status update in a webhook's payload: what became of each message we sent."""
+    found: list[MetaStatus] = []
+    for entry in payload.get("entry") or []:
+        for change in entry.get("changes") or []:
+            for update in (change.get("value") or {}).get("statuses") or []:
+                message_id, status = str(update.get("id") or ""), str(update.get("status") or "")
+                if not message_id or not status:
+                    continue
+                recipient = str(update.get("recipient_id") or "").strip().lstrip("+")
+                errors = tuple(meta_error(error) for error in update.get("errors") or [])
+                found.append(MetaStatus(message_id, status, f"+{recipient}" if recipient else "", errors))
+    return found
+
+
 def parse_meta_inbound(payload: dict[str, Any]) -> list[MetaInbound]:
-    """Every message in a webhook's payload. Status updates (sent, delivered, read) and kinds OpenStall cannot use
-    (a reaction, a location) are left out."""
+    """Every message in a webhook's payload. Status updates (sent, delivered, read, failed: parse_meta_statuses) and
+    kinds OpenStall cannot use (a reaction, a location) are left out."""
     found: list[MetaInbound] = []
     for entry in payload.get("entry") or []:
         for change in entry.get("changes") or []:

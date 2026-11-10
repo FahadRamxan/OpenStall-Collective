@@ -9,12 +9,13 @@ import { E2E_API_URL } from "../playwright.config";
 // four a week. Her bare answers ("9") answer the question asked.
 const ASK = {
   days: "آپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
-  city: "آپ کس شہر سے بھیجتی ہیں؟",
-  lowest: "بڑے آرڈر کے لیے آپ ایک کی کم سے کم کتنی قیمت لیں گی، امریکی ڈالر میں؟",
+  city: "پارسل کس شہر سے بھیجا جائے گا؟",
+  lowest: "بڑے آرڈر میں ایک عدد کی کم سے کم قیمت کتنی ہو سکتی ہے، امریکی ڈالر میں؟",
   leadDays: "آرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
-  summary: "یہ آپ کی لسٹنگ ہے: Hand-embroidered cushion cover",
-  confirm: 'اسے شائع کرنے کے لیے "ہاں" لکھیں، یا بتائیں کیا بدلنا ہے۔',
-  live: "آپ کی لسٹنگ اب لائیو ہے!",
+  // Her item is named in Urdu in messages to her; the listing itself keeps its English title for buyers.
+  summary: "یہ رہا آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور",
+  confirm: 'اشتہار لگانے کے لیے "ہاں" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔',
+  live: "آپ کا اشتہار لگ گیا ہے!",
 };
 
 // The first test publishes a cushion cover. Put the demo world back as seeded afterwards: later spec files search and

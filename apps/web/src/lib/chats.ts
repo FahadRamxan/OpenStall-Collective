@@ -31,6 +31,13 @@ export type ChatMessage = {
    * shown under it, never sent to her. Null for one in English, and for her own words.
    */
   english?: string | null;
+  /**
+   * What became of a message of OpenStall's on WhatsApp: sent (WhatsApp took it, which says nothing yet about her
+   * phone), delivered, read, or failed, with `delivery_error` saying why in WhatsApp's words. Null for her own
+   * messages, the web chat's, and older ones.
+   */
+  delivery?: "sent" | "delivered" | "read" | "failed" | null;
+  delivery_error?: string | null;
   created_at: string;
 };
 

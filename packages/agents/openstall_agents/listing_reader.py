@@ -91,6 +91,12 @@ LISTING_SCHEMA: JSONObject = {
             "description": "A short shop title in English, such as 'Hand-embroidered cushion cover'. Empty if her "
             "photos and words do not show what she makes.",
         },
+        "title_local": {
+            "type": "string",
+            "description": "The same title in the language she writes or speaks in, in its own script, as a native "
+            "speaker would say it to her (Urdu in Urdu script, such as 'ہاتھ کی کڑھائی والا کشن کور'; Hindi in "
+            "Devanagari; Spanish), for OpenStall's messages to her. Empty if she uses English, or there is no title.",
+        },
         "description": {
             "type": "string",
             "description": "Two or three plain English sentences: what it is, its material, size and how it is made, "
@@ -158,6 +164,7 @@ LISTING_SCHEMA: JSONObject = {
     },
     "required": [
         "title",
+        "title_local",
         "description",
         "category",
         "variants",
@@ -181,7 +188,8 @@ SYSTEM = (
     "You turn what a home maker sends OpenStall Collective, photos of what she makes and her words (typed, or her "
     "voice notes written down), into a draft listing that AI shopping agents will read, and the limits her seller "
     "agent keeps to. Write the title, description and variants in plain English from what the photos show and what "
-    "she said; never add a fact that neither shows. Give her price, how many she can make a week, how many days her "
+    "she said; never add a fact that neither shows. Write the title again in her own language for OpenStall's "
+    "messages to her, unless she uses English. Give her price, how many she can make a week, how many days her "
     "parcel takes to reach the buyer, the city she ships from, the lowest price she would take for one on a big order "
     "and the fewest days she needs to make an order only if she said them, each with the words she used, copied "
     "exactly as written in her messages. When a message of hers answers a question OpenStall asked her, the question "
@@ -217,6 +225,7 @@ class ListingReading:
     traced."""
 
     title: str | None = None
+    title_local: str | None = None  # the title in her language, for messages to her; None in English
     description: str | None = None
     category: str | None = None
     variants: tuple[str, ...] = ()
@@ -282,6 +291,7 @@ def draft_from(answer: Mapping[str, Any], said: Sequence[Said]) -> ListingReadin
     category = answer.get("category")
     return ListingReading(
         title=title,
+        title_local=_clean(answer.get("title_local"), MAX_TITLE) if title else None,
         description=_clean(answer.get("description"), MAX_DESCRIPTION),
         category=(category if category in CATEGORIES else "other") if title else None,
         variants=_variants(answer.get("variants")),
@@ -427,6 +437,18 @@ _WORDS_FOR = {
 }
 
 
+def _local_title(shown: Mapping[str, Any], prompt: str) -> str:
+    """Fake mode's title in her language: the sample photo's, in the script her words are written in (Urdu's Arabic
+    letters, Hindi's Devanagari); none for words in Latin letters, which could be English."""
+    titles = shown.get("titles") or {}
+    words = " ".join(said for said, _ in _said_in(prompt))
+    if any("؀" <= letter <= "ۿ" for letter in words):
+        return str(titles.get("ur") or "")
+    if any("ऀ" <= letter <= "ॿ" for letter in words):
+        return str(titles.get("hi") or "")
+    return ""
+
+
 def fake_listing_reply(call: LLMCall) -> JSONObject | None:
     """Fake mode's listing reader, the same on every run: what fake mode's sample product photo shows (by its text
     chunk), and the facts its patterns find in her words. None for any request that is not a listing reading."""
@@ -434,6 +456,7 @@ def fake_listing_reply(call: LLMCall) -> JSONObject | None:
         return None
     answer: JSONObject = {
         "title": "",
+        "title_local": "",
         "description": "",
         "category": "other",
         "variants": [],
@@ -454,6 +477,7 @@ def fake_listing_reply(call: LLMCall) -> JSONObject | None:
         shown = _fixture_fields(image.data)
         if shown is not None:
             answer.update({key: shown[key] for key in ("title", "description", "category", "variants") if key in shown})
+            answer["title_local"] = _local_title(shown, call.prompt)
             break
     for words, answering in _said_in(call.prompt):
         if match := _FLOOR.search(words):

@@ -168,6 +168,7 @@ TABLES = [
     "quote_requests",
     "searches",
     "sellers",
+    "whatsapp_sends",
 ]
 
 

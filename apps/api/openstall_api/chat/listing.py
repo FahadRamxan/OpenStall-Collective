@@ -176,6 +176,7 @@ def update_draft(
     if reading is not None:
         read: dict[str, Any] = {
             "title": reading.title,
+            "title_local": reading.title_local,  # for messages to her (asking.described), never for buyers
             "description": reading.description,
             "category": reading.category,
             "variants": list(reading.variants),

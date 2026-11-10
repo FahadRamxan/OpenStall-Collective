@@ -6,10 +6,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from openstall_api.chat.store import delivery_of
 from openstall_api.db import get_session
-from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Direction, Product, Seller
+from openstall_api.models import Channel, ChatMessage, ChatSession, ChatState, Delivery, Direction, Product, Seller
 from openstall_api.settings import get_settings
 
 router = APIRouter(prefix="/api", tags=["chats"])
@@ -54,6 +55,11 @@ class MessageOut(BaseModel):
     # What a message to her in Urdu, Hindi or Spanish says in English, from the English templates with the same facts:
     # shown under it on the pages, never sent to her. None for one in English, and for her own words.
     english: str | None = None
+    # What became of a message of ours on WhatsApp: sent (WhatsApp took it), delivered, read, or failed, with a
+    # sentence saying why in WhatsApp's words. None for her own messages, the web chat's, and ours from before this
+    # was kept.
+    delivery: Delivery | None = None
+    delivery_error: str | None = None
     created_at: datetime
 
 
@@ -161,6 +167,23 @@ def list_chats(session: SessionDep) -> list[ChatSummary]:
     return summaries
 
 
+def message_out(message: ChatMessage) -> MessageOut:
+    delivery, delivery_error = delivery_of(message)
+    return MessageOut(
+        id=message.id,
+        direction=message.direction,
+        channel=message.channel,
+        text=message.text,
+        media=[media_out(item) for item in message.media_json],
+        transcript=message.transcript,
+        language=message.language,
+        english=message.english,
+        delivery=delivery,
+        delivery_error=delivery_error,
+        created_at=aware(message.created_at),
+    )
+
+
 @router.get("/chats/{seller_id}")
 def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
     """One seller's messages on every channel, oldest first."""
@@ -174,6 +197,7 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
             .where(ChatSession.seller_id == seller_id)
             .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
             .limit(MAX_MESSAGES)
+            .options(selectinload(ChatMessage.sends))
         )
     )
     drafting = session.scalar(
@@ -199,18 +223,5 @@ def get_conversation(seller_id: str, session: SessionDep) -> Conversation:
         draft=draft,
         listing=listing,
         playable=get_settings().OPENSTALL_MODE == "fake" and not seller.whatsapp_number and not seller.web_chat_id,
-        messages=[
-            MessageOut(
-                id=message.id,
-                direction=message.direction,
-                channel=message.channel,
-                text=message.text,
-                media=[media_out(item) for item in message.media_json],
-                transcript=message.transcript,
-                language=message.language,
-                english=message.english,
-                created_at=aware(message.created_at),
-            )
-            for message in reversed(recent)
-        ],
+        messages=[message_out(message) for message in reversed(recent)],
     )

@@ -82,10 +82,19 @@ services:
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
-      # WhatsApp through Meta's WhatsApp Cloud API: its test number's access token and phone number id, and the app's
-      # secret that signs its webhook. Render makes the verify token: type it into Meta's webhook settings.
+      # WhatsApp through Whapi.Cloud: the channel's token and id. Render makes the webhook secret: the webhook in the
+      # channel's settings is this service's address + /api/webhooks/whapi/ + that secret. Meta's WhatsApp Cloud API
+      # (below) works too, once its business account has a payment method: set WHATSAPP_PROVIDER to meta.
       - key: WHATSAPP_PROVIDER
-        value: meta
+        value: whapi
+      - key: WHAPI_TOKEN
+        sync: false
+      - key: WHAPI_CHANNEL_ID
+        sync: false
+      - key: WHAPI_WEBHOOK_SECRET
+        generateValue: true
+      # Meta's WhatsApp Cloud API: its test number's access token and phone number id, and the app's secret that signs
+      # its webhook. Render makes the verify token: type it into Meta's webhook settings.
       - key: META_WHATSAPP_TOKEN
         sync: false
       - key: META_WHATSAPP_PHONE_NUMBER_ID

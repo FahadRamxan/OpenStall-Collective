@@ -194,12 +194,12 @@ PHRASES: dict[str, TipPhrases] = {
         "it. You make {item}: could you make this too? Reply and tell us."
     ),
     "ur": TipPhrases(
-        "OpenStall ڈیمانڈ ریڈار: اس ہفتے {count} خریداروں کے ایجنٹوں نے “{label}” تلاش کیا، اور OpenStall پر کوئی اسے "
-        "نہیں بیچتا۔ آپ {item} بناتی ہیں: کیا آپ یہ بھی بنا سکتی ہیں؟ جواب دے کر ہمیں بتائیں۔"
+        "OpenStall ڈیمانڈ ریڈار: اس ہفتے {count} خریداروں کے ایجنٹوں نے “{label}” تلاش کیا، اور OpenStall پر یہ کوئی "
+        "نہیں بیچتا۔ آپ کے ہاں {item} بنتا ہے: کیا یہ بھی بن سکتا ہے؟ جواب دے کر ہمیں بتائیں۔"
     ),
     "hi": TipPhrases(
         "OpenStall डिमांड रडार: इस हफ़्ते {count} खरीदारों के एजेंटों ने “{label}” खोजा, और OpenStall पर इसे कोई नहीं "
-        "बेचता। आप {item} बनाती हैं: क्या आप यह भी बना सकती हैं? जवाब देकर हमें बताएँ।"
+        "बेचता। आपके यहाँ {item} बनता है: क्या यह भी बन सकता है? जवाब देकर हमें बताएँ।"
     ),
     "es": TipPhrases(
         "Radar de demanda de OpenStall: esta semana {count} agentes de compradores buscaron “{label}”, y nadie en "

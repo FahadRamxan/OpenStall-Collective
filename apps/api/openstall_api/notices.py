@@ -18,7 +18,6 @@ better than not at all.
 """
 
 import logging
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -28,7 +27,7 @@ from typing import Any, Literal, cast
 from sqlalchemy import CursorResult, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
-from openstall_api.chat.store import CHANNEL_WORDS, channel_for, find_chat, save_message
+from openstall_api.chat.store import CHANNEL_WORDS, PHONE_NUMBER, channel_for, find_chat, record_send, save_message
 from openstall_api.db import session_scope
 from openstall_api.events import EventType, record_event
 from openstall_api.messaging import Messenger
@@ -269,6 +268,8 @@ def _claim(session: Session, part_id: str, now: datetime) -> bool:
 def _record_sent(session: Session, part: OrderPart, notice: Notice, channel: Channel, provider_id: str | None) -> None:
     chat = find_chat(session, part.seller, channel)
     message = save_message(session, chat, Direction.OUTBOUND, notice.text, [])
+    if channel == Channel.WHATSAPP:  # what became of it on her phone, as WhatsApp tells it later
+        record_send(session, message, provider_id)
     part.notified_at = utcnow()
     when = ship_by(part)
     record_event(
@@ -337,10 +338,6 @@ def tell_maker(part_id: str, messenger: Callable[[], Messenger]) -> bool:
         assert part is not None
         _record_sent(session, part, notice, Channel.WHATSAPP, sent.message_id)
     return True
-
-
-# A phone number, as Twilio may quote one in an error ("The 'To' number +92300... is not valid"): 7 to 15 digits.
-PHONE_NUMBER = re.compile(r"(?:whatsapp:)?\+?\d[\d\s-]{5,17}\d")
 
 
 def _reason(error: Exception) -> str:

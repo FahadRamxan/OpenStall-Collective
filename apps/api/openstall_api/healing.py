@@ -67,8 +67,8 @@ PHRASES: dict[str, DropPhrases] = {
         ship_by=" Please ship it by {day}.",
     ),
     "ur": DropPhrases(
-        ask="یہ سن کر افسوس ہوا۔ کیا آپ آرڈر {order_id} ({quantity} × {item}، {amount}) میں سے اپنا حصہ چھوڑنا چاہتی "
-        "ہیں؟ OpenStall یہ دوسرے کاریگروں سے بنوائے گا، اور اس کی ادائیگی آپ کو نہیں ہوگی۔ چھوڑنے کے لیے \"ہاں\" "
+        ask="یہ سن کر افسوس ہوا۔ کیا آرڈر {order_id} ({quantity} × {item}، {amount}) میں سے آپ کا حصہ چھوڑ دیا جائے؟ "
+        "OpenStall یہ دوسرے کاریگروں سے بنوائے گا، اور اس کی ادائیگی آپ کو نہیں ہوگی۔ چھوڑنے کے لیے \"ہاں\" "
         "لکھیں، یا رکھنے کے لیے \"نہیں\"۔",
         some_items="آپ کا سامان",
         dropped="ہو گیا: آرڈر {order_id} میں سے آپ کا حصہ خریدار کو واپس چلا گیا ہے، اور اس کی کوئی رقم نہیں لی گئی۔ "
@@ -77,8 +77,8 @@ PHRASES: dict[str, DropPhrases] = {
         ship_by=" براہ کرم اسے {day} تک بھیج دیں۔",
     ),
     "hi": DropPhrases(
-        ask="यह सुनकर दुख हुआ। क्या आप ऑर्डर {order_id} ({quantity} × {item}, {amount}) में से अपना हिस्सा छोड़ना "
-        "चाहती हैं? OpenStall इसे दूसरे कारीगरों से बनवाएगा, और इसका भुगतान आपको नहीं होगा। छोड़ने के लिए \"हाँ\" "
+        ask="यह सुनकर दुख हुआ। क्या ऑर्डर {order_id} ({quantity} × {item}, {amount}) में से आपका हिस्सा छोड़ दिया "
+        "जाए? OpenStall इसे दूसरे कारीगरों से बनवाएगा, और इसका भुगतान आपको नहीं होगा। छोड़ने के लिए \"हाँ\" "
         "लिखें, या रखने के लिए \"नहीं\"।",
         some_items="आपका सामान",
         dropped="हो गया: ऑर्डर {order_id} में से आपका हिस्सा खरीदार को वापस चला गया है, और इसके लिए कोई पैसा नहीं लिया "
@@ -110,15 +110,18 @@ CANT_MAKE_IT: tuple[str, ...] = tuple(
         "can't do the order", "cannot do the order", "can't deliver", "cannot deliver", "can't finish",
         "cannot finish", "won't be able to make", "will not be able to make", "unable to make", "unable to deliver",
         "drop out", "give up my share",
-        # Urdu
-        "نہیں بنا سکتی", "نہیں بنا سکتا", "نہیں بنا سکوں گی", "نہیں بنا پاؤں گی", "نہیں کر سکتی", "نہیں کر سکوں گی",
-        "نہیں بھیج سکتی", "نہیں بھیج سکوں گی",
+        # Urdu, as a woman and as a man says it
+        "نہیں بنا سکتی", "نہیں بنا سکتا", "نہیں بنا سکوں گی", "نہیں بنا سکوں گا", "نہیں بنا پاؤں گی",
+        "نہیں بنا پاؤں گا", "نہیں کر سکتی", "نہیں کر سکتا", "نہیں کر سکوں گی", "نہیں کر سکوں گا", "نہیں بھیج سکتی",
+        "نہیں بھیج سکتا", "نہیں بھیج سکوں گی", "نہیں بھیج سکوں گا",
         # Urdu and Hindi in Latin letters
-        "nahi bana sakti", "nahin bana sakti", "nahi bana sakta", "nahi bana paungi", "nahi kar sakti",
-        "nahin kar sakti", "nahi bhej sakti",
-        # Hindi
-        "नहीं बना सकती", "नहीं बना सकता", "नहीं बना पाऊँगी", "नहीं बना पाऊंगी", "नहीं कर सकती", "नहीं कर पाऊँगी",
-        "नहीं कर पाऊंगी", "नहीं भेज सकती", "नहीं भेज पाऊँगी",
+        "nahi bana sakti", "nahin bana sakti", "nahi bana sakta", "nahin bana sakta", "nahi bana paungi",
+        "nahi bana paunga", "nahi kar sakti", "nahin kar sakti", "nahi kar sakta", "nahin kar sakta",
+        "nahi bhej sakti", "nahi bhej sakta",
+        # Hindi, as a woman and as a man says it
+        "नहीं बना सकती", "नहीं बना सकता", "नहीं बना पाऊँगी", "नहीं बना पाऊंगी", "नहीं बना पाऊँगा", "नहीं बना पाऊंगा",
+        "नहीं कर सकती", "नहीं कर सकता", "नहीं कर पाऊँगी", "नहीं कर पाऊंगी", "नहीं कर पाऊँगा", "नहीं कर पाऊंगा",
+        "नहीं भेज सकती", "नहीं भेज सकता", "नहीं भेज पाऊँगी", "नहीं भेज पाऊँगा",
         # Spanish
         "no puedo hacerlo", "no lo puedo hacer", "no puedo hacer el pedido", "no puedo hacer este pedido",
         "no puedo cumplir", "no voy a poder", "no puedo entregar", "no podré hacerlo",

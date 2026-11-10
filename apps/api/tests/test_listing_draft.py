@@ -26,7 +26,8 @@ SAMPLES = [PHOTO, (fixture_voice_note(), "audio/wav")]
 TYPED = "Cushion covers, $18 each, 4 a week."
 SO_FAR = "Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week"
 # The sample voice note is Amina's Urdu: her language is saved, and she is answered in Urdu from then on.
-SO_FAR_UR = "آپ کی لسٹنگ اب تک: Hand-embroidered cushion cover، 18.00 ڈالر فی عدد، ہفتے میں 4"
+# Her item is named in Urdu too: her words are Urdu, so the reader gives its title in Urdu beside the English one.
+SO_FAR_UR = "اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4"
 ASK_DAYS_UR = "آپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟"
 STILL_TO_ASK = (
     "how many days delivery takes, the city it ships from, her lowest price and the days she needs to make an order"
@@ -64,7 +65,9 @@ def test_her_photo_and_voice_note_become_a_draft_and_she_is_asked_one_question_i
     chat = chat_of(db, sent["seller_id"])
     draft = chat.draft_json
     assert draft is not None
-    assert {name: draft[name] for name in ("title", "description", "category", "variants")} == SAMPLE_PRODUCT
+    shown = {name: SAMPLE_PRODUCT[name] for name in ("title", "description", "category", "variants")}
+    assert {name: draft[name] for name in shown} == shown
+    assert draft["title_local"] == SAMPLE_PRODUCT["titles"]["ur"]  # her words are Urdu: her item is named in Urdu
     assert (draft["price_usd"], draft["capacity_per_week"], draft["ship_days"], draft["ship_from_city"]) == (
         "18.00",
         4,
@@ -136,7 +139,7 @@ def test_after_her_urdu_voice_note_she_is_asked_in_urdu_whatever_she_types(db):
 
     sent = on_the_web("9")
 
-    assert sent["replies"] == [f"شکریہ۔ {SO_FAR_UR}، 9 دن میں پہنچتا ہے۔ آپ کس شہر سے بھیجتی ہیں؟"]
+    assert sent["replies"] == [f"شکریہ۔ {SO_FAR_UR}، 9 دن میں پہنچتا ہے۔ پارسل کس شہر سے بھیجا جائے گا؟"]
 
 
 @pytest.mark.parametrize(
@@ -145,7 +148,7 @@ def test_after_her_urdu_voice_note_she_is_asked_in_urdu_whatever_she_types(db):
         (
             "hi",
             "धन्यवाद। आपकी लिस्टिंग अब तक: Hand-embroidered cushion cover, $18.00 प्रति पीस, हफ़्ते में 4, 9 दिन में "
-            "पहुँचता है। आप किस शहर से भेजती हैं?",
+            "पहुँचता है। पार्सल किस शहर से भेजा जाएगा?",
         ),
         (
             "es",

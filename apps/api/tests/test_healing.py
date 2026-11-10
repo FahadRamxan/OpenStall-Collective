@@ -214,7 +214,7 @@ def test_her_no_keeps_her_share(story, fakes):
 
 def test_priya_drops_out_in_hindi(story, fakes):
     [ask] = play("s_priya", "माफ़ कीजिए, मैं यह ऑर्डर नहीं बना सकती।")
-    assert "ऑर्डर ord_demo" in ask and "छोड़ना" in ask
+    assert "ऑर्डर ord_demo" in ask and "छोड़ दिया जाए" in ask
     [done] = play("s_priya", "हाँ")
     assert done.startswith("हो गया: ऑर्डर ord_demo में से आपका हिस्सा")
     assert part_of(story, "Priya").status == PartStatus.RELEASED

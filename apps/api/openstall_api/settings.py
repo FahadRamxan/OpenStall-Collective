@@ -67,15 +67,26 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str | None = None
     TWILIO_AUTH_TOKEN: SecretStr | None = None
     TWILIO_WHATSAPP_FROM: str = "whatsapp:+14155238886"
-    # Which WhatsApp provider sandbox mode talks to: Twilio (above), or Meta's WhatsApp Cloud API, with a phone number
-    # from developers.facebook.com (a test number works), its access token and phone number id. Meta's webhook, at
-    # /api/webhooks/whatsapp, is checked with the app's secret, and its address with our own verify token.
-    WHATSAPP_PROVIDER: Literal["twilio", "meta"] = "twilio"
+    # Which WhatsApp provider sandbox mode talks to: Twilio (above); Meta's WhatsApp Cloud API, with a phone number
+    # from developers.facebook.com (a test number works), its access token and phone number id, its webhook at
+    # /api/webhooks/whatsapp checked with the app's secret and its address with our own verify token; or Whapi.Cloud,
+    # a WhatsApp number linked to Whapi as a device, with its channel's token, its webhook at
+    # /api/webhooks/whapi/{WHAPI_WEBHOOK_SECRET}, as Whapi signs nothing. WHAPI_CHANNEL_ID, when set, is the only
+    # channel whose events count.
+    WHATSAPP_PROVIDER: Literal["twilio", "meta", "whapi"] = "twilio"
     META_WHATSAPP_TOKEN: SecretStr | None = None
     META_WHATSAPP_PHONE_NUMBER_ID: str | None = None
     META_WHATSAPP_VERIFY_TOKEN: SecretStr | None = None
     META_APP_SECRET: SecretStr | None = None
     META_GRAPH_VERSION: str = "v23.0"
+    WHAPI_TOKEN: SecretStr | None = None
+    WHAPI_API_URL: str = "https://gate.whapi.cloud"
+    WHAPI_WEBHOOK_SECRET: SecretStr | None = None
+    WHAPI_CHANNEL_ID: str | None = None
+    # A Whapi number is often someone's own: only a sender who began with this word is answered (her link to
+    # OpenStall writes it for her), unless WHAPI_ANSWER_EVERYONE says the number is OpenStall's alone.
+    WHAPI_START_WORD: str = "start"
+    WHAPI_ANSWER_EVERYONE: bool = False
 
     ANTHROPIC_API_KEY: SecretStr | None = None
     OPENAI_API_KEY: SecretStr | None = None

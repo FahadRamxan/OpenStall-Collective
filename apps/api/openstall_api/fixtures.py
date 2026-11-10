@@ -28,6 +28,8 @@ SAMPLE_PRODUCT = {
     "inside a red border.",
     "category": "home textiles",
     "variants": ["red", "teal", "mustard"],
+    # Its title in the makers' languages, for messages to her (the listing reader's title_local).
+    "titles": {"ur": "ہاتھ کی کڑھائی والا کشن کور", "hi": "हाथ की कढ़ाई वाला कुशन कवर"},
 }
 
 

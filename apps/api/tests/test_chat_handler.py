@@ -91,7 +91,7 @@ def test_same_input_through_whatsapp_and_the_web_gives_the_same_messages_and_rep
     assert [text for direction, text, _ in on_the_web if direction == "outbound"] == [
         WELCOME,
         f"Thank you. Your listing so far: Hand-embroidered cushion cover. {QUESTIONS['price_usd']}",
-        "شکریہ۔ آپ کی لسٹنگ اب تک: Hand-embroidered cushion cover، 18.00 ڈالر فی عدد، ہفتے میں 4، Lahore سے۔ آپ کا "
+        "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، Lahore سے۔ آپ کا "
         "پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
     ]
 
