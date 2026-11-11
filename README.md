@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#try-it-for-judges"><b>Try it</b></a> ·
+  <a href="https://www.youtube.com/watch?v=zbl8VqHXcYc"><b>Video (2:51)</b></a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="docs/judges.md">Judges' walkthrough</a> ·
   <a href="docs/guide.md">Detailed guide</a>
@@ -60,6 +61,8 @@ flowchart LR
 
 ## See it
 
+**The demo video, 2:51:** https://www.youtube.com/watch?v=zbl8VqHXcYc. **A real WhatsApp chat on the hosted demo:** [a maker sends Start and gets OpenStall's welcome in Urdu, delivered and read](https://openstall-collective.onrender.com/seller-chat?seller=s_53a82b0aeae3).
+
 | The live demo | A maker's chat: Urdu, with English under it |
 | --- | --- |
 | ![The live demo: the story's request, offers, split and payments, with the live feed](docs/images/demo.png) | ![Amina's order in Urdu on the seller chat, with the same message in English under it](docs/images/seller-chat.png) |
@@ -74,7 +77,7 @@ flowchart LR
 
 1. On [/demo](https://openstall-collective.onrender.com/demo), press **Run it with an AI agent**: Claude, as a buyer's agent, chooses the MCP storefront's tools itself, and each maker's agent bids within her limits. The demo's buttons ask for the demo token, which is in the Devpost testing instructions with the PayPal sandbox buyer login.
 2. **Open its approval page**, press **Approve and pay with PayPal**, and log in at PayPal's sandbox with that buyer login. The receipt says PayPal is holding the total, and each maker is told in her language.
-3. **Be a maker on WhatsApp:** open [wa.me/923275157727?text=Start](https://wa.me/923275157727?text=Start), send the **Start** it writes for you, then a photo of something you make. OpenStall asks for what it needs, one question at a time, and your stall goes live. Everything on [/seller-chat](https://openstall-collective.onrender.com/seller-chat) is public, so send nothing private.
+3. **Be a maker on WhatsApp:** open [wa.me/923275157727?text=Start](https://wa.me/923275157727?text=Start), send the **Start** it writes for you, then a photo of something you make. OpenStall asks for what it needs, one question at a time, and your stall goes live. Everything on [/seller-chat](https://openstall-collective.onrender.com/seller-chat) is public, so send nothing private. If WhatsApp does not answer, **Start as a new seller** on [/seller-chat](https://openstall-collective.onrender.com/seller-chat) is the same chat in the browser.
 4. [/status](https://openstall-collective.onrender.com/status) shows what runs for real, and the PayPal doctor's checks.
 
 The seeded makers have no phones, so nobody can send their courier receipts on the hosted demo: play pay-on-proof in test mode, below.

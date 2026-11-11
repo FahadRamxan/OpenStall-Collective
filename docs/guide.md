@@ -233,7 +233,7 @@ npx context-plugins install paypal --targets claude
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 11: **54 done, 1 partly done, 3 not started.** [CLAUDE.md](../CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 11: **55 done, 1 partly done, 2 not started.** [CLAUDE.md](../CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
@@ -246,10 +246,10 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Trust passports and the materials advance | 35, 36, 37, 38 | | |
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44, 45 | | |
-| Hardening and submission | 46, 47 | 49: the README, this guide and [the judges' walkthrough](judges.md), with the hosted demo's address; the sandbox buyer login and the demo token go in the Devpost testing instructions | 48, 50 |
+| Hardening and submission | 46, 47, 50 | 49: the README, this guide and [the judges' walkthrough](judges.md), with the hosted demo's address and the video; the sandbox buyer login and the demo token are pasted into the Devpost testing instructions by a person | 48 |
 | More of PayPal | 51, 52, 53, 55, 56, 57, 58 | | 54 Braintree |
 
-Next: the dress rehearsal on the hosted demo (48), the video, and the Devpost submission (50).
+The Devpost text was entered on November 11 ([as entered](devpost.md)); its eligibility statements, the terms and Submit are a person's to press. The demo video, 2:51: https://www.youtube.com/watch?v=zbl8VqHXcYc. Next: the dress rehearsal on the hosted demo (48).
 
 ## Repository layout
 
