@@ -100,6 +100,7 @@ Every PayPal product OpenStall uses or plans to, and how far it has got (`packag
 - **Test mode** (the default `.env`) simulates PayPal, WhatsApp and the AI models, and every page says so ("simulated PayPal", "Test mode").
 - **The five makers are demo data,** marked `seeded_demo` wherever they appear, with placeholder photos.
 - **Not connected yet:** Hyperwallet, so Amina's bank payout in Pakistan is simulated in every mode (on PayPal's live host she would have no rail rather than a pretend payout), and a buyer's street address (makers are told the buyer's city).
+- **A courier receipt is read, not verified.** The model reads the courier and tracking number off her photo, she confirms them, and one tracking number pays only one share; nothing yet asks the courier whether that parcel exists. A photo can be made up, by AI or otherwise. The buyer stays safe, since the number is on the PayPal order and PayPal checks it in a "not received" dispute, but OpenStall would have paid the maker already. The fix is to book each parcel through the courier, or check its number with the courier's tracking, before her share is captured, and to pay a maker with no record only on delivery ([docs/decisions.md](decisions.md), November 11).
 - **Not built yet:** changing a listing once it is live. [Build progress](#build-progress) lists every step.
 
 ## Use your own AI agent
@@ -191,14 +192,17 @@ It runs `pytest`, then `mypy --strict` on the PayPal package, then, in `apps/web
 
 ## The hosted demo
 
-[render.yaml](../render.yaml) runs the API, the web app and a Postgres database on Render, and every push to `main` deploys them.
+[render.yaml](../render.yaml) runs the API, the web app and a Postgres database on Render. It has been live since November 11, in sandbox mode: PayPal's real sandbox, Claude, ElevenLabs, and WhatsApp through Whapi.
 
 - Web app: https://openstall-collective.onrender.com
-- API: https://openstall-collective-api.onrender.com (its health check is `/health`)
+- API: https://openstall-collective-api.onrender.com (its health check is `/health`, its MCP storefront `/mcp`)
+- A maker's WhatsApp: [wa.me/923275157727?text=Start](https://wa.me/923275157727?text=Start), OpenStall's own number on Whapi. A chat must begin with "Start" (the link writes it), because every chat is public on `/seller-chat`: a stranger writing to the number is left alone, and nothing of theirs is kept or shown.
 
-These addresses work once the blueprint is created. To create it (once): in the Render dashboard choose **New > Blueprint** and pick this repo. Render asks for the values marked `sync: false` (the PayPal, Anthropic, ElevenLabs and Twilio keys); leave the ones you do not have yet empty and add them later in the API's Environment tab. Render makes the demo token and the passport signing key itself. The API runs in sandbox mode. Every value written in `render.yaml` is applied again on each blueprint sync, over a change made in the dashboard, so change those in the file: if Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` there.
+To create it (once): in the Render dashboard choose **New > Blueprint** and give it this repo. Render asks for the values marked `sync: false`; the hosted demo has the PayPal app's id, secret and webhook id, the Whapi token and channel id, and the Anthropic and ElevenLabs keys, and leaves Twilio, Meta, OpenAI and Google Vision empty. Render makes the demo token, the passport signing key and the Whapi webhook's secret itself. The demo was created from the repository's public address, so a push does not deploy it: **Manual Deploy** on each service, or **Manual sync** on the blueprint, takes the latest commit. Every value written in `render.yaml` is applied again on each blueprint sync, over a change made in the dashboard, so change those in the file: if Render gives a service a different address, change `PUBLIC_BASE_URL`, `WEB_BASE_URL` and `NEXT_PUBLIC_API_BASE_URL` there.
 
-Both services run on Render's $7 instance type (`0.5c-512mb`, once called Starter) and the database on its $6 one (`0.1c-256mb`, once basic-256mb): $20.25 a month with the 1 GB disk, paid from the hackathon's $50 Render credit. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](decisions.md)).
+Once it is up, point both webhooks at it: PayPal's (the app's webhook, by its id, to the API's `/api/webhooks/paypal`) and Whapi's (the API's `/api/webhooks/whapi/` + the secret Render made, with the `messages` and `statuses` events). The PayPal doctor on `/status` reads the PayPal webhook back and warns while it points anywhere else.
+
+Both services run on Render's `0.5c-512mb` instance type and the database on its `0.1c-256mb` one, with a 1 GB disk: $24.75 a month as Render priced it on November 11, paid from the hackathon's $50 Render credit. A free Render database is deleted 30 days after it is created, and free services sleep when idle, but the demo must stay up until judging ends on December 15 (see [docs/decisions.md](decisions.md)).
 
 To check a deploy, open `/status`, which names the deployed commit. Then run the smoke tests and an MCP search against it:
 
@@ -229,12 +233,12 @@ npx context-plugins install paypal --targets claude
 
 ## Build progress
 
-OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 9: **53 done, 2 partly done, 3 not started.** [CLAUDE.md](../CLAUDE.md) lists every step with its state and commit.
+OpenStall is built in 58 numbered steps; each is tested, wired into the web app, tested in a browser, then pushed on its own. As of November 11: **54 done, 1 partly done, 3 not started.** [CLAUDE.md](../CLAUDE.md) lists every step with its state and commit.
 
 | Part | Done | Partly done | Not started |
 |---|---|---|---|
 | Foundation | 01–06 | | |
-| PayPal | 07–11, 13 | 12: the Render blueprint, the deploy needs an account | |
+| PayPal | 07–13 | | |
 | Sellers on WhatsApp | 14–19 | | |
 | Agent storefront | 20, 21 | | |
 | Negotiation and the collective | 22–30 | | |
@@ -242,10 +246,10 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Trust passports and the materials advance | 35, 36, 37, 38 | | |
 | The order heals itself; guardrails | 39, 40 | | |
 | Pages and design | 41, 42, 43, 44, 45 | | |
-| Hardening and submission | 46, 47 | 49: the README, this guide and [the judges' walkthrough](judges.md); the hosted demo's address and the sandbox buyer login come at submission | 48, 50 |
+| Hardening and submission | 46, 47 | 49: the README, this guide and [the judges' walkthrough](judges.md), with the hosted demo's address; the sandbox buyer login and the demo token go in the Devpost testing instructions | 48, 50 |
 | More of PayPal | 51, 52, 53, 55, 56, 57, 58 | | 54 Braintree |
 
-Next: the hosted demo once there is a Render account (12), its dress rehearsal (48), and the Devpost draft and submission kit (50).
+Next: the dress rehearsal on the hosted demo (48), the video, and the Devpost submission (50).
 
 ## Repository layout
 

@@ -68,7 +68,16 @@ flowchart LR
 
 ## Try it (for judges)
 
-**No keys and no accounts needed:** test mode simulates PayPal, WhatsApp and the AI models, the same on every run, and every page says so. The hosted demo's address goes here at submission; until then, run it on your machine.
+**The hosted demo, on PayPal's sandbox:** https://openstall-collective.onrender.com. Claude, ElevenLabs and WhatsApp run for real there, and no real money moves. **Or run it on your machine in test mode**, with no keys and no accounts: test mode simulates PayPal, WhatsApp and the AI models, the same on every run, and every page says so.
+
+### Try the hosted demo
+
+1. On [/demo](https://openstall-collective.onrender.com/demo), press **Run it with an AI agent**: Claude, as a buyer's agent, chooses the MCP storefront's tools itself, and each maker's agent bids within her limits. The demo's buttons ask for the demo token, which is in the Devpost testing instructions with the PayPal sandbox buyer login.
+2. **Open its approval page**, press **Approve and pay with PayPal**, and log in at PayPal's sandbox with that buyer login. The receipt says PayPal is holding the total, and each maker is told in her language.
+3. **Be a maker on WhatsApp:** open [wa.me/923275157727?text=Start](https://wa.me/923275157727?text=Start), send the **Start** it writes for you, then a photo of something you make. OpenStall asks for what it needs, one question at a time, and your stall goes live. Everything on [/seller-chat](https://openstall-collective.onrender.com/seller-chat) is public, so send nothing private.
+4. [/status](https://openstall-collective.onrender.com/status) shows what runs for real, and the PayPal doctor's checks.
+
+The seeded makers have no phones, so nobody can send their courier receipts on the hosted demo: play pay-on-proof in test mode, below.
 
 ### Run it in test mode (about five minutes)
 
@@ -113,10 +122,11 @@ The same walkthrough runs as a browser test on every change. To plug in your own
 | **PayPal** | Orders v2 with intent AUTHORIZE, partial captures and voids, Payouts, order tracking, verified webhooks, disputes answered with proof, JS SDK buttons and Venmo, and PayPal's own MCP server for the ops agent |
 | **APIMatic** | APIMatic's PayPal Python SDK for every Orders and Payments call, built with APIMatic's PayPal Context Plugin ([docs/apimatic.md](docs/apimatic.md)) |
 | **AI** | Claude for the seller and buyer agents, the listing and receipt readers and the ops agent; ElevenLabs Scribe v2 for voice notes and Eleven v4 Turbo for spoken answers |
-| **Channels** | WhatsApp through Meta's WhatsApp Cloud API or Twilio, and the same chat in the browser |
+| **Channels** | WhatsApp through Whapi.Cloud on the hosted demo (Meta's WhatsApp Cloud API and Twilio also work), and the same chat in the browser |
+| **Hosting** | Render: the API, the web app and Postgres from one blueprint ([render.yaml](render.yaml)) |
 | **App** | Python, FastAPI, SQLAlchemy and Postgres; Next.js 16, React 19, Tailwind 4 and AG Grid; the MCP Python SDK |
 | **Trust** | Ed25519-signed trust passports, checked live in the browser with Web Crypto |
-| **Quality** | About 1,600 Python tests, 325 component tests and 118 browser tests, including an accessibility check of every page in light and dark mode |
+| **Quality** | About 1,690 Python tests, 335 component tests and 119 browser tests, including an accessibility check of every page in light and dark mode |
 
 **Where code decides, not the model:** every price against her limits, the split, every number in a sentence a model writes, every message to a maker (templates in her language), and every movement of money.
 

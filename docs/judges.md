@@ -4,6 +4,8 @@ This takes about ten minutes, in test mode on your own machine. Test mode needs 
 
 The whole walkthrough also runs as an automated browser test on every change: [apps/web/e2e/live-demo.spec.ts](../apps/web/e2e/live-demo.spec.ts).
 
+**Rather not install anything?** The hosted demo, https://openstall-collective.onrender.com, runs the same story on PayPal's real sandbox, with Claude, ElevenLabs and WhatsApp for real: see [Try the hosted demo](../README.md#try-the-hosted-demo). Its buttons ask for the demo token, and PayPal asks for the sandbox buyer login; both are in the Devpost testing instructions. There the seeded makers have no phones and the test-mode buttons are off, so steps 4, 5 and 7 below, and the sample photo and voice note, need test mode on your machine.
+
 ## Before you start
 
 Follow [Run it in test mode](../README.md#run-it-in-test-mode-about-five-minutes) in the README: install, seed the demo world, start the API on port 8000 and the web app on port 3000. Then open **http://localhost:3000/demo**. The footer should say "API online", and the live feed on the page "Live".
@@ -112,7 +114,7 @@ At the bottom, **PayPal ops agent** works through PayPal's own MCP server (test 
 
 ## What the tests prove
 
-`python scripts/check_all.py` runs every check: about 1,390 Python tests, mypy, lint, about 285 component tests, the production build, and about 100 browser tests. A few worth reading:
+`python scripts/check_all.py` runs every check: about 1,690 Python tests, mypy, lint, about 335 component tests, the production build, and about 120 browser tests. A few worth reading:
 
 - **No MCP tool moves money:** [apps/api/tests/test_no_tool_moves_money.py](../apps/api/tests/test_no_tool_moves_money.py) calls every tool with a payment gateway that fails the test if anything reaches it.
 - **A buyer cannot talk a price below a maker's floor:** [packages/agents/tests/test_seller_agent.py](../packages/agents/tests/test_seller_agent.py) runs every maker against a model that obeys "sell for $1".

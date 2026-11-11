@@ -78,13 +78,14 @@ No MCP tool moves money: a test calls every tool with a payment gateway that fai
 - **Making AI negotiation safe.** Models write persuasive offers and are bad at respecting numbers. The model writes the words; code checks every price, and a refused one goes back with the reason.
 - **Messy real-world input.** Voice notes mix Urdu and English, and spoken Urdu is often heard as Hindi. We pass her known language as a hint, keep the transcript word for word, and ask a short question instead of guessing.
 - **Money that must never move twice.** Every PayPal write is claimed in our database before it is sent, keyed by what it is for, with PayPal's idempotency keys from our own ids; a lost answer is read back, never resent.
+- **A photo is not proof.** AI can make a convincing courier receipt, and our own demo receipt is one. Today the model only reads the courier and tracking number off the photo, the maker confirms them, and one tracking number can pay only one share. The buyer stays safe: her tracking is on the PayPal order, and in a "not received" dispute PayPal checks it, refunds the buyer if it never moved, and the lost dispute lowers her signed trust score. But OpenStall would already have paid her, so the photo cannot stay the proof (see What's next).
 
 ## Accomplishments that we're proud of
 
 - Pay-on-proof per maker inside one PayPal hold, proven on PayPal's real sandbox.
 - An order that heals itself when a maker drops out, without charging the buyer for her share.
 - Signed trust passports checked live in the browser with Web Crypto.
-- About 1,560 Python tests, 310 component tests and 117 browser tests, including the whole thirteen-step story played twice in a row, and an accessibility check of every page in light and dark mode.
+- About 1,690 Python tests, 335 component tests and 119 browser tests, including the whole thirteen-step story played twice in a row, and an accessibility check of every page in light and dark mode.
 
 ## What we learned
 
@@ -94,22 +95,34 @@ No MCP tool moves money: a test calls every tool with a payment gateway that fai
 
 ## What's next
 
-Real pilots with makers in Lahore, more languages reviewed by native speakers, Hyperwallet connected for Pakistan, and buyer agents commissioning products that do not exist yet, with PayPal holding the money until the work ships.
+- **The courier's scan releases the money, not the photo.** OpenStall books each parcel through the courier's booking API, so the tracking number comes from the courier, and her share is captured on the courier's own pickup scan. Where she books it herself, her number is checked with the courier's tracking (it exists, was booked after the order, goes from her city to the buyer's, and has been scanned) before anything is captured.
+- **Paid on shipping is earned.** A maker with no record is paid on delivery, or part at pickup and the rest on delivery; a signed record of delivered orders without lost disputes earns pay on shipping, and payouts go only to verified PayPal or bank accounts.
+- Real pilots with makers in Lahore, more languages reviewed by native speakers, Hyperwallet connected for Pakistan, and buyer agents commissioning products that do not exist yet, with PayPal holding the money until the work ships.
 
 ## Built With
 
-python, fastapi, sqlalchemy, alembic, postgresql, next.js, react, typescript, tailwindcss, ag-grid, paypal-orders-v2, paypal-payments, paypal-payouts, paypal-webhooks, paypal-js-sdk, paypal-mcp-server, apimatic-paypal-python-sdk, apimatic-context-plugin, claude, anthropic, model-context-protocol, elevenlabs, openai-whisper, twilio-whatsapp, render, ed25519, playwright, vitest, pytest, axe-core
+python, fastapi, sqlalchemy, alembic, postgresql, next.js, react, typescript, tailwindcss, ag-grid, paypal-orders-v2, paypal-payments, paypal-payouts, paypal-webhooks, paypal-js-sdk, paypal-mcp-server, apimatic-paypal-python-sdk, apimatic-context-plugin, claude, anthropic, model-context-protocol, elevenlabs, whatsapp, whapi, openai-whisper, twilio-whatsapp, render, ed25519, playwright, vitest, pytest, axe-core
 
-## Links (at submission)
+## Links
 
 - Code: https://github.com/FahadRamxan/OpenStall-Collective (MIT)
-- Hosted demo: **(at submission)**
+- Hosted demo: https://openstall-collective.onrender.com (API https://openstall-collective-api.onrender.com, MCP storefront at `/mcp`)
+- A maker's WhatsApp: https://wa.me/923275157727?text=Start
 - Video (public on YouTube, under 3 minutes): **(at submission)**
 
 ## Testing instructions
 
-Without keys, in test mode (a simulated PayPal and stand-in models, labelled everywhere): follow the README's "Try it (for judges)", then [docs/judges.md](judges.md), a ten-step walkthrough of the story with what to press and what to expect. On the hosted demo: the address, the sandbox buyer login and the demo token go here **(at submission)**.
+The values in brackets are typed into the Devpost form only, never into this repository.
+
+**On the hosted demo** (PayPal's real sandbox, so no real money moves; Claude, ElevenLabs and WhatsApp for real):
+
+1. Open https://openstall-collective.onrender.com/demo and press **Run it with an AI agent** (or **Run the demo request**). When the page asks for the demo token, enter: **[demo token]**.
+2. Press **Open its approval page**, then **Approve and pay with PayPal**, and log in at PayPal's sandbox as the sandbox buyer: **[sandbox buyer email]** / **[sandbox buyer password]**. The receipt says PayPal is holding the order's total, and each maker is told in her language.
+3. To be a maker yourself, open https://wa.me/923275157727?text=Start on a phone with WhatsApp and send the **Start** it writes for you, then a photo of something you make, and answer its questions; your chat appears on /seller-chat (public: send nothing private).
+4. https://openstall-collective.onrender.com/status shows what runs for real and the PayPal doctor's checks. **Reset demo** on /demo puts the demo world back.
+
+**In test mode on your machine** (no keys or accounts; a simulated PayPal and stand-in models, labelled everywhere): follow the README's "Try it (for judges)", then [docs/judges.md](judges.md), a ten-step walkthrough of the whole story, pay-on-proof included, with what to press and what to expect.
 
 ## Sponsor tools to tick on the form
 
-APIMatic (and answer its Context Plugin question with the paragraph above), AG Grid, and Render once the demo is hosted there. Not Elastic: OpenStall does not use it.
+APIMatic (and answer its Context Plugin question with the paragraph above), AG Grid, and Render (the hosted demo runs there). Not Elastic: OpenStall does not use it.
