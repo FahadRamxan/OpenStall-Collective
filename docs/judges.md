@@ -83,8 +83,8 @@ In test mode the card is signed with a fixed test key that anyone can rebuild, a
 Still on `/demo`, with the story's order approved:
 
 1. On **Grace's phone**, press **Grace can't make it** (test mode). She writes "Sorry, I can't make this order.", and OpenStall asks her to confirm: nothing moves on her words alone.
-2. Press **Reply "Yes" as Grace**. Her $203.00 share goes back to the buyer, never charged. OpenStall asks the other makers' agents for her 7 units, and **Payments** shows **The order heals itself**: "Noor can make all 7: top-up order …, $206.50." Noor's phone appears.
-3. Press **Approve the top-up**. Its approval page says which order it tops up and whose units it replaces. Approve it like the first: Noor is told on her phone, in Urdu.
+2. Press **Reply "Yes" as Grace**. Her $203.00 share goes back to the buyer, never charged. OpenStall asks the other makers' agents for her 7 units, and **Payments** shows **The order heals itself**, with a top-up order from the cheapest maker who can still make them in time. Following these steps in order, that is Priya: she shipped her 11 in step 4, so she has room for 7 more, "Priya can make all 7: top-up order …, $112.00." (Had Priya not shipped yet, it would be Noor, 7 for $206.50.)
+3. Press **Approve the top-up**. Its approval page says which order it tops up and whose units it replaces. Approve it like the first: the maker is told on her phone, in her language.
 
 **Live activity** follows each step: Grace dropping out, her share released, the agents' new round, the top-up, and the order re-planned without her.
 
