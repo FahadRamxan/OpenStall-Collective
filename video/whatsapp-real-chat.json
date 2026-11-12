@@ -1,0 +1,158 @@
+[
+  {
+    "time": "15:11:48",
+    "from": "maker",
+    "text": "«میں ہاتھ سے کشن کور بناتا ہوں»",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:11:48",
+    "from": "OpenStall",
+    "text": "*OpenStall میں خوش آمدید!*\n\nاپنا سامان بیچنے کے لیے:\n1. اپنے ہاتھ سے بنی چیز کی تصویر بھیجیں۔\n2. اس کے بارے میں لکھ کر یا وائس نوٹ میں بتائیں۔\n3. ہم آپ کا اشتہار بنائیں گے، جسے خریداروں کے اے آئی ایجنٹ ڈھونڈ سکیں گے۔\n\nسامان بھیجنے پر آپ کو PayPal سے ادائیگی ہوگی۔",
+    "english": "*Welcome to OpenStall!*\n\nTo sell what you make:\n1. Send a photo of it.\n2. Tell me about it, by text or a voice note.\n3. We make your listing, which buyers' AI shopping agents can find.\n\nYou are paid through PayPal when you ship.",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:11:48",
+    "from": "OpenStall",
+    "text": "اب تک آپ کا اشتہار: ہاتھ سے بنے کشن کور۔\n\nبراہِ کرم اس کی ایک تصویر بھیجیں۔",
+    "english": "Your listing so far: Handmade cushion covers.\n\nPlease send a photo of it.",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:12:15",
+    "from": "maker",
+    "text": "",
+    "english": "",
+    "buttons": null,
+    "media": [
+      "image/jpeg"
+    ]
+  },
+  {
+    "time": "15:12:15",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: نیلے نقش والا کشن کور۔\n\nایک عدد کی قیمت کتنے امریکی ڈالر ہے؟",
+    "english": "Thank you. Your listing so far: Blue patterned cushion cover.\n\nWhat is your price for one, in US dollars?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:12:32",
+    "from": "maker",
+    "text": "15$",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:12:32",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: نیلے نقش والا کشن کور، 15.00 ڈالر فی عدد۔\n\nایک ہفتے میں کتنے تیار ہو سکتے ہیں؟",
+    "english": "Thank you. Your listing so far: Blue patterned cushion cover, $15.00 each.\n\nHow many can you make in a week?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:12:47",
+    "from": "maker",
+    "text": "100",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:12:47",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: نیلے نقش والا کشن کور، 15.00 ڈالر فی عدد، ہفتے میں 100۔\n\nآپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
+    "english": "Thank you. Your listing so far: Blue patterned cushion cover, $15.00 each, 100 a week.\n\nHow many days does your parcel take to reach a buyer in the US?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:01",
+    "from": "maker",
+    "text": "20",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:01",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ سے بنا کشن کور، 15.00 ڈالر فی عدد، ہفتے میں 100، 20 دن میں پہنچتا ہے۔\n\nپارسل کس شہر سے بھیجا جائے گا؟",
+    "english": "Thank you. Your listing so far: Blue patterned cushion cover, $15.00 each, 100 a week, arrives in 20 days.\n\nWhich city do you send it from?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:15",
+    "from": "maker",
+    "text": "Islamabad, Pakistan",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:15",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ سے بنا کشن کور، 15.00 ڈالر فی عدد، ہفتے میں 100، 20 دن میں پہنچتا ہے، Islamabad سے۔\n\nبڑے آرڈر میں ایک عدد کی کم سے کم قیمت کتنی ہو سکتی ہے، امریکی ڈالر میں؟",
+    "english": "Thank you. Your listing so far: Blue patterned cushion cover, $15.00 each, 100 a week, arrives in 20 days, from Islamabad.\n\nFor a big order, what is the lowest price you would take for one, in US dollars?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:35",
+    "from": "maker",
+    "text": "8$",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:35",
+    "from": "OpenStall",
+    "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ سے بنا نیلے نقش والا کشن کور، 15.00 ڈالر فی عدد، ہفتے میں 100، 20 دن میں پہنچتا ہے، Islamabad سے، بڑے آرڈر پر کم سے کم 8.00 ڈالر۔\n\nآرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
+    "english": "Thank you. Your listing so far: Hand-made blue patterned cushion cover, $15.00 each, 100 a week, arrives in 20 days, from Islamabad, lowest $8.00 for a big order.\n\nWhat is the fewest days you need to make an order?",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:56",
+    "from": "maker",
+    "text": "25",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:13:56",
+    "from": "OpenStall",
+    "text": "شکریہ۔ یہ رہا آپ کا اشتہار:\n• ہاتھ سے بنا کشن کور\n• 15.00 ڈالر فی عدد\n• ہفتے میں 100\n• 20 دن میں پہنچتا ہے\n• Islamabad سے\n• بڑے آرڈر پر کم سے کم 8.00 ڈالر\n• آرڈر تیار کرنے میں 25 دن\n\nاشتہار لگانے کے لیے \"ہاں\" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔",
+    "english": "Thank you. Here is your listing:\n• Hand-made cushion cover with blue paisley pattern\n• $15.00 each\n• 100 a week\n• arrives in 20 days\n• from Islamabad\n• lowest $8.00 for a big order\n• 25 days to make an order\n\nReply YES to publish it, or tell me what to change.",
+    "buttons": [
+      "ہاں، اشتہار لگائیں"
+    ],
+    "media": []
+  },
+  {
+    "time": "15:14:11",
+    "from": "maker",
+    "text": "ہاں، اشتہار لگائیں",
+    "english": "",
+    "buttons": null,
+    "media": []
+  },
+  {
+    "time": "15:14:11",
+    "from": "OpenStall",
+    "text": "آپ کا اشتہار لگ گیا ہے! اب اے آئی شاپنگ ایجنٹ اسے ڈھونڈ سکتے ہیں۔ آپ کی دکان: http://localhost:3000/stall/s_c46af5c690b8",
+    "english": "Your listing is live! AI shopping agents can find it now. Your stall: http://localhost:3000/stall/s_c46af5c690b8",
+    "buttons": null,
+    "media": []
+  }
+]

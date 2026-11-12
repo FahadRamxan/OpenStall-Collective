@@ -891,3 +891,13 @@ Text: `docs/devpost.md`, every field as it was entered on Devpost.
 - **What only a person may do.** The form's three eligibility statements (age, jurisdiction, not working for the sponsors), the Official Rules and Terms box and the Submit button are a person's, as are the demo token and the sandbox buyer login.
 - **Secrets only in the form.** The demo token and the sandbox buyer login belong in the testing instructions, which only judges and organizers see, pasted by a person; this repository keeps placeholders.
 - **WhatsApp has a fallback.** The hosted demo's Whapi number runs on a trial, and judging is December 1 to 15, so the testing instructions send a judge whose WhatsApp gets no answer to **Start as a new seller** on /seller-chat, the same chat in the browser, which needs no token.
+
+## November 11: the demo video's sources in the repository
+
+Code: `video/` (`video/README.md`), the studio in `video/studio/` and the recording tools in `video/tools/`.
+
+- **Sources in git, outputs out.** The script, the voice, the chats, the assets, the twelve screen recordings and the studio are kept; the rendered MP4 (about 50 MB, on YouTube), the frame cache (about 700 MB), the music WAV and `node_modules` are not, since the tools make them again. The music is seeded, so it comes back the same.
+- **The recordings and the voice are sources, not outputs.** Every shot in `video/studio/src/data.js` points at seconds inside a recording, and every caption at a time on the voice; a new take, or a new reading by ElevenLabs, would move them. So the 63 MB of recordings stay in git, with `moments.json` to retime a new take against.
+- **Paths are the repository's own.** The recorder and the helpers find the folder from where they are; the batch files that start test mode for recording work from any checkout, keep their CRLF (`.gitattributes`), and build the web app into `apps/web/.next-video`, which git and ESLint skip.
+- **The real chat without the sender's phone.** The transcript of November 10 keeps every message word for word, OpenStall's public number, and nothing that names the phone it came from.
+

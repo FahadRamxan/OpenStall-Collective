@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // The UI tests' production build (see playwright.config.ts).
     ".next-e2e/**",
+    // The demo video's recording build (video/tools/run-web-test-mode.cmd).
+    ".next-video/**",
     // Test output: Playwright's report ships its own scripts.
     "coverage/**",
     "test-results/**",

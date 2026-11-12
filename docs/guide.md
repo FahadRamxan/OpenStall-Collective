@@ -249,7 +249,7 @@ OpenStall is built in 58 numbered steps; each is tested, wired into the web app,
 | Hardening and submission | 46, 47, 50 | 49: the README, this guide and [the judges' walkthrough](judges.md), with the hosted demo's address and the video; the sandbox buyer login and the demo token are pasted into the Devpost testing instructions by a person | 48 |
 | More of PayPal | 51, 52, 53, 55, 56, 57, 58 | | 54 Braintree |
 
-The Devpost text was entered on November 11 ([as entered](devpost.md)); its eligibility statements, the terms and Submit are a person's to press. The demo video, 2:51: https://www.youtube.com/watch?v=zbl8VqHXcYc. Next: the dress rehearsal on the hosted demo (48).
+Submitted on Devpost on November 11 ([the text as entered](devpost.md)). The demo video, 2:51: https://www.youtube.com/watch?v=zbl8VqHXcYc. Next: the dress rehearsal on the hosted demo (48).
 
 ## Repository layout
 
@@ -259,6 +259,7 @@ apps/web/        Next.js: stall, seller-chat, demo, approve, dashboard
 packages/        agents, allocator, paypal, trust
 scripts/         demo and helper scripts
 docs/            day-one checks and decisions
+video/           the demo video: script, voice, recordings, and the studio that renders it
 paypal-plan.md   the APIMatic contract sheet for the PayPal SDK
 CLAUDE.md        how this repo is built, and the state of every build step
 ```

@@ -123,11 +123,11 @@ python, fastapi, sqlalchemy, postgresql, alembic, next.js, react, typescript, ta
 
 ### Image gallery and video
 
-The thumbnail is the home page's top. The gallery holds the live demo, the home page, the dashboard, a maker's chat and the receipt, from [docs/images](images), each with a caption that says so when it shows test mode. The demo video is public on YouTube: https://www.youtube.com/watch?v=zbl8VqHXcYc (2:51).
+[The thumbnail](images/devpost-thumbnail.png) is the home page's top. The gallery holds the live demo, the home page, the dashboard, a maker's chat and the receipt, from [docs/images](images), each with a caption that says so when it shows test mode. The demo video is public on YouTube: https://www.youtube.com/watch?v=zbl8VqHXcYc (2:51).
 
 ## Additional info (for judges and organizers only)
 
-**Sponsor tools:** AG Grid, APIMatic and Render. **Code:** https://github.com/FahadRamxan/OpenStall-Collective. **Working demo:** https://openstall-collective.onrender.com. **New or existing:** new; the first commit is from October 30, 2026. The three eligibility statements and the Official Rules and Terms box are a person's to tick, and Submit a person's to press.
+**Sponsor tools:** AG Grid, APIMatic and Render. **Code:** https://github.com/FahadRamxan/OpenStall-Collective. **Working demo:** https://openstall-collective.onrender.com. **New or existing:** new; the first commit is from October 30, 2026. A person ticked the three eligibility statements and the Official Rules and Terms box and pressed Submit, on November 11.
 
 ### How it meets the main technology requirement
 

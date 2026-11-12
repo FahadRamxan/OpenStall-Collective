@@ -61,7 +61,7 @@ flowchart LR
 
 ## See it
 
-**The demo video, 2:51:** https://www.youtube.com/watch?v=zbl8VqHXcYc. **A real WhatsApp chat on the hosted demo:** [a maker sends Start and gets OpenStall's welcome in Urdu, delivered and read](https://openstall-collective.onrender.com/seller-chat?seller=s_53a82b0aeae3).
+**The demo video, 2:51:** https://www.youtube.com/watch?v=zbl8VqHXcYc ([how it was made](video/README.md)). **A real WhatsApp chat on the hosted demo:** [a maker sends Start and gets OpenStall's welcome in Urdu, delivered and read](https://openstall-collective.onrender.com/seller-chat?seller=s_53a82b0aeae3).
 
 | The live demo | A maker's chat: Urdu, with English under it |
 | --- | --- |
@@ -139,6 +139,7 @@ The same walkthrough runs as a browser test on every change. To plug in your own
 - **[The judges' walkthrough](docs/judges.md):** the story, step by step.
 - **[APIMatic's PayPal SDK, operation by operation](docs/apimatic.md)**, and **[the sandbox proof](docs/day-one-checks.md)**.
 - **[Why things are the way they are](docs/decisions.md)**, newest last.
+- **[The demo video](video/README.md):** its script and voice, the screen recordings, and the studio that renders it at 60 fps.
 
 ## License
 

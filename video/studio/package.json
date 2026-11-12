@@ -1,0 +1,20 @@
+{
+  "name": "openstall-demo-video",
+  "private": true,
+  "version": "1.0.0",
+  "description": "OpenStall Collective demo video: an HTML timeline synced to narration-draft.mp3, rendered to a 1920x1080 60 fps MP4.",
+  "type": "module",
+  "scripts": {
+    "frames": "node tools/extract-frames.mjs",
+    "audio": "node tools/make-audio.mjs",
+    "render": "node tools/render.mjs",
+    "preview": "node tools/serve.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/noto-nastaliq-urdu": "5.3.0",
+    "@fontsource/noto-sans-devanagari": "5.3.0",
+    "playwright-core": "1.64.1",
+    "topojson-client": "3.1.0",
+    "world-atlas": "2.0.2"
+  }
+}

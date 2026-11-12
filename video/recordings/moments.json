@@ -1,0 +1,222 @@
+{
+  "R1-home": {
+    "seconds": 14.21,
+    "moments": [
+      {
+        "t": 3.26,
+        "label": "hover See the live demo"
+      },
+      {
+        "t": 11.44,
+        "label": "How it works"
+      }
+    ]
+  },
+  "R2-run": {
+    "seconds": 33.09,
+    "moments": [
+      {
+        "t": 5.75,
+        "label": "Run the demo request pressed"
+      },
+      {
+        "t": 5.78,
+        "label": "approval link ready"
+      },
+      {
+        "t": 9.46,
+        "label": "section request"
+      },
+      {
+        "t": 13.92,
+        "label": "section rules"
+      },
+      {
+        "t": 18,
+        "label": "section offers"
+      },
+      {
+        "t": 24.07,
+        "label": "section allocation"
+      },
+      {
+        "t": 30.53,
+        "label": "section order"
+      }
+    ]
+  },
+  "R3-approve": {
+    "seconds": 31.27,
+    "moments": [
+      {
+        "t": 4.49,
+        "label": "approval page"
+      },
+      {
+        "t": 9.23,
+        "label": "split and pay-on-proof explained"
+      },
+      {
+        "t": 16.4,
+        "label": "simulated PayPal page"
+      },
+      {
+        "t": 22.85,
+        "label": "PayPal is holding $815.00"
+      },
+      {
+        "t": 24.36,
+        "label": "each maker told"
+      }
+    ]
+  },
+  "R4-phones": {
+    "seconds": 22.13,
+    "moments": [
+      {
+        "t": 8.47,
+        "label": "Payments: reserved, makers told"
+      },
+      {
+        "t": 13.43,
+        "label": "the makers' phones"
+      }
+    ]
+  },
+  "R7-attacks": {
+    "seconds": 15.94,
+    "moments": [
+      {
+        "t": 7.61,
+        "label": "Try every attack"
+      },
+      {
+        "t": 7.64,
+        "label": "10 of 10 attacks refused"
+      }
+    ]
+  },
+  "R8-tamper": {
+    "seconds": 21.49,
+    "moments": [
+      {
+        "t": 8.08,
+        "label": "on-time rate changed to 0.99"
+      },
+      {
+        "t": 12.2,
+        "label": "signature does not match"
+      },
+      {
+        "t": 18.53,
+        "label": "put back: signature valid"
+      }
+    ]
+  },
+  "R9-status-hosted": {
+    "seconds": 19.63,
+    "moments": [
+      {
+        "t": 4.38,
+        "label": "PayPal doctor (hosted, PayPal sandbox)"
+      },
+      {
+        "t": 10.71,
+        "label": "APIMatic cross-check"
+      },
+      {
+        "t": 16.26,
+        "label": "PayPal products"
+      }
+    ]
+  },
+  "R10-dashboard": {
+    "seconds": 16.57,
+    "moments": [
+      {
+        "t": 2.21,
+        "label": "Demand Radar tip"
+      }
+    ]
+  },
+  "R11-seller-chat": {
+    "seconds": 7.91,
+    "moments": [
+      {
+        "t": 2.22,
+        "label": "Priya's chat, Hindi with English under it"
+      }
+    ]
+  },
+  "R5-proof": {
+    "seconds": 21.47,
+    "moments": [
+      {
+        "t": 5.95,
+        "label": "Priya sends her courier receipt"
+      },
+      {
+        "t": 6.01,
+        "label": "receipt read: India Post EE123456789IN"
+      },
+      {
+        "t": 12.43,
+        "label": "Priya replies yes"
+      },
+      {
+        "t": 12.45,
+        "label": "Priya is paid"
+      },
+      {
+        "t": 17.11,
+        "label": "Payments: paid on proof, tracking on PayPal"
+      }
+    ]
+  },
+  "R6-heal": {
+    "seconds": 22.69,
+    "moments": [
+      {
+        "t": 5.74,
+        "label": "Grace can't make it"
+      },
+      {
+        "t": 11.67,
+        "label": "Grace confirms"
+      },
+      {
+        "t": 15.54,
+        "label": "The order heals itself"
+      }
+    ]
+  },
+  "R12-receipt": {
+    "seconds": 31.17,
+    "moments": [
+      {
+        "t": 2.41,
+        "label": "PayPal holds $815.00; every share confirmed; each maker told"
+      },
+      {
+        "t": 4.76,
+        "label": "Priya: paid on proof of shipping, India Post tracking, her courier receipt, tracking on PayPal"
+      },
+      {
+        "t": 13.17,
+        "label": "Amina: paid to her bank through Hyperwallet (simulated), TCS tracking"
+      },
+      {
+        "t": 18.5,
+        "label": "Lucía reserved, paid when she ships; Grace released back to you"
+      },
+      {
+        "t": 23.46,
+        "label": "The order heals itself: Priya's top-up, 7 for $112.00"
+      },
+      {
+        "t": 28,
+        "label": "One PayPal authorization for $815.00; each share captured when she ships"
+      }
+    ]
+  }
+}

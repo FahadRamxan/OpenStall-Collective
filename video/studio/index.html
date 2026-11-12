@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenStall Collective · demo video</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- 1920x1080 stage. Every frame is a function of time on narration-draft.mp3 (see src/engine.js). -->
+    <div id="stage">
+      <div class="bg"></div>
+      <div id="scenes"></div>
+      <div id="captions"></div>
+    </div>
+    <div id="controls">
+      <button id="play" type="button">Play</button>
+      <input id="scrub" type="range" min="0" max="170" step="0.001" value="0" aria-label="Time" />
+      <span id="time" class="time">0:00.00</span>
+    </div>
+    <div id="bootmsg">Loading…</div>
+    <audio id="narration" src="../narration-draft.mp3" preload="auto"></audio>
+
+    <script src="src/map-dots.js"></script>
+    <script src="src/data.js"></script>
+    <script src="src/engine.js"></script>
+    <script src="src/components.js"></script>
+    <script src="src/scenes.js"></script>
+    <script src="src/main.js"></script>
+  </body>
+</html>

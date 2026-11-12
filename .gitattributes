@@ -7,3 +7,7 @@
 *.ogg binary
 *.mp3 binary
 *.webm binary
+*.mp4 binary
+*.wav binary
+*.woff2 binary
+*.cmd text eol=crlf

@@ -1,0 +1,212 @@
+[
+  {
+    "section": "Hook",
+    "tag": "[thoughtful]",
+    "line": "Forty hand-embroidered cushion covers... needed in thirty days.",
+    "start": 0.12,
+    "end": 4.68
+  },
+  {
+    "section": "Hook",
+    "tag": "[steady]",
+    "line": "One AI shopping agent, ready to buy.",
+    "start": 5.42,
+    "end": 7.92
+  },
+  {
+    "section": "Hook",
+    "tag": "[concerned]",
+    "line": "And the women who make them best sell only on WhatsApp... and none of them can make forty alone.",
+    "start": 8.54,
+    "end": 14.14
+  },
+  {
+    "section": "Title",
+    "tag": "[confident]",
+    "line": "OpenStall Collective turns them into one supplier, in three steps: list, split, and pay on proof.",
+    "start": 14.9,
+    "end": 21.88
+  },
+  {
+    "section": "Title",
+    "tag": "[assured]",
+    "line": "Claude does the talking. Code decides. PayPal holds the money.",
+    "start": 22.4,
+    "end": 26.18
+  },
+  {
+    "section": "Step one: list",
+    "tag": "[clear]",
+    "line": "Step one: list.",
+    "start": 28.1,
+    "end": 29.68
+  },
+  {
+    "section": "Step one: list",
+    "tag": "[warm]",
+    "line": "This is a real chat on OpenStall's WhatsApp number. A maker writes one line in Urdu... and sends a photo.",
+    "start": 30.42,
+    "end": 37.32
+  },
+  {
+    "section": "Step one: list",
+    "tag": "[analytical]",
+    "line": "Claude reads the photo: a blue paisley cushion cover. Every number in the listing comes from the maker's own words.",
+    "start": 38.14,
+    "end": 45.0
+  },
+  {
+    "section": "Step one: list",
+    "tag": "[reassuring]",
+    "line": "OpenStall asks only for what's missing, one short question at a time, in Urdu.",
+    "start": 45.68,
+    "end": 50.92
+  },
+  {
+    "section": "Step one: list",
+    "tag": "[upbeat]",
+    "line": "One tap on haan, yes... and the stall is live, for any AI agent to read.",
+    "start": 52.12,
+    "end": 57.16
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[clear]",
+    "line": "Step two: split.",
+    "start": 58.94,
+    "end": 60.36
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[steady]",
+    "line": "A buyer's AI agent asks OpenStall's MCP storefront for forty covers, at most thirty dollars each.",
+    "start": 61.28,
+    "end": 68.3
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[analytical]",
+    "line": "Each maker's agent bids, and code checks every price against her floor and the buyer's maximum.",
+    "start": 68.94,
+    "end": 74.7
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[confident]",
+    "line": "Plain code splits the order: twelve from Amina, eleven from Priya, ten from Lucía, seven from Grace... eight hundred and fifteen dollars.",
+    "start": 75.4,
+    "end": 84.68
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[clear]",
+    "line": "The agent can't pay. A person approves one PayPal checkout, intent authorize... so PayPal only holds the money.",
+    "start": 85.8,
+    "end": 92.84
+  },
+  {
+    "section": "Step two: split",
+    "tag": "[warm]",
+    "line": "Each maker hears about her share on her phone, in her own language.",
+    "start": 93.54,
+    "end": 96.68
+  },
+  {
+    "section": "Step three: pay on proof",
+    "tag": "[confident]",
+    "line": "Step three: pay on proof.",
+    "start": 97.58,
+    "end": 99.62
+  },
+  {
+    "section": "Step three: pay on proof",
+    "tag": "[steady]",
+    "line": "Priya ships her parcel in Jaipur and photographs the courier receipt.",
+    "start": 100.52,
+    "end": 103.98
+  },
+  {
+    "section": "Step three: pay on proof",
+    "tag": "[analytical]",
+    "line": "AI reads the courier and the tracking number... and Priya confirms with one tap.",
+    "start": 104.6,
+    "end": 109.28
+  },
+  {
+    "section": "Step three: pay on proof",
+    "tag": "[upbeat]",
+    "line": "Only then is her share captured from that one authorization, and paid out to her PayPal... with her tracking on the PayPal order.",
+    "start": 109.96,
+    "end": 116.84
+  },
+  {
+    "section": "Step three: pay on proof",
+    "tag": "[reassuring]",
+    "line": "In Pakistan, where Payouts can't reach, Amina is paid to her bank through Hyperwallet... simulated here, and labelled.",
+    "start": 117.62,
+    "end": 124.56
+  },
+  {
+    "section": "When a maker drops out",
+    "tag": "[concerned]",
+    "line": "And if Grace can't make it?",
+    "start": 125.34,
+    "end": 127.14
+  },
+  {
+    "section": "When a maker drops out",
+    "tag": "[reassuring]",
+    "line": "Her share is released, never charged... and the other makers' agents bid for her seven covers, as a top-up.",
+    "start": 128.06,
+    "end": 134.36
+  },
+  {
+    "section": "Trust",
+    "tag": "[confident]",
+    "line": "Try to break it: ten real attacks... all refused by the code they target.",
+    "start": 135.08,
+    "end": 140.02
+  },
+  {
+    "section": "Trust",
+    "tag": "[assured]",
+    "line": "Every maker carries a signed trust passport. Change one number, and the signature fails.",
+    "start": 140.74,
+    "end": 146.06
+  },
+  {
+    "section": "Trust",
+    "tag": "[professional]",
+    "line": "Orders and payments run on APIMatic's PayPal SDK... and an ops agent checks them through PayPal's own MCP server, read-only.",
+    "start": 146.9,
+    "end": 155.26
+  },
+  {
+    "section": "Trust",
+    "tag": "[thoughtful]",
+    "line": "A receipt photo can be faked, so next, the courier's own scan will release the money.",
+    "start": 155.96,
+    "end": 160.64
+  },
+  {
+    "section": "Close",
+    "tag": "[confident]",
+    "line": "Claude talks.",
+    "start": 161.38,
+    "end": 162.18
+  },
+  {
+    "section": "Close",
+    "tag": "[assured]",
+    "line": "Code decides.",
+    "start": 162.74,
+    "end": 163.66
+  },
+  {
+    "section": "Close",
+    "tag": "[definitive]",
+    "line": "PayPal pays on proof.",
+    "start": 164.28,
+    "end": 165.62
+  }
+]

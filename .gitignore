@@ -17,10 +17,11 @@ dist/
 .mypy_cache/
 .hypothesis/
 
-# Node / Next.js (.next-e2e is the UI tests' build)
+# Node / Next.js (.next-e2e is the UI tests' build, .next-video the demo video's recording build)
 node_modules/
 .next/
 .next-e2e/
+.next-video/
 out/
 
 # Playwright output (apps/web): reports, traces, review screenshots and the e2e run's throwaway database

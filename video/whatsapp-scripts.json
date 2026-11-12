@@ -1,0 +1,298 @@
+{
+  "A0 Welcome on real WhatsApp (the hosted demo, a +92 number)": [
+    {
+      "from": "maker",
+      "text": "Start",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "*OpenStall میں خوش آمدید!*\n\nاپنا سامان بیچنے کے لیے:\n1. اپنے ہاتھ سے بنی چیز کی تصویر بھیجیں۔\n2. اس کے بارے میں لکھ کر یا وائس نوٹ میں بتائیں۔\n3. ہم آپ کا اشتہار بنائیں گے، جسے خریداروں کے اے آئی ایجنٹ ڈھونڈ سکیں گے۔\n\nسامان بھیجنے پر آپ کو PayPal سے ادائیگی ہوگی۔",
+      "english": "*Welcome to OpenStall!*\n\nTo sell what you make:\n1. Send a photo of it.\n2. Tell me about it, by text or a voice note.\n3. We make your listing, which buyers' AI shopping agents can find.\n\nYou are paid through PayPal when you ship.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ],
+  "A1 A maker lists her cushion cover (Urdu)": [
+    {
+      "from": "maker",
+      "text": "",
+      "english": "",
+      "buttons": [],
+      "media": [
+        null,
+        null
+      ],
+      "voice_transcript": "کڑھائی والے کشن کور، تین رنگوں میں، اٹھارہ ڈالر کا ایک۔ میں ہفتے میں چار بنا سکتی ہوں۔"
+    },
+    {
+      "from": "OpenStall",
+      "text": "*OpenStall میں خوش آمدید!*\n\nاپنا سامان بیچنے کے لیے:\n1. اپنے ہاتھ سے بنی چیز کی تصویر بھیجیں۔\n2. اس کے بارے میں لکھ کر یا وائس نوٹ میں بتائیں۔\n3. ہم آپ کا اشتہار بنائیں گے، جسے خریداروں کے اے آئی ایجنٹ ڈھونڈ سکیں گے۔\n\nسامان بھیجنے پر آپ کو PayPal سے ادائیگی ہوگی۔",
+      "english": "*Welcome to OpenStall!*\n\nTo sell what you make:\n1. Send a photo of it.\n2. Tell me about it, by text or a voice note.\n3. We make your listing, which buyers' AI shopping agents can find.\n\nYou are paid through PayPal when you ship.",
+      "buttons": [],
+      "media": [
+        null
+      ],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4۔\n\nآپ کا پارسل امریکہ میں خریدار تک کتنے دن میں پہنچتا ہے؟",
+      "english": "Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week.\n\nHow many days does your parcel take to reach a buyer in the US?",
+      "buttons": [],
+      "media": [
+        null
+      ],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "9",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، 9 دن میں پہنچتا ہے۔\n\nپارسل کس شہر سے بھیجا جائے گا؟",
+      "english": "Thank you. Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week, arrives in 9 days.\n\nWhich city do you send it from?",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "Lahore",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، 9 دن میں پہنچتا ہے، Lahore سے۔\n\nبڑے آرڈر میں ایک عدد کی کم سے کم قیمت کتنی ہو سکتی ہے، امریکی ڈالر میں؟",
+      "english": "Thank you. Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week, arrives in 9 days, from Lahore.\n\nFor a big order, what is the lowest price you would take for one, in US dollars?",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "15",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ۔ اب تک آپ کا اشتہار: ہاتھ کی کڑھائی والا کشن کور، 18.00 ڈالر فی عدد، ہفتے میں 4، 9 دن میں پہنچتا ہے، Lahore سے، بڑے آرڈر پر کم سے کم 15.00 ڈالر۔\n\nآرڈر تیار کرنے کے لیے آپ کو کم سے کم کتنے دن چاہئیں؟",
+      "english": "Thank you. Your listing so far: Hand-embroidered cushion cover, $18.00 each, 4 a week, arrives in 9 days, from Lahore, lowest $15.00 for a big order.\n\nWhat is the fewest days you need to make an order?",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "5",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ۔ یہ رہا آپ کا اشتہار:\n• ہاتھ کی کڑھائی والا کشن کور\n• 18.00 ڈالر فی عدد\n• ہفتے میں 4\n• 9 دن میں پہنچتا ہے\n• Lahore سے\n• بڑے آرڈر پر کم سے کم 15.00 ڈالر\n• آرڈر تیار کرنے میں 5 دن\n\nاشتہار لگانے کے لیے \"ہاں\" لکھیں، یا بتائیں کہ کیا بدلنا ہے۔",
+      "english": "Thank you. Here is your listing:\n• Hand-embroidered cushion cover\n• $18.00 each\n• 4 a week\n• arrives in 9 days\n• from Lahore\n• lowest $15.00 for a big order\n• 5 days to make an order\n\nReply YES to publish it, or tell me what to change.",
+      "buttons": [
+        "ہاں، اشتہار لگائیں"
+      ],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "ہاں",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "آپ کا اشتہار لگ گیا ہے! اب اے آئی شاپنگ ایجنٹ اسے ڈھونڈ سکتے ہیں۔ آپ کی دکان: http://localhost:3000/stall/s_3d780ff0c4c4",
+      "english": "Your listing is live! AI shopping agents can find it now. Your stall: http://localhost:3000/stall/s_3d780ff0c4c4",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ],
+  "A2 Amina: her share, her receipt, paid to her bank (Urdu)": [
+    {
+      "from": "OpenStall",
+      "text": "السلام علیکم Amina! OpenStall سے آپ کے لیے ایک نیا آرڈر آیا ہے۔\n\nآرڈر: ord_34b1eb72b990\nسامان: Hand-embroidered cushion cover\nتعداد: 12\nقیمت: 18.00 ڈالر فی عدد، کل 216.00 ڈالر\nبھیجنے کی آخری تاریخ: 2 دسمبر 2026\nپہنچانا ہے: Chicago، 11 دسمبر 2026 تک\n\nPayPal نے آپ کے 216.00 ڈالر محفوظ کر لیے ہیں۔ سامان بھیجتے وقت کورئیر کی رسید کی تصویر یہاں بھیجیں، اسی وقت آپ کو ادائیگی ہو جائے گی۔",
+      "english": "Hello Amina! You have a new order from OpenStall.\n\nOrder: ord_34b1eb72b990\nItem: Hand-embroidered cushion cover\nQuantity: 12\nPrice: $18.00 each, $216.00 in all\nShip by: December 2, 2026\nDeliver to: Chicago, by December 11, 2026\n\nPayPal is holding your $216.00. When you ship, send a photo of the courier receipt here, and you will be paid then.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "",
+      "english": "",
+      "buttons": [],
+      "media": [
+        null
+      ],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ! میں نے آرڈر ord_34b1eb72b990 (12 × Hand-embroidered cushion cover) کی کورئیر رسید پڑھ لی ہے:\nکورئیر: TCS\nٹریکنگ نمبر: 7712345678\n\nکیا یہ درست ہے؟ \"ہاں\" لکھیں، یا درست ٹریکنگ نمبر لکھ دیں۔",
+      "english": "Thank you! I read your courier receipt for order ord_34b1eb72b990 (12 × Hand-embroidered cushion cover):\nCourier: TCS\nTracking number: 7712345678\n\nIs that right? Reply YES, or type the right tracking number.",
+      "buttons": [
+        "ہاں، درست ہے"
+      ],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "جی ہاں",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "شکریہ! آپ کا ٹریکنگ نمبر 7712345678 محفوظ ہو گیا ہے، اور آپ کے 216.00 ڈالر ابھی ادا کیے جا رہے ہیں۔",
+      "english": "Thank you! Your tracking number 7712345678 is saved, and your $216.00 is being paid now.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "آپ کو ادائیگی ہو گئی! آرڈر ord_34b1eb72b990 کے 216.00 ڈالر Hyperwallet کے ذریعے آپ کے بینک اکاؤنٹ میں بھیج دیے گئے ہیں۔\n(ٹیسٹ موڈ: نقلی PayPal، کوئی اصل رقم منتقل نہیں ہوئی۔)",
+      "english": "You are paid! $216.00 for order ord_34b1eb72b990 has been sent to your bank account through Hyperwallet.\n(Test mode: simulated PayPal, no real money moved.)",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ],
+  "A3 Priya: her share, her receipt, paid on proof (Hindi)": [
+    {
+      "from": "OpenStall",
+      "text": "नमस्ते Priya! OpenStall से आपके लिए एक नया ऑर्डर आया है।\n\nऑर्डर: ord_34b1eb72b990\nसामान: Mirror-work embroidered cushion cover\nसंख्या: 11\nकीमत: $16.00 प्रति पीस, कुल $176.00\nभेजने की आख़िरी तारीख़: 1 दिसंबर 2026\nपहुँचाना है: Chicago, 11 दिसंबर 2026 तक\n\nPayPal ने आपके $176.00 सुरक्षित रख लिए हैं। सामान भेजते समय कूरियर की रसीद की फ़ोटो यहाँ भेजें, उसी समय आपको भुगतान हो जाएगा।",
+      "english": "Hello Priya! You have a new order from OpenStall.\n\nOrder: ord_34b1eb72b990\nItem: Mirror-work embroidered cushion cover\nQuantity: 11\nPrice: $16.00 each, $176.00 in all\nShip by: December 1, 2026\nDeliver to: Chicago, by December 11, 2026\n\nPayPal is holding your $176.00. When you ship, send a photo of the courier receipt here, and you will be paid then.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "",
+      "english": "",
+      "buttons": [],
+      "media": [
+        null
+      ],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "धन्यवाद! मैंने ऑर्डर ord_34b1eb72b990 (11 × Mirror-work embroidered cushion cover) की कूरियर रसीद पढ़ ली है:\nकूरियर: India Post\nट्रैकिंग नंबर: EE123456789IN\n\nक्या यह सही है? \"हाँ\" लिखें, या सही ट्रैकिंग नंबर लिख दें।",
+      "english": "Thank you! I read your courier receipt for order ord_34b1eb72b990 (11 × Mirror-work embroidered cushion cover):\nCourier: India Post\nTracking number: EE123456789IN\n\nIs that right? Reply YES, or type the right tracking number.",
+      "buttons": [
+        "हाँ, सही है"
+      ],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "हाँ",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "धन्यवाद! आपका ट्रैकिंग नंबर EE123456789IN सेव हो गया है, और आपके $176.00 का भुगतान अभी किया जा रहा है।",
+      "english": "Thank you! Your tracking number EE123456789IN is saved, and your $176.00 is being paid now.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "आपको भुगतान हो गया! ऑर्डर ord_34b1eb72b990 के $176.00 आपके PayPal खाते में भेज दिए गए हैं।\n(टेस्ट मोड: नकली PayPal, कोई असली पैसा नहीं भेजा गया।)",
+      "english": "You are paid! $176.00 for order ord_34b1eb72b990 has been sent to your PayPal account.\n(Test mode: simulated PayPal, no real money moved.)",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ],
+  "A4 Lucía: her share (Spanish)": [
+    {
+      "from": "OpenStall",
+      "text": "¡Hola, Lucía! Tienes un pedido nuevo de OpenStall.\n\nPedido: ord_34b1eb72b990\nArtículo: Oaxacan embroidered cushion cover\nCantidad: 10\nPrecio: US$22.00 cada uno, US$220.00 en total\nFecha límite de envío: 5 de diciembre de 2026\nEntregar en: Chicago, a más tardar el 11 de diciembre de 2026\n\nPayPal tiene reservados tus US$220.00. Cuando lo envíes, manda aquí una foto del recibo de la paquetería y se te pagará en ese momento.",
+      "english": "Hello Lucía! You have a new order from OpenStall.\n\nOrder: ord_34b1eb72b990\nItem: Oaxacan embroidered cushion cover\nQuantity: 10\nPrice: $22.00 each, $220.00 in all\nShip by: December 5, 2026\nDeliver to: Chicago, by December 11, 2026\n\nPayPal is holding your $220.00. When you ship, send a photo of the courier receipt here, and you will be paid then.",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ],
+  "A5 Grace: her share, then she drops out (English)": [
+    {
+      "from": "OpenStall",
+      "text": "Hello Grace! You have a new order from OpenStall.\n\nOrder: ord_34b1eb72b990\nItem: Hand-embroidered linen cushion cover\nQuantity: 7\nPrice: $29.00 each, $203.00 in all\nShip by: December 8, 2026\nDeliver to: Chicago, by December 11, 2026\n\nPayPal is holding your $203.00. When you ship, send a photo of the courier receipt here, and you will be paid then.",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "Sorry, I can't make this order.",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "I'm sorry to hear that. Do you want to give up your share of order ord_34b1eb72b990 (7 × Hand-embroidered linen cushion cover, $203.00)? OpenStall will ask other makers to make it, and you will not be paid for it. Reply YES to give it up, or NO to keep it.",
+      "english": "",
+      "buttons": [
+        "Yes, drop my share",
+        "No, I'll make it"
+      ],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "maker",
+      "text": "Yes",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    },
+    {
+      "from": "OpenStall",
+      "text": "Done: your share of order ord_34b1eb72b990 goes back to the buyer, and nothing is charged for it. Thank you for telling us in time. OpenStall is asking other makers to make it.",
+      "english": "",
+      "buttons": [],
+      "media": [],
+      "voice_transcript": ""
+    }
+  ]
+}

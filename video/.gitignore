@@ -1,0 +1,9 @@
+# Made again by the tools here (see README.md), so kept out of git:
+studio/node_modules/
+studio/cache/
+studio/out/
+studio/music/
+test-mode.db
+test-mode-media/
+tools/frames/
+tools/receipt-order.txt
