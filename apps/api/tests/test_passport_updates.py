@@ -4,7 +4,7 @@ maker's passport stays marked seeded_demo and says how many of its orders went t
 share's delivery date; doing it again changes nothing; a maker with no passport gets none yet."""
 
 import asyncio
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +16,7 @@ from openstall_api.db import session_scope
 from openstall_api.delivery import confirm_delivery, refresh_passport
 from openstall_api.events import EventType
 from openstall_api.main import app
-from openstall_api.models import DataSource, Event, Order, Passport, Seller
+from openstall_api.models import DataSource, Event, Order, OrderPart, Passport, Seller
 from openstall_api.passports import FAKE_MODE_KEY_B64, MissingSigningKey
 from openstall_api.seed import DEMO_ORDER_ID, seed, seed_demo_order
 from openstall_api.storefront import storefront
@@ -126,8 +126,10 @@ def test_each_delivery_counts(reserved, db):
     ship_and_deliver(reserved["s_priya"], ON_TIME)
     second = client.post("/api/dev/story-orders").json()["order_id"]
     shares = reserve(second, db)
+    # The second order is due 30 days from the day the test runs: late is two days after its own date.
+    due = db.get(OrderPart, shares["s_priya"]).delivery_date
 
-    ship_and_deliver(shares["s_priya"], LATE)
+    ship_and_deliver(shares["s_priya"], datetime.combine(due + timedelta(days=2), time(9), tzinfo=UTC))
 
     metrics = passport(db, "s_priya").metrics_json
     assert (metrics["orders_delivered"], metrics["live_deliveries"], metrics["live_on_time"]) == (69, 2, 1)
